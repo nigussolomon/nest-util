@@ -2,5 +2,18 @@
   "extends": "./tsconfig.base.json",
   "compileOnSave": false,
   "files": [],
-  "references": []
+  "references": [
+    {
+      "path": "./libs/nest-crud"
+    },
+    {
+      "path": "./libs/nest-auth"
+    },
+    {
+      "path": "./apps/demo-api-e2e"
+    },
+    {
+      "path": "./apps/demo-api"
+    }
+  ]
 }

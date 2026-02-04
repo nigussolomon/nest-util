@@ -1,0 +1,26 @@
+{
+  "name": "@nest-util/demo-api-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@nest-util/demo-api"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/demo-api-e2e/jest.config.cts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "@nest-util/demo-api:build",
+          "@nest-util/demo-api:serve"
+        ]
+      }
+    }
+  }
+}
