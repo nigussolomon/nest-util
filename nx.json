@@ -1,7 +1,10 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "default": [
+      "{projectRoot}/**/*",
+      "sharedGlobals"
+    ],
     "production": [
       "default",
       "!{projectRoot}/.eslintrc.json",
@@ -40,7 +43,9 @@
       "options": {
         "targetName": "test"
       },
-      "exclude": ["apps/demo-api-e2e/**/*"]
+      "exclude": [
+        "apps/demo-api-e2e/**/*"
+      ]
     },
     {
       "plugin": "@nx/webpack/plugin",
@@ -61,7 +66,9 @@
   },
   "targetDefaults": {
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
     }
   }
 }
