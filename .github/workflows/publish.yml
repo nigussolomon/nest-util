@@ -48,3 +48,13 @@ jobs:
           name: nest-crud-tgz
           path: nest-util-nest-crud-*.tgz
           retention-days: 7
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          files: nest-util-nest-crud-*.tgz
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
