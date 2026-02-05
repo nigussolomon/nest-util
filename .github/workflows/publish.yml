@@ -7,7 +7,7 @@ on:
     branches: [publish]
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -50,3 +50,11 @@ jobs:
             exit 1
           fi
           echo "Build artifacts verified successfully"
+
+      - name: Publish to Branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: pkg/nest-crud
+          folder: libs/nest-crud/dist
+          clean: true
+          single-commit: true
