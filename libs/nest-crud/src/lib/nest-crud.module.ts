@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
+import { NestCrudService } from './services/nest-crud.service';
 
 @Module({
-  controllers: [],
-  providers: [],
-  exports: [],
+  providers: [NestCrudService],
+  exports: [NestCrudService],
 })
 export class NestCrudModule {}
