@@ -1,0 +1,10 @@
+export * from './lib/nest-crud.module';
+export * from './lib/services/nest-crud.service';
+export * from './lib/controllers/nest-crud.controller';
+export * from './lib/dtos/filter.dto';
+export * from './lib/dtos/pagination.dto';
+export * from './lib/decorators/response-message.decorator';
+export * from './lib/interceptors/response.interceptor';
+export * from './lib/interfaces/crud.interface';
+export * from './lib/helpers/exception-filter.helper';
+//# sourceMappingURL=index.d.ts.map
