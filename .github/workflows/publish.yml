@@ -1,0 +1,52 @@
+name: Publish Libs
+
+on:
+  push:
+    branches: [publish]
+  pull_request:
+    branches: [publish]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nest-crud:
+    name: Build & Verify nest-crud
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test @nest-util/nest-crud
+        run: pnpm nx test @nest-util/nest-crud
+
+      - name: Build @nest-util/nest-crud
+        run: pnpm nx build @nest-util/nest-crud
+
+      - name: Copy package.json to dist
+        run: cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
+
+      - name: Verify Build Artifacts
+        run: |
+          if [ ! -d "libs/nest-crud/dist" ]; then
+            echo "Error: Build output directory libs/nest-crud/dist not found"
+            exit 1
+          fi
+          if [ ! -f "libs/nest-crud/dist/package.json" ]; then
+            echo "Error: libs/nest-crud/dist/package.json not found"
+            exit 1
+          fi
+          echo "Build artifacts verified successfully"
