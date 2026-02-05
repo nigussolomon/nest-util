@@ -36,25 +36,15 @@ jobs:
       - name: Build @nest-util/nest-crud
         run: pnpm nx build @nest-util/nest-crud
 
-      - name: Copy package.json to dist
-        run: cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
-
-      - name: Verify Build Artifacts
+      - name: Create Tarball
         run: |
-          if [ ! -d "libs/nest-crud/dist" ]; then
-            echo "Error: Build output directory libs/nest-crud/dist not found"
-            exit 1
-          fi
-          if [ ! -f "libs/nest-crud/dist/package.json" ]; then
-            echo "Error: libs/nest-crud/dist/package.json not found"
-            exit 1
-          fi
-          echo "Build artifacts verified successfully"
-
-      - name: Publish to Branch
-        uses: JamesIves/github-pages-deploy-action@v4
+          cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
+          cd libs/nest-crud/dist
+          pnpm pack --pack-destination ../../../
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          branch: pkg/nest-crud
-          folder: libs/nest-crud/dist
-          clean: true
-          single-commit: true
+          name: nest-crud-tgz
+          path: nest-util-nest-crud-*.tgz
+          retention-days: 7
