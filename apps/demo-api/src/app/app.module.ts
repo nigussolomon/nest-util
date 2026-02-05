@@ -5,6 +5,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ResponseInterceptor } from '@nest-util/nest-crud';
+import { PostController } from './post/post.controller';
+import { CommentController } from './comment/comment.controller';
+import { PostService } from './post/post.service';
+import { CommentService } from './comment/comment.service';
+import { Comment } from './comment/comment.entity';
+import { Post } from './post/post.entity';
 
 @Module({
   imports: [
@@ -18,11 +24,14 @@ import { ResponseInterceptor } from '@nest-util/nest-crud';
       autoLoadEntities: true,
       synchronize: true,
     }),
+    TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, PostController, CommentController],
   providers: [
     AppService,
+    PostService,
+    CommentService,
     {
       provide: APP_INTERCEPTOR,
       useClass: ResponseInterceptor,

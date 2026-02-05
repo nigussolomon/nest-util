@@ -53,8 +53,58 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
-          files: nest-util-nest-crud-*.tgz
+          files: |
+            nest-util-nest-crud-*.tgz
           prerelease: true
           generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ncnu:
+    name: Build & Verify ncnu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build ncnu
+        run: pnpm nx build ncnu
+
+      - name: Create Tarball
+        run: |
+          mkdir -p dist/libs/ncnu/bin
+          cp libs/ncnu/package.json dist/libs/ncnu/package.json
+          cp libs/ncnu/bin/ncnu.js dist/libs/ncnu/bin/ncnu.js
+          cd dist/libs/ncnu
+          # Fix entry points and remove devDependencies
+          jq '.main |= sub("\\.ts$"; ".js") | del(.devDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
+          pnpm pack --pack-destination ../../../
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncnu-tgz
+          path: ncnu-*.tgz
+          retention-days: 7
+
+      - name: Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          files: |
+            ncnu-*.tgz
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
