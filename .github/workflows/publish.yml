@@ -38,6 +38,8 @@ jobs:
         run: |
           cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
           cd libs/nest-crud/dist
+          # Fix paths in package.json to be relative to the current folder (dist)
+          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
         
       - name: Upload Artifact
