@@ -1,16 +1,19 @@
 import { Controller } from '@nestjs/common';
+import { ApiTags, ApiExtraModels } from '@nestjs/swagger';
 import { UsersService } from './user.service';
 import { CreateUserDto, UpdateUserDto, UserResponseDto } from './user.dto';
-import { EntityName, NestCrudController } from '@nest-util/nest-crud';
+import { CreateNestedCrudController, EntityName } from '@nest-util/nest-crud';
 
+@ApiTags('Users')
+@ApiExtraModels(CreateUserDto, UpdateUserDto, UserResponseDto)
 @Controller('users')
 @EntityName({ singular: 'User', plural: 'Users' })
-export class UsersController extends NestCrudController<
+export class UsersController extends CreateNestedCrudController(
   CreateUserDto,
   UpdateUserDto,
   UserResponseDto
-> {
-  constructor(protected override readonly service: UsersService) {
+) {
+  constructor(service: UsersService) {
     super(service);
   }
 }

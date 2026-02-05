@@ -5,3 +5,5 @@ export * from './lib/dtos/filter.dto';
 export * from './lib/dtos/pagination.dto';
 export * from './lib/decorators/response-message.decorator';
 export * from './lib/interceptors/response.interceptor';
+export * from './lib/interfaces/crud.interface';
+export * from './lib/helpers/exception-filter.helper';
