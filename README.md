@@ -70,5 +70,15 @@ npx nx test nest-crud
 
 ---
 
+> [!IMPORTANT]
+> **Global Configuration (demo-api)**
+> The demo application includes several global configurations in its bootstrap process to ensure consistent behavior:
+> - **ValidationPipe**: Configured with `transform: true` and `enableImplicitConversion: true` to automatically convert request payloads to DTO instances.
+> - **TypeOrmExceptionFilter**: A global filter from `@nest-util/nest-crud` that gracefully handles database-specific errors.
+> - **Query Parser**: The HTTP adapter is configured to use the `extended` query parser for handling complex nested query strings.
+> - **Swagger**: API documentation is automatically generated and available at `/api/docs`.
+
+---
+
 > [!TIP]
 > **GitHub Pages**: Detailed documentation is automatically deployed to GitHub Pages on every push to the `main` branch. Check it out at [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/).

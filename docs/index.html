@@ -2,11 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Nest-Util Documentation</title>
+  <title>Nest-Util | Professional NestJS Utilities</title>
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
   <meta name="description" content="A collection of powerful utilities for NestJS development, including a generic CRUD system and project generator.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- Themeable CSS -->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css">
+  
+  <!-- Custom Styles -->
+  <style>
+    :root {
+      /* Branding Colors */
+      --theme-color: #E0234E;
+      --base-font-family: 'Inter', sans-serif;
+      --heading-font-family: 'Outfit', sans-serif;
+      
+      /* Refined UI */
+      --base-font-size: 16px;
+      --content-max-width: 65em;
+      --sidebar-width: 18rem;
+    }
+
+    body {
+      font-family: var(--base-font-family);
+    }
+
+    .markdown-section h1, .markdown-section h2, .markdown-section h3 {
+      font-family: var(--heading-font-family);
+      font-weight: 700;
+    }
+
+    /* Professional Touch */
+    .app-nav {
+      margin: 1rem 2rem;
+    }
+
+    /* Logo Styling */
+    .sidebar .app-name-link img {
+      width: 120px;
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
@@ -16,21 +57,43 @@
       repo: 'nigussolomon/nest-util',
       loadSidebar: true,
       loadNavbar: true,
-      subMaxLevel: 3,
+      coverpage: true,
+      onlyCover: false,
       auto2top: true,
+      subMaxLevel: 3,
+      executeScript: true,
+      
+      // Plugins
       search: 'auto',
-      plugins: [
-        function(hook, vm) {
-          hook.beforeEach(function(html) {
-            return html;
-          });
-        }
-      ]
+      copyCode: {
+        buttonText: 'Copy',
+        errorText: 'Error',
+        successText: 'Copied'
+      },
+      pagination: {
+        previousText: 'Previous',
+        nextText: 'Next',
+        crossChapter: true,
+        crossChapterText: true
+      },
+      tabs: {
+        persist: true,
+        sync: true,
+        theme: 'classic',
+        tabComments: true,
+        tabHeadings: true
+      }
     }
   </script>
-  <!-- Docsify v4 -->
+  
+  <!-- Docsify Core -->
   <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+  
+  <!-- Plugins -->
+  <script src="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-tabs@1"></script>
 </body>
 </html>
