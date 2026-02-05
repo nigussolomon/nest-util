@@ -2,6 +2,12 @@
   "name": "@nest-util/demo-api",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "typeorm": "ts-node -P tsconfig.app.json -r tsconfig-paths/register ../../node_modules/typeorm/cli.js",
+    "migration:generate": "pnpm typeorm migration:generate ./src/db/migrations/$NAME -d src/db/ormconfig.ts",
+    "migration:run": "pnpm typeorm migration:run -d src/db/ormconfig.ts",
+    "migration:revert": "pnpm typeorm migration:revert -d src/db/ormconfig.ts"
+  },
   "nx": {
     "targets": {
       "build": {
@@ -83,16 +89,19 @@
     }
   },
   "dependencies": {
-    "@nest-util/nest-crud": "workspace:*",
     "@nest-util/nest-auth": "workspace:*",
+    "@nest-util/nest-crud": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "dotenv": "^17.2.3",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@nestjs/testing": "^11.0.0"
+    "@nestjs/testing": "^11.0.0",
+    "ts-node": "10.9.1",
+    "tsconfig-paths": "^4.2.0"
   }
 }

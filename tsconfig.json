@@ -10,9 +10,6 @@
       "path": "./libs/nest-auth"
     },
     {
-      "path": "./apps/demo-api-e2e"
-    },
-    {
       "path": "./apps/demo-api"
     }
   ]
