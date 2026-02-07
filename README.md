@@ -26,7 +26,11 @@ A professional code generation tool to scaffold your NestJS resources:
 - **Definite Assignment**: Generates code compatible with strict TypeScript property initialization.
 
 ### 3. @nest-util/nest-auth
-*(Work in Progress)* - Standardized authentication and authorization utilities.
+A dynamic and flexible authentication library:
+- **`AuthModule`**: Dynamic configuration for entities, fields, and JWT.
+- **`AuthService`**: Built-in registration and login with bcrypt hashing.
+- **Custom Decorators**: `@Public()`, `@CurrentUser()`, and `@AuthOptions()`.
+- **Route Disabling**: Easily disable auth endpoints via configuration.
 
 ---
 

@@ -17,6 +17,12 @@ export class User {
   @Column()
   name!: string;
 
+  @Column({ select: false, nullable: true })
+  password!: string;
+
+  @Column({ select: false, nullable: true })
+  refreshToken!: string;
+
   @Column({ default: true })
   isActive!: boolean;
 
