@@ -2,21 +2,32 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
   actions: read
 
 jobs:
-  main:
+  setup:
+    name: Setup
     runs-on: ubuntu-latest
+    outputs:
+      affected-lint: ${{ steps.affected.outputs.lint }}
+      affected-test: ${{ steps.affected.outputs.test }}
+      affected-build: ${{ steps.affected.outputs.build }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v2
+      - name: Fetch main branch for comparison
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+        if: github.ref != 'refs/heads/main'
+
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
@@ -25,6 +36,172 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-node-modules
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Check affected projects
+        id: affected
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
+          HEAD_SHA="${{ github.sha }}"
+          
+          echo "lint=$(pnpm nx show projects --affected --base=$BASE_SHA --head=$HEAD_SHA -t lint | wc -l | xargs)" >> $GITHUB_OUTPUT
+          echo "test=$(pnpm nx show projects --affected --base=$BASE_SHA --head=$HEAD_SHA -t test | wc -l | xargs)" >> $GITHUB_OUTPUT
+          echo "build=$(pnpm nx show projects --affected --base=$BASE_SHA --head=$HEAD_SHA -t build | wc -l | xargs)" >> $GITHUB_OUTPUT
+
+  lint:
+    name: Lint
+    needs: setup
+    if: needs.setup.outputs.affected-lint != '0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+        if: github.ref != 'refs/heads/main'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm nx run-many -t lint test build typecheck --all --exclude demo-api
+      - name: Run lint
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
+          pnpm nx affected -t lint --base=$BASE_SHA --exclude demo-api
+
+  typecheck:
+    name: Typecheck
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+        if: github.ref != 'refs/heads/main'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run typecheck
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
+          pnpm nx affected -t typecheck --base=$BASE_SHA --exclude demo-api
+
+  test:
+    name: Test
+    needs: setup
+    if: needs.setup.outputs.affected-test != '0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+        if: github.ref != 'refs/heads/main'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
+          pnpm nx affected -t test --base=$BASE_SHA --exclude demo-api --coverage
+
+  build:
+    name: Build
+    needs: [setup, lint, typecheck]
+    if: |
+      always() &&
+      needs.setup.outputs.affected-build != '0' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      needs.typecheck.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main:refs/remotes/origin/main --depth=1
+        if: github.ref != 'refs/heads/main'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run build
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
+          pnpm nx affected -t build --base=$BASE_SHA --exclude demo-api
