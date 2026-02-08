@@ -92,10 +92,12 @@ describe('ncnu generate', () => {
     );
     const content = controllerCall[1];
 
+    expect(content).toContain('import { CreateNestedCrudController, IBaseController } from \'@nest-util/nest-crud\'');
     expect(content).toContain('export class UserController extends CreateNestedCrudController(');
     expect(content).toContain('CreateUserDto,');
     expect(content).toContain('UpdateUserDto,');
     expect(content).toContain('User');
+    expect(content).toContain(') implements IBaseController<CreateUserDto, UpdateUserDto, User>');
     expect(content).toContain('constructor(override readonly service: UserService)');
   });
 });

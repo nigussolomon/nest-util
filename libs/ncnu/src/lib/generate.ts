@@ -110,7 +110,7 @@ export class ${className}Service extends NestCrudService<
 
 function generateController(className: string, fileName: string) {
   return `import { Controller } from '@nestjs/common';
-import { CreateNestedCrudController } from '@nest-util/nest-crud';
+import { CreateNestedCrudController, IBaseController } from '@nest-util/nest-crud';
 import { ${className}Service } from './${fileName}.service';
 import { ${className} } from './${fileName}.entity';
 import { Create${className}Dto } from './create-${fileName}.dto';
@@ -123,7 +123,7 @@ export class ${className}Controller extends CreateNestedCrudController(
   Create${className}Dto,
   Update${className}Dto,
   ${className}
-) {
+) implements IBaseController<Create${className}Dto, Update${className}Dto, ${className}> {
   constructor(override readonly service: ${className}Service) {
     super(service);
   }
