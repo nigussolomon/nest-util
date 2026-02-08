@@ -17,9 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch main branch for Nx affected
-        run: git fetch origin main:main
-
       - uses: pnpm/action-setup@v2
         with:
           version: 10
