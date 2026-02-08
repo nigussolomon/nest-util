@@ -108,3 +108,53 @@ jobs:
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  nest-auth:
+    name: Build & Verify nest-auth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test @nest-util/nest-auth
+        run: pnpm nx test @nest-util/nest-auth
+
+      - name: Build @nest-util/nest-auth
+        run: pnpm nx build @nest-util/nest-auth
+
+      - name: Create Tarball
+        run: |
+          cp libs/nest-auth/package.json libs/nest-auth/dist/package.json
+          cd libs/nest-auth/dist
+          # Fix paths in package.json to be relative to the current folder (dist)
+          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
+          pnpm pack --pack-destination ../../../
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nest-auth-tgz
+          path: nest-util-nest-auth-*.tgz
+          retention-days: 7
+
+      - name: Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          files: |
+            nest-util-nest-auth-*.tgz
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

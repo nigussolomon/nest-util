@@ -11,6 +11,9 @@ import { PostService } from './post/post.service';
 import { CommentService } from './comment/comment.service';
 import { Comment } from './comment/comment.entity';
 import { Post } from './post/post.entity';
+import { AuthModule } from '@nest-util/nest-auth';
+import { User } from './user/user.entity';
+import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
 
 @Module({
   imports: [
@@ -26,6 +29,20 @@ import { Post } from './post/post.entity';
     }),
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
+    AuthModule.forRoot({
+      userEntity: User,
+      identifierField: 'email',
+      passkeyField: 'password',
+      jwtSecret: 'super-secret-key',
+      refreshTokenSecret: 'super-secret-key',
+      refreshTokenExpiresIn: '7d',
+      refreshTokenField: 'refreshToken',
+      disabledRoutes: ['register'],
+      accessTokenField: 'accessToken',
+      loginDto: LoginDto,
+      registerDto: RegisterDto,
+      refreshDto: RefreshDto,
+    }),
   ],
   controllers: [AppController, PostController, CommentController],
   providers: [
