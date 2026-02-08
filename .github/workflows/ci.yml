@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches-ignore: [publish]
   pull_request:
 
 permissions:
