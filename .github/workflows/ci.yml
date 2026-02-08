@@ -93,7 +93,7 @@ jobs:
       - name: Run lint
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
-          pnpm nx affected -t lint --base=$BASE_SHA --exclude demo-api
+          pnpm nx affected -t lint --base=$BASE_SHA
 
   typecheck:
     name: Typecheck
@@ -128,7 +128,7 @@ jobs:
       - name: Run typecheck
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
-          pnpm nx affected -t typecheck --base=$BASE_SHA --exclude demo-api
+          pnpm nx affected -t typecheck --base=$BASE_SHA
 
   test:
     name: Test
@@ -164,7 +164,7 @@ jobs:
       - name: Run tests
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
-          pnpm nx affected -t test --base=$BASE_SHA --exclude demo-api --coverage
+          pnpm nx affected -t test --base=$BASE_SHA --coverage
 
   build:
     name: Build
@@ -204,4 +204,4 @@ jobs:
       - name: Run build
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha || 'origin/main~1' }}"
-          pnpm nx affected -t build --base=$BASE_SHA --exclude demo-api
+          pnpm nx affected -t build --base=$BASE_SHA
