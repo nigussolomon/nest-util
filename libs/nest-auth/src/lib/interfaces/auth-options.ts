@@ -4,7 +4,7 @@ export interface AuthModuleOptions {
   /**
    * The TypeORM entity for users.
    */
-  userEntity: Type<any>;
+  userEntity: Type<unknown>;
 
   /**
    * Field to use for login (e.g., 'email', 'username').
@@ -47,6 +47,12 @@ export interface AuthModuleOptions {
   refreshTokenField?: string;
 
   /**
+   * Field to store access token in user entity.
+   * @default 'accessToken'
+   */
+  accessTokenField?: string;
+
+  /**
    * Header name to look for refresh token.
    * @default 'x-refresh-token'
    */
@@ -56,4 +62,19 @@ export interface AuthModuleOptions {
    * List of routes to disable (e.g., ['register']).
    */
   disabledRoutes?: string[];
+
+  /**
+   * DTO for login.
+   */
+  loginDto?: Type<unknown>;
+
+  /**
+   * DTO for registration.
+   */
+  registerDto?: Type<unknown>;
+
+  /**
+   * DTO for refreshing tokens.
+   */
+  refreshDto?: Type<unknown>;
 }

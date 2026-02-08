@@ -29,4 +29,4 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm nx affected -t lint test build typecheck --exclude @nest-util/nest-auth
+      - run: pnpm nx affected -t lint test build typecheck

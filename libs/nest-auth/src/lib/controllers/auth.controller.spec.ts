@@ -1,15 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
 import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import { ForbiddenException } from '@nestjs/common';
 
+import { CreateAuthController } from './auth.controller';
+
 describe('AuthController', () => {
-  let controller: AuthController;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let controller: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let authService: any;
 
   const mockOptions = {
+    userEntity: class User { id = 1 },
+    identifierField: 'email',
+    passkeyField: 'password',
+    jwtSecret: 'test-secret',
     disabledRoutes: [] as string[],
+    loginDto: class LoginDto { email = ''; password = '' },
+    registerDto: class RegisterDto { email = ''; password = '' },
   };
 
   beforeEach(async () => {
@@ -17,10 +26,13 @@ describe('AuthController', () => {
       register: jest.fn(),
       login: jest.fn(),
       refresh: jest.fn(),
+      logout: jest.fn(),
     };
 
+    const ControllerClass = CreateAuthController(mockOptions);
+
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController],
+      controllers: [ControllerClass],
       providers: [
         {
           provide: AuthService,
@@ -33,7 +45,7 @@ describe('AuthController', () => {
       ],
     }).compile();
 
-    controller = module.get<AuthController>(AuthController);
+    controller = module.get(ControllerClass);
     mockOptions.disabledRoutes = []; // reset
   });
 
@@ -76,30 +88,38 @@ describe('AuthController', () => {
   });
 
   describe('refresh', () => {
-    it('should call authService.refresh with token from headers', async () => {
-      const headers = { 'x-refresh-token': 'header-token' };
-      const body = {};
-      authService.refresh.mockResolvedValue({ access_token: 'new-at' });
-
-      const result = await controller.refresh(headers, body);
-
-      expect(authService.refresh).toHaveBeenCalledWith('header-token');
-      expect(result).toEqual({ access_token: 'new-at' });
-    });
-
-    it('should call authService.refresh with token from body if header is missing', async () => {
-      const headers = {};
+    it('should call authService.refresh with token from body', async () => {
       const body = { refreshToken: 'body-token' };
       authService.refresh.mockResolvedValue({ access_token: 'new-at' });
 
-      const result = await controller.refresh(headers, body);
+      const result = await controller.refresh(body);
 
       expect(authService.refresh).toHaveBeenCalledWith('body-token');
       expect(result).toEqual({ access_token: 'new-at' });
     });
 
-    it('should throw ForbiddenException if token is missing entirely', async () => {
-      await expect(controller.refresh({}, {})).rejects.toThrow(ForbiddenException);
+    it('should throw ForbiddenException if token is missing', async () => {
+      await expect(controller.refresh({ refreshToken: '' })).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('me', () => {
+    it('should return the current user', async () => {
+      const user = { id: 1, email: 'test@test.com' };
+      const result = await controller.me(user);
+      expect(result).toEqual(user);
+    });
+  });
+
+  describe('logout', () => {
+    it('should call authService.logout with user id', async () => {
+      const user = { id: 1 };
+      authService.logout.mockResolvedValue(true);
+
+      const result = await controller.logout(user);
+
+      expect(authService.logout).toHaveBeenCalledWith(1);
+      expect(result).toBe(true);
     });
   });
 });

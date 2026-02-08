@@ -13,6 +13,7 @@ import { Comment } from './comment/comment.entity';
 import { Post } from './post/post.entity';
 import { AuthModule } from '@nest-util/nest-auth';
 import { User } from './user/user.entity';
+import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
 
 @Module({
   imports: [
@@ -37,6 +38,10 @@ import { User } from './user/user.entity';
       refreshTokenExpiresIn: '7d',
       refreshTokenField: 'refreshToken',
       disabledRoutes: ['register'],
+      accessTokenField: 'accessToken',
+      loginDto: LoginDto,
+      registerDto: RegisterDto,
+      refreshDto: RefreshDto,
     }),
   ],
   controllers: [AppController, PostController, CommentController],

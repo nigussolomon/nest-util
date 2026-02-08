@@ -1,126 +1,126 @@
 # @nest-util/nest-auth
 
-`@nest-util/nest-auth` is a dynamic NestJS authentication library designed to be flexible, plug-and-play, and easy to override. It uses the Provider Pattern to allow developers to configure user entities, field names, and security settings seamlessly.
+`@nest-util/nest-auth` is a dynamic NestJS authentication library designed to be flexible, plug-and-play, and easy to override. It uses the Provider Pattern to allow developers to configure user entities, field names, and security settings while providing custom DTOs for validation and documentation.
 
 ## Installation
 
 ```bash
-pnpm add @nest-util/nest-auth @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt
-pnpm add -D @types/passport-jwt @types/bcrypt
+npm install @nest-util/nest-auth @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt
+npm install -D @types/passport-jwt @types/bcrypt
 ```
 
 ## Quick Start
 
-### 1. Register AuthModule
+### 1. Define Authentication DTOs
 
-In your `AppModule`, register the `AuthModule` using the `forRoot` method. 
+In your API project, define the DTOs you want to use for authentication. This gives you full control over validation and Swagger documentation.
+
+```typescript
+// auth.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+
+export class LoginDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: 'password123' })
+  password!: string;
+}
+
+export class RegisterDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: 'password123' })
+  password!: string;
+}
+
+export class RefreshDto {
+  @ApiProperty()
+  refreshToken!: string;
+}
+```
+
+### 2. Register AuthModule
+
+In your `AppModule`, register the `AuthModule` using the `forRoot` method and provide your DTO types.
 
 ```typescript
 import { AuthModule } from '@nest-util/nest-auth';
 import { User } from './user/user.entity';
+import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
 
 @Module({
   imports: [
     AuthModule.forRoot({
       userEntity: User,
-      identifierField: 'email', // The unique field for login (default: 'email')
-      passkeyField: 'password', // The password field name (default: 'password')
+      identifierField: 'email', // Default: 'email'
+      passkeyField: 'password', // Default: 'password'
       jwtSecret: 'your-secret-key',
-      expiresIn: '1h', // Access token expiration (default: '1h')
-      refreshTokenSecret: 'your-refresh-secret', // Optional
-      refreshTokenExpiresIn: '7d', // Refresh token expiration (default: '7d')
-      refreshTokenField: 'refreshToken', // Field in user entity (default: 'refreshToken')
-      disabledRoutes: ['register'], // Optional: Disable specific routes
+      loginDto: LoginDto,
+      registerDto: RegisterDto,
+      refreshDto: RefreshDto,
+      accessTokenField: 'accessToken', // Field to store hashed AT nonce
+      refreshTokenField: 'refreshToken', // Field to store hashed RT nonce
     }),
   ],
 })
 export class AppModule {}
 ```
 
-### 2. Protect Your Routes
+### 3. Protect Your Routes
 
-By default, we recommend using the `JwtAuthGuard` globally or per-controller.
+Use the `JwtAuthGuard` and `@CurrentUser()` decorator.
 
 ```typescript
-import { JwtAuthGuard } from '@nest-util/nest-auth';
+import { JwtAuthGuard, CurrentUser, AuthUser } from '@nest-util/nest-auth';
 
 @UseGuards(JwtAuthGuard)
 @Controller('profile')
 export class ProfileController {
-  // ...
+  @Get('me')
+  getProfile(@CurrentUser() user: AuthUser) {
+    return user;
+  }
 }
-```
-
-### Global Authentication
-
-To protect all routes by default and use `@Public()` to exclude specific ones, register `JwtAuthGuard` as a global provider:
-
-```typescript
-import { APP_GUARD } from '@nestjs/core';
-import { JwtAuthGuard } from '@nest-util/nest-auth';
-
-@Module({
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-  ],
-})
-export class AppModule {}
 ```
 
 ## Features
 
-### Dynamic Field Mapping
-The library doesn't hardcode field names. If your user entity uses `username` instead of `email`, or `pwd` instead of `password`, simply configure them in `forRoot`.
+### DTO Factory Pattern
+The library uses a factory pattern for its `AuthController`. When you provide `loginDto`, `registerDto`, or `refreshDto` in `forRoot`, the library dynamically generates a controller that uses these classes for request validation and Swagger documentation.
 
-### Custom Decorators
+### Type Safety
+The library exports `AuthUser` (class) and `AuthTokens` (interface) to ensure type safety across your application.
 
-#### `@CurrentUser()`
-Extract the authenticated user object directly from the request.
+### Secure Validation
+- **Single-Use Tokens**: Every access and refresh token contains a unique nonce.
+- **Explicit Hashing**: Tokens are hashed and stored in the database.
+- **Automatic Selection**: The library explicitly selects hidden fields (like `accessToken` or `password`) only when needed for validation, ensuring no sensitive data leaks into `AuthUser`.
 
-```typescript
-@Get('me')
-getProfile(@CurrentUser() user: any) {
-  return user;
-}
-```
+## Authentication Endpoints
 
-#### `@Public()`
-Bypass the global `JwtAuthGuard` for specific routes (like login or register).
-
-```typescript
-@Public()
-@Post('login')
-login(@Body() dto: LoginDto) {
-  // ...
-}
-```
-
-### Base Controller & Service
-The library provides `AuthService` and `AuthController` out of the box with logic for:
-- **Registration**: Handles user creation and password hashing using bcrypt via `POST /auth/register`.
-- **Login**: Validates credentials and generates JWT access and **refresh tokens** via `POST /auth/login`.
-- **Refresh**: Handles **single-use refresh token rotation** via `POST /auth/refresh`. 
-  - Token can be passed in the `x-refresh-token` header (recommended) or in the request body as `refreshToken`.
-  - To ensure uniqueness and prevent replay attacks, each refresh token includes a unique nonce and is hashed before being stored in the database.
-- **Sensitive Data**: All responses automatically exclude the password hash and the refresh token field.
-
-### Swagger Documentation
-Endpoints are automatically documented if you use `@nestjs/swagger`. Standard DTOs like `LoginDto`, `RegisterDto`, and `RefreshDto` are exported for your convenience.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Register a new user |
+| POST | `/auth/login` | Login and get tokens |
+| POST | `/auth/refresh` | Get new tokens using refresh token |
+| GET  | `/auth/me` | Get current user profile |
+| POST | `/auth/logout` | Logout user |
 
 ## Advanced Usage
 
-### Overriding Base Logic
-Since the library uses the Provider Pattern, you can extend the base classes to add custom logic.
+### Overriding AuthService
+You can extend the base `AuthService` to add custom logic.
 
 ```typescript
 @Injectable()
 export class CustomAuthService extends AuthService {
-  async register(data: any) {
-    // Custom logic before/after registration
-    return super.register(data);
+  async register(data: any): Promise<AuthUser> {
+    // Custom logic before registration
+    const user = await super.register(data);
+    // Custom logic after registration
+    return user;
   }
 }
 ```

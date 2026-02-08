@@ -3,24 +3,26 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import type { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
+import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 
 @Injectable()
 export class AuthService {
-  private readonly userRepository: Repository<any>;
+  private readonly userRepository: Repository<Record<string, unknown>>;
 
   constructor(
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
     private readonly jwtService: JwtService,
     @Inject(DataSource) private readonly dataSource: DataSource
   ) {
-    this.userRepository = this.dataSource.getRepository(this.options.userEntity);
+    this.userRepository = this.dataSource.getRepository(this.options.userEntity) as Repository<Record<string, unknown>>;
   }
 
-  async register(data: any) {
-    const identifier = data[this.options.identifierField];
-    const password = data[this.options.passkeyField];
+  async register(data: Record<string, unknown>): Promise<AuthUser> {
+    const identifier = data[this.options.identifierField] as string;
+    const password = data[this.options.passkeyField] as string;
 
     const existingUser = await this.userRepository.findOne({
       where: { [this.options.identifierField]: identifier },
@@ -40,9 +42,9 @@ export class AuthService {
     return this.removeSensitiveData(savedUser);
   }
 
-  async login(credentials: any) {
-    const identifier = credentials[this.options.identifierField];
-    const password = credentials[this.options.passkeyField];
+  async login(credentials: Record<string, unknown>): Promise<AuthTokens> {
+    const identifier = credentials[this.options.identifierField] as string;
+    const password = credentials[this.options.passkeyField] as string;
 
     const user = await this.userRepository
       .createQueryBuilder('user')
@@ -56,7 +58,7 @@ export class AuthService {
 
     const isPasswordValid = await bcrypt.compare(
       password,
-      user[this.options.passkeyField]
+      user[this.options.passkeyField] as string
     );
 
     if (!isPasswordValid) {
@@ -66,7 +68,7 @@ export class AuthService {
     return await this.generateTokens(user);
   }
 
-  async refresh(refreshToken: string) {
+  async refresh(refreshToken: string): Promise<AuthTokens> {
     const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
     const secret = this.options.refreshTokenSecret || this.options.jwtSecret;
 
@@ -82,67 +84,77 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const storedHash = user[refreshTokenField];
+      const storedHash = user[refreshTokenField] as string;
       if (!storedHash) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const isTokenValid = await bcrypt.compare(refreshToken, storedHash);
+      const isTokenValid = await bcrypt.compare(payload.nonce, storedHash);
       if (!isTokenValid) {
-        // Potential reuse attack: clear token and throw
-        await this.userRepository.createQueryBuilder()
-          .update(this.options.userEntity)
-          .set({ [refreshTokenField]: null })
-          .where('id = :id', { id: user.id })
-          .execute();
-          
         throw new UnauthorizedException('Refresh token reused or invalid');
-      }
-
-      // Explicitly nullify before generating new ones to ensure rotation
-      const nullifyResult = await this.userRepository.createQueryBuilder()
-        .update(this.options.userEntity)
-        .set({ [refreshTokenField]: null })
-        .where('id = :id', { id: user.id })
-        .execute();
-
-      if (nullifyResult.affected === 0) {
-        throw new UnauthorizedException('Invalid refresh token or user not found');
       }
       
       return await this.generateTokens(user);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof UnauthorizedException) throw e;
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
-  private async generateTokens(user: any) {
+  async logout(userId: number | string): Promise<boolean> {
+    const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
+    const accessTokenField = this.options.accessTokenField || 'accessToken';
+    
+    const updateResult = await this.userRepository.createQueryBuilder()
+      .update(this.options.userEntity)
+      .set({ [refreshTokenField]: null, [accessTokenField]: null })
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new UnauthorizedException('Failed to logout');
+    }
+
+    return true;
+  }
+
+  private async generateTokens(user: Record<string, unknown>): Promise<AuthTokens> {
     const identifierField = this.options.identifierField;
     const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
+    const accessTokenField = this.options.accessTokenField || 'accessToken';
     const payload = { sub: user.id, [identifierField]: user[identifierField] };
     
     const refreshPayload = { 
       ...payload, 
-      nonce: Math.random().toString(36).substring(7) 
+      nonce: crypto.randomUUID() 
     };
 
-    const accessToken = this.jwtService.sign(payload);
+    const accessTokenPayload = { 
+      ...payload, 
+      nonce: crypto.randomUUID() 
+    };
+
+    const accessToken = this.jwtService.sign(accessTokenPayload, {
+      secret: this.options.jwtSecret,
+      expiresIn: '15m',
+    });
     
     const refreshSecret = this.options.refreshTokenSecret || this.options.jwtSecret;
     const refreshExpiresIn = this.options.refreshTokenExpiresIn || '7d';
     
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: refreshSecret,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expiresIn: refreshExpiresIn as any,
     });
 
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    const hashedRefreshToken = await bcrypt.hash(refreshPayload.nonce, 10);
+    const hashedAccessToken = await bcrypt.hash(accessTokenPayload.nonce, 10);
     
     const updateResult = await this.userRepository.createQueryBuilder()
       .update(this.options.userEntity)
-      .set({ [refreshTokenField]: hashedRefreshToken })
-      .where('id = :id', { id: user.id })
+      .set({ [refreshTokenField]: hashedRefreshToken, [accessTokenField]: hashedAccessToken })
+      .where('id = :id', { id: user.id as string | number })
       .execute();
 
     if (updateResult.affected === 0) {
@@ -156,21 +168,41 @@ export class AuthService {
     };
   }
 
-  private removeSensitiveData(user: any) {
+  private removeSensitiveData(user: Record<string, unknown>): AuthUser {
     const { ...userData } = user;
     const passkeyField = this.options.passkeyField;
     const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
+    const accessTokenField = this.options.accessTokenField || 'accessToken';
 
     delete userData[passkeyField];
     delete userData[refreshTokenField];
+    delete userData[accessTokenField];
 
-    return userData;
+    return userData as AuthUser;
   }
 
-  async validateUser(payload: any) {
-    const user = await this.userRepository.findOne({
-      where: { id: payload.sub },
-    });
-    return user ? this.removeSensitiveData(user) : null;
+  async validateUser(payload: { sub: string | number; nonce: string }): Promise<AuthUser | null> {
+    const accessTokenField = this.options.accessTokenField || 'accessToken';
+    
+    const user = await this.userRepository.createQueryBuilder('user')
+      .addSelect(`user.${accessTokenField}`)
+      .where('user.id = :id', { id: payload.sub })
+      .getOne();
+
+    const storedAccessToken = user ? user[accessTokenField] : null;
+
+    if (!user || !storedAccessToken) {
+      throw new UnauthorizedException('Access token reused or invalid');
+    }
+
+    const isAccessTokenValid = await bcrypt.compare(
+      payload.nonce,
+      storedAccessToken as string
+    );
+    if (!isAccessTokenValid) {
+      throw new UnauthorizedException('Access token reused or invalid');
+    }
+
+    return this.removeSensitiveData(user);
   }
 }

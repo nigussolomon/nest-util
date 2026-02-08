@@ -18,10 +18,20 @@
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/swagger": "^11.2.6",
+    "@nestjs/typeorm": "^11.0.0",
+    "bcrypt": "^6.0.0",
+    "passport-jwt": "^4.0.1",
+    "rxjs": "^7.8.0",
     "tslib": "^2.3.0",
-    "uuid": "^8.3.2"
+    "typeorm": "^0.3.28"
   },
   "devDependencies": {
-    "@types/uuid": "^11.0.0"
+    "@types/bcrypt": "^6.0.0",
+    "@types/passport-jwt": "^4.0.1"
   }
 }

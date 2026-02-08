@@ -6,7 +6,7 @@ import { AUTH_OPTIONS } from './constants';
 import { AuthModuleOptions } from './interfaces/auth-options';
 import { AuthService } from './services/auth.service';
 import { RouteDisabledGuard } from './guards/route-disabled.guard';
-import { AuthController } from './controllers/auth.controller';
+import { CreateAuthController } from './controllers/auth.controller';
 import { JwtStrategy } from './guards/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -14,15 +14,18 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 @Module({})
 export class AuthModule {
   static forRoot(options: AuthModuleOptions): DynamicModule {
+    const Controller = CreateAuthController(options);
+
     return {
       module: AuthModule,
-      controllers: [AuthController],
+      controllers: [Controller],
       imports: [
         PassportModule.register({ defaultStrategy: 'jwt' }),
         JwtModule.register({
           secret: options.jwtSecret,
           signOptions: {
-            expiresIn: (options.expiresIn as any) || '1h',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expiresIn: (options.expiresIn ?? '1h') as any,
           },
         }),
         TypeOrmModule.forFeature([options.userEntity]),
