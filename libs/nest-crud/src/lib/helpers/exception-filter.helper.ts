@@ -4,7 +4,6 @@ import {
   ExceptionFilter,
   HttpStatus,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 
 interface DatabaseError extends Error {
@@ -12,6 +11,8 @@ interface DatabaseError extends Error {
   errno?: number;
   detail?: string;
 }
+
+import { Response } from 'express';
 
 @Catch(QueryFailedError)
 export class TypeOrmExceptionFilter implements ExceptionFilter {

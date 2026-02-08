@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { generate } from './generate';
+import { generate } from './generate.js';
 
 jest.mock('fs/promises');
 
