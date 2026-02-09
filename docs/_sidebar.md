@@ -1,6 +1,10 @@
 ![logo](assets/logo.png)
 
 - [Home](/)
+- [Getting Started](getting-started)
+- [Example & Recipes](examples)
 - [CRUD System](nest-crud)
 - [Generator (NCNU)](ncnu)
 - [Auth Utilities](nest-auth)
+- [API Reference](api-reference)
+- [Troubleshooting](troubleshooting)
