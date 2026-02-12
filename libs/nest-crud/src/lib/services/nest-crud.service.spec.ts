@@ -36,11 +36,13 @@ describe('NestCrudService', () => {
       andWhere: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn(),
     } as unknown as jest.Mocked<SelectQueryBuilder<MockEntity>>;
 
     repository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      findOne: jest.fn(),
       findOneBy: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
@@ -50,6 +52,8 @@ describe('NestCrudService', () => {
     const options = {
       repository,
       allowedFilters: ['name'] as const,
+      include: [],
+      relations: [],
       toResponseDto: (entity: MockEntity | MockEntity[]) => {
         if (Array.isArray(entity)) {
           return entity.map((e) => ({ id: e.id, name: e.name }));
@@ -72,15 +76,7 @@ describe('NestCrudService', () => {
       ],
     }).compile();
 
-    service =
-      module.get<
-        NestCrudService<
-          MockEntity,
-          Partial<MockEntity>,
-          Partial<MockEntity>,
-          MockResponseDto
-        >
-      >(NestCrudService);
+    service = module.get(NestCrudService);
   });
 
   it('should be defined', () => {
@@ -94,6 +90,7 @@ describe('NestCrudService', () => {
         limit: 10,
         filter: { name_cont: 'test' },
       };
+
       const entities: MockEntity[] = [{ id: 1, name: 'test' }];
       const total = 1;
 
@@ -117,16 +114,20 @@ describe('NestCrudService', () => {
   describe('findOne', () => {
     it('should return a transformed entity', async () => {
       const entity: MockEntity = { id: 1, name: 'test' };
-      repository.findOneBy.mockResolvedValue(entity);
+      repository.findOne.mockResolvedValue(entity);
 
       const result = await service.findOne(1);
 
-      expect(repository.findOneBy).toHaveBeenCalledWith({ id: 1 });
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+        relations: [],
+      });
+
       expect(result).toEqual({ id: 1, name: 'test' });
     });
 
     it('should throw NotFoundException if entity does not exist', async () => {
-      repository.findOneBy.mockResolvedValue(null);
+      repository.findOne.mockResolvedValue(null);
 
       await expect(service.findOne(1)).rejects.toThrow(NotFoundException);
     });
@@ -136,6 +137,7 @@ describe('NestCrudService', () => {
     it('should save and return transformed entity', async () => {
       const payload: Partial<MockEntity> = { name: 'new' };
       const savedEntity: MockEntity = { id: 1, name: 'new' };
+
       repository.save.mockResolvedValue(savedEntity);
 
       const result = await service.create(payload);
@@ -147,14 +149,13 @@ describe('NestCrudService', () => {
 
   describe('update', () => {
     it('should update and return transformed entity', async () => {
-      const entity: MockEntity = { id: 1, name: 'old' };
+      const existing: MockEntity = { id: 1, name: 'old' };
+      const updated: MockEntity = { id: 1, name: 'updated' };
       const payload: Partial<MockEntity> = { name: 'updated' };
-      const updatedEntity: MockEntity = { id: 1, name: 'updated' };
 
-      repository.findOneBy
-        .mockResolvedValueOnce(entity)
-        .mockResolvedValueOnce(updatedEntity);
+      repository.findOneBy.mockResolvedValue(existing);
       repository.update.mockResolvedValue({ affected: 1 } as UpdateResult);
+      repository.findOne.mockResolvedValue(updated);
 
       const result = await service.update(1, payload);
 

@@ -1,18 +1,47 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+interface Field {
+  name: string;
+  type: string;
+  relation?: {
+    type: 'relation' | 'relationMany';
+    target: string;
+  };
+}
+
 export async function generate(
   modelName: string,
   fields: string[],
   targetPath: string
 ) {
-  const parsedFields = fields.map((f) => {
-    const [name, type] = f.split(':');
-    return { name, type: type || 'string' };
+  if (!fields.length) throw new Error('Fields array cannot be empty');
+
+  const parsedFields: Field[] = fields.map((f) => {
+    const parts = f.split(':');
+    const name = parts[0];
+    const type = parts[1] ?? 'string';
+    if (type.startsWith('relation')) {
+      return {
+        name,
+        type,
+        relation: {
+          type: type === 'relation' ? 'relation' : 'relationMany',
+          target: parts[2],
+        },
+      };
+    }
+    return { name, type };
   });
 
   const className = modelName.charAt(0).toUpperCase() + modelName.slice(1);
   const fileName = modelName.toLowerCase();
+
+  const resourceDir = path.resolve(process.cwd(), targetPath, fileName);
+  const dtoDir = path.join(resourceDir, 'dtos');
+
+  await fs.mkdir(resourceDir, { recursive: true });
+  await fs.mkdir(dtoDir, { recursive: true });
 
   const templates = {
     entity: generateEntity(className, parsedFields),
@@ -22,20 +51,17 @@ export async function generate(
     controller: generateController(className, fileName),
   };
 
-  const resourceDir = path.resolve(process.cwd(), targetPath, fileName);
-  await fs.mkdir(resourceDir, { recursive: true });
-
   await Promise.all([
     fs.writeFile(
       path.join(resourceDir, `${fileName}.entity.ts`),
       templates.entity
     ),
     fs.writeFile(
-      path.join(resourceDir, `create-${fileName}.dto.ts`),
+      path.join(dtoDir, `create-${fileName}.dto.ts`),
       templates.dtoCreate
     ),
     fs.writeFile(
-      path.join(resourceDir, `update-${fileName}.dto.ts`),
+      path.join(dtoDir, `update-${fileName}.dto.ts`),
       templates.dtoUpdate
     ),
     fs.writeFile(
@@ -51,12 +77,26 @@ export async function generate(
   console.log(`Successfully generated CRUD for ${className} in ${resourceDir}`);
 }
 
-function generateEntity(
-  className: string,
-  fields: { name: string; type: string }[]
-) {
-  const columns = fields
-    .map((f) => {
+function generateEntity(className: string, fields: Field[]) {
+  const imports: string[] = [
+    'Entity',
+    'PrimaryGeneratedColumn',
+    'Column',
+    'CreateDateColumn',
+    'UpdateDateColumn',
+  ];
+  let columns = '';
+
+  fields.forEach((f) => {
+    if (f.relation) {
+      if (f.relation.type === 'relation') {
+        imports.push('ManyToOne', 'JoinColumn');
+        columns += `\n  @ManyToOne(() => ${f.relation.target})\n  @JoinColumn()\n  ${f.name}!: ${f.relation.target};\n`;
+      } else {
+        imports.push('ManyToMany', 'JoinTable');
+        columns += `\n  @ManyToMany(() => ${f.relation.target})\n  @JoinTable()\n  ${f.name}!: ${f.relation.target}[];\n`;
+      }
+    } else {
       const typeormType =
         f.type === 'string'
           ? 'varchar'
@@ -67,17 +107,13 @@ function generateEntity(
           : 'varchar';
       const tsType =
         f.type === 'hash' ? 'string' : f.type === 'date' ? 'Date' : f.type;
+      columns += `\n  @ApiProperty({ required: false })\n  @Column({ type: '${typeormType}', nullable: true })\n  ${f.name}!: ${tsType};\n`;
+    }
+  });
 
-      let swaggerProp = `@ApiProperty({ required: false })`;
-      if (f.type === 'date') {
-        swaggerProp = `@ApiProperty({ required: false, type: String, format: 'date-time' })`;
-      }
+  const importSet = Array.from(new Set(imports)).join(', ');
 
-      return `  ${swaggerProp}\n  @Column({ type: '${typeormType}', nullable: true })\n  ${f.name}!: ${tsType};`;
-    })
-    .join('\n\n');
-
-  return `import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+  return `import { ${importSet} } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 
 @Entity()
@@ -86,36 +122,49 @@ export class ${className} {
   @ApiProperty()
   id!: number;
 
-${columns}
+  ${columns}
 
-@CreateDateColumn()
-@ApiProperty({ type: String, format: 'date-time' })
-createdAt!: Date;
+  @CreateDateColumn()
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: Date;
 
-@UpdateDateColumn()
-@ApiProperty({ type: String, format: 'date-time' })
-updatedAt!: Date;
+  @UpdateDateColumn()
+  @ApiProperty({ type: String, format: 'date-time' })
+  updatedAt!: Date;
 }
 `;
 }
 
 function generateDto(
   className: string,
-  fields: { name: string; type: string }[],
-  prefix: string
+  fields: Field[],
+  prefix: 'Create' | 'Update'
 ) {
-  const properties = fields
+  const props = fields
     .map((f) => {
-      const tsType =
-        f.type === 'hash' ? 'string' : f.type === 'date' ? 'Date' : f.type;
-      const isRequired = prefix === 'Create';
+      const tsType = f.relation
+        ? f.relation.type === 'relation'
+          ? 'number'
+          : 'number[]'
+        : f.type === 'hash'
+        ? 'string'
+        : f.type === 'date'
+        ? 'Date'
+        : f.type;
 
-      let apiPropertyOptions = `required: ${isRequired}`;
-      if (f.type === 'date') {
-        apiPropertyOptions += `, type: String, format: 'date-time'`;
-      }
+      const fieldName = f.relation
+        ? f.relation.type === 'relation'
+          ? `${f.name}Id`
+          : `${f.name}Ids`
+        : f.name;
+      const required = prefix === 'Create';
 
-      return `  @ApiProperty({ ${apiPropertyOptions} })\n  ${f.name}${
+      const apiOptions =
+        tsType === 'Date'
+          ? `{ required: ${required}, type: String, format: 'date-time' }`
+          : `{ required: ${required} }`;
+
+      return `  @ApiProperty(${apiOptions})\n  ${fieldName}${
         prefix === 'Update' ? '?' : '!'
       }: ${tsType};`;
     })
@@ -124,7 +173,7 @@ function generateDto(
   return `import { ApiProperty } from '@nestjs/swagger';
 
 export class ${prefix}${className}Dto {
-${properties}
+${props}
 }
 `;
 }
@@ -135,8 +184,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NestCrudService } from '@nest-util/nest-crud';
 import { ${className} } from './${fileName}.entity';
-import { Create${className}Dto } from './create-${fileName}.dto';
-import { Update${className}Dto } from './update-${fileName}.dto';
+import { Create${className}Dto } from './dtos/create-${fileName}.dto';
+import { Update${className}Dto } from './dtos/update-${fileName}.dto';
 
 @Injectable()
 export class ${className}Service extends NestCrudService<
@@ -150,7 +199,7 @@ export class ${className}Service extends NestCrudService<
   ) {
     super({
       repository,
-      allowedFilters: [], // Add keys from ${className} to allow filtering
+      allowedFilters: [],
     });
   }
 }
@@ -162,8 +211,8 @@ function generateController(className: string, fileName: string) {
 import { CreateNestedCrudController, IBaseController } from '@nest-util/nest-crud';
 import { ${className}Service } from './${fileName}.service';
 import { ${className} } from './${fileName}.entity';
-import { Create${className}Dto } from './create-${fileName}.dto';
-import { Update${className}Dto } from './update-${fileName}.dto';
+import { Create${className}Dto } from './dtos/create-${fileName}.dto';
+import { Update${className}Dto } from './dtos/update-${fileName}.dto';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('${fileName}')

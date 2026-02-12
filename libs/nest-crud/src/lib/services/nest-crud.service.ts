@@ -9,6 +9,12 @@ import { CrudInterface } from '../interfaces/crud.interface';
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   repository: Repository<Entity>;
   allowedFilters?: readonly (keyof Entity)[];
+  include?: readonly (keyof Entity)[];
+  relations?: {
+    property: keyof Entity;
+    repo: Repository<ObjectLiteral>;
+    idField?: string;
+  }[];
   toResponseDto?: (entity: Entity | Entity[]) => ResponseDto | ResponseDto[];
   createDtoClass?: Type<unknown>;
   updateDtoClass?: Type<unknown>;
@@ -24,6 +30,12 @@ export class NestCrudService<
 {
   protected readonly repo: Repository<Entity>;
   protected readonly allowedFilters: readonly (keyof Entity)[];
+  protected readonly include: readonly (keyof Entity)[];
+  protected readonly relations: {
+    property: keyof Entity;
+    repo: Repository<ObjectLiteral>;
+    idField?: string;
+  }[];
   protected readonly toResponseDto?: (
     entity: Entity | Entity[]
   ) => ResponseDto | ResponseDto[];
@@ -33,13 +45,52 @@ export class NestCrudService<
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
     this.allowedFilters = options.allowedFilters ?? [];
+    this.include = options.include ?? [];
+    this.relations = options.relations ?? [];
     this.toResponseDto = options.toResponseDto;
     this.createDtoClass = options.createDtoClass;
     this.updateDtoClass = options.updateDtoClass;
   }
 
+  private async resolveRelations<T extends ObjectLiteral>(
+    payload: T
+  ): Promise<T> {
+    if (!this.relations.length) return payload;
+
+    for (const relation of this.relations) {
+      const idField = relation.idField ?? `${String(relation.property)}Id`;
+
+      if (!(idField in payload)) continue;
+
+      const id = payload[idField as keyof T];
+      if (!id) continue;
+
+      const entity = await relation.repo.findOneBy({
+        id,
+      } as unknown as Partial<ObjectLiteral>);
+
+      if (!entity) {
+        throw new NotFoundException(`${String(relation.property)} not found`);
+      }
+
+      (payload as unknown as Record<string, unknown>)[
+        String(relation.property)
+      ] = entity;
+
+      delete (payload as unknown as Record<string, unknown>)[idField];
+    }
+
+    return payload;
+  }
+
   async findAll(query: PaginationDto & FilterDto) {
     const qb = this.repo.createQueryBuilder('e');
+
+    if (this.include.length > 0) {
+      this.include.forEach((relation) => {
+        qb.leftJoinAndSelect(`e.${String(relation)}`, String(relation));
+      });
+    }
 
     applyFilters(qb, query.filter, this.allowedFilters);
 
@@ -57,7 +108,10 @@ export class NestCrudService<
   }
 
   async findOne(id: number) {
-    const entity = await this.repo.findOneBy({ id } as unknown as Entity);
+    const entity = await this.repo.findOne({
+      where: { id } as unknown as Partial<Entity>,
+      relations: this.include as string[],
+    });
 
     if (!entity) {
       throw new NotFoundException('Resource not found');
@@ -69,7 +123,11 @@ export class NestCrudService<
   }
 
   async create(payload: CreateDto) {
-    const entity = await this.repo.save(payload as unknown as Entity);
+    const resolved = await this.resolveRelations(
+      payload as unknown as ObjectLiteral
+    );
+
+    const entity = await this.repo.save(resolved as unknown as Entity);
 
     return this.toResponseDto
       ? (this.toResponseDto(entity) as ResponseDto)
@@ -77,13 +135,19 @@ export class NestCrudService<
   }
 
   async update(id: number, payload: UpdateDto) {
-    const existing = await this.repo.findOneBy({ id } as unknown as Entity);
+    const existing = await this.repo.findOneBy({
+      id,
+    } as unknown as Partial<Entity>);
 
     if (!existing) {
       throw new NotFoundException('Resource not found');
     }
 
-    await this.repo.update(id, payload as unknown as Entity);
+    const resolved = await this.resolveRelations(
+      payload as unknown as ObjectLiteral
+    );
+
+    await this.repo.update(id, resolved as unknown as Partial<Entity>);
 
     return this.findOne(id);
   }
