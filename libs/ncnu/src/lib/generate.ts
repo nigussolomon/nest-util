@@ -1,8 +1,12 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-export async function generate(modelName: string, fields: string[], targetPath: string) {
-  const parsedFields = fields.map(f => {
+export async function generate(
+  modelName: string,
+  fields: string[],
+  targetPath: string
+) {
+  const parsedFields = fields.map((f) => {
     const [name, type] = f.split(':');
     return { name, type: type || 'string' };
   });
@@ -22,28 +26,56 @@ export async function generate(modelName: string, fields: string[], targetPath: 
   await fs.mkdir(resourceDir, { recursive: true });
 
   await Promise.all([
-    fs.writeFile(path.join(resourceDir, `${fileName}.entity.ts`), templates.entity),
-    fs.writeFile(path.join(resourceDir, `create-${fileName}.dto.ts`), templates.dtoCreate),
-    fs.writeFile(path.join(resourceDir, `update-${fileName}.dto.ts`), templates.dtoUpdate),
-    fs.writeFile(path.join(resourceDir, `${fileName}.service.ts`), templates.service),
-    fs.writeFile(path.join(resourceDir, `${fileName}.controller.ts`), templates.controller),
+    fs.writeFile(
+      path.join(resourceDir, `${fileName}.entity.ts`),
+      templates.entity
+    ),
+    fs.writeFile(
+      path.join(resourceDir, `create-${fileName}.dto.ts`),
+      templates.dtoCreate
+    ),
+    fs.writeFile(
+      path.join(resourceDir, `update-${fileName}.dto.ts`),
+      templates.dtoUpdate
+    ),
+    fs.writeFile(
+      path.join(resourceDir, `${fileName}.service.ts`),
+      templates.service
+    ),
+    fs.writeFile(
+      path.join(resourceDir, `${fileName}.controller.ts`),
+      templates.controller
+    ),
   ]);
 
   console.log(`Successfully generated CRUD for ${className} in ${resourceDir}`);
 }
 
-function generateEntity(className: string, fields: { name: string; type: string }[]) {
-  const columns = fields.map(f => {
-    const typeormType = f.type === 'string' ? 'varchar' : f.type === 'number' ? 'int' : (f.type === 'date' ? 'timestamp' : 'varchar');
-    const tsType = f.type === 'hash' ? 'string' : (f.type === 'date' ? 'Date' : f.type);
-    
-    let swaggerProp = `@ApiProperty({ required: false })`;
-    if (f.type === 'date') {
-      swaggerProp = `@ApiProperty({ required: false, type: String, format: 'date-time' })`;
-    }
+function generateEntity(
+  className: string,
+  fields: { name: string; type: string }[]
+) {
+  const columns = fields
+    .map((f) => {
+      const typeormType =
+        f.type === 'string'
+          ? 'varchar'
+          : f.type === 'number'
+          ? 'int'
+          : f.type === 'date'
+          ? 'timestamp'
+          : 'varchar';
+      const tsType =
+        f.type === 'hash' ? 'string' : f.type === 'date' ? 'Date' : f.type;
 
-    return `  ${swaggerProp}\n  @Column({ type: '${typeormType}', nullable: true })\n  ${f.name}!: ${tsType};`;
-  }).join('\n\n');
+      let swaggerProp = `@ApiProperty({ required: false })`;
+      if (f.type === 'date') {
+        swaggerProp = `@ApiProperty({ required: false, type: String, format: 'date-time' })`;
+      }
+
+      return `  ${swaggerProp}\n  @Column({ type: '${typeormType}', nullable: true })\n  ${f.name}!: ${tsType};`;
+    })
+    .join('\n\n');
 
   return `import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
@@ -55,22 +87,39 @@ export class ${className} {
   id!: number;
 
 ${columns}
+
+@CreateDateColumn()
+@ApiProperty({ type: String, format: 'date-time' })
+createdAt!: Date;
+
+@UpdateDateColumn()
+@ApiProperty({ type: String, format: 'date-time' })
+updatedAt!: Date;
 }
 `;
 }
 
-function generateDto(className: string, fields: { name: string; type: string }[], prefix: string) {
-  const properties = fields.map(f => {
-    const tsType = f.type === 'hash' ? 'string' : (f.type === 'date' ? 'Date' : f.type);
-    const isRequired = prefix === 'Create';
-    
-    let apiPropertyOptions = `required: ${isRequired}`;
-    if (f.type === 'date') {
-      apiPropertyOptions += `, type: String, format: 'date-time'`;
-    }
+function generateDto(
+  className: string,
+  fields: { name: string; type: string }[],
+  prefix: string
+) {
+  const properties = fields
+    .map((f) => {
+      const tsType =
+        f.type === 'hash' ? 'string' : f.type === 'date' ? 'Date' : f.type;
+      const isRequired = prefix === 'Create';
 
-    return `  @ApiProperty({ ${apiPropertyOptions} })\n  ${f.name}${prefix === 'Update' ? '?' : '!'}: ${tsType};`;
-  }).join('\n\n');
+      let apiPropertyOptions = `required: ${isRequired}`;
+      if (f.type === 'date') {
+        apiPropertyOptions += `, type: String, format: 'date-time'`;
+      }
+
+      return `  @ApiProperty({ ${apiPropertyOptions} })\n  ${f.name}${
+        prefix === 'Update' ? '?' : '!'
+      }: ${tsType};`;
+    })
+    .join('\n\n');
 
   return `import { ApiProperty } from '@nestjs/swagger';
 
