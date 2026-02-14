@@ -1,0 +1,15 @@
+# Gitleaks configuration file
+# https://github.com/gitleaks/gitleaks
+
+title = "Gitleaks configuration for nest-util"
+
+# Extend the default gitleaks configuration
+[extend]
+useDefault = true
+
+# Allowlist to exclude false positives
+[allowlist]
+description = "Ignore example environment files"
+paths = [
+  '''\.env\.example$''',
+]
