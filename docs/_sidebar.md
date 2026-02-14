@@ -3,6 +3,7 @@
 - [Architecture](architecture.md)
 - [nest-crud](nest-crud.md)
 - [nest-auth](nest-auth.md)
+- [nest-file](nest-file.md)
 - [ncnu CLI](ncnu.md)
 - [Examples](examples.md)
 - [API Reference](api-reference.md)

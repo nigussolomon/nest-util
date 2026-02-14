@@ -49,8 +49,8 @@ Recommendations:
 
 Responsibilities:
 
-- build and verify each library package
-- create tarballs
+- build and verify each library package (`nest-audit`, `nest-crud`, `nest-auth`, `nest-file`)
+- create tarballs for every package + CLI artifact
 - upload build artifacts
 - compose release assets
 
