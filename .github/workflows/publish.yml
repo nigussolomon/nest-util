@@ -9,8 +9,49 @@ permissions:
   actions: read
 
 jobs:
+  nest-audit:
+    name: Build & Verify nest-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test @nest-util/nest-audit
+        run: pnpm nx test @nest-util/nest-audit
+
+      - name: Build @nest-util/nest-audit
+        run: pnpm nx build @nest-util/nest-audit
+
+      - name: Create Tarball
+        run: |
+          cp libs/nest-audit/package.json libs/nest-audit/dist/package.json
+          cd libs/nest-audit/dist
+          # Fix paths in package.json to be relative to the current folder (dist)
+          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
+          pnpm pack --pack-destination ../../../
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nest-audit-tgz
+          path: nest-util-nest-audit-*.tgz
+          retention-days: 7
+
   nest-crud:
     name: Build & Verify nest-crud
+    needs: nest-audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,12 +75,21 @@ jobs:
       - name: Build @nest-util/nest-crud
         run: pnpm nx build @nest-util/nest-crud
 
+      - name: Download nest-audit package
+        uses: actions/download-artifact@v4
+        with:
+          name: nest-audit-tgz
+          path: ./artifacts
+
+      - name: Validate nest-audit artifact exists
+        run: ls -1 ./artifacts/nest-util-nest-audit-*.tgz
+
       - name: Create Tarball
         run: |
           cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
           cd libs/nest-crud/dist
           # Fix paths in package.json to be relative to the current folder (dist)
-          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
+          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | .peerDependencies["@nest-util/nest-audit"] = "^0.0.1" | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
         
       - name: Upload Artifact
@@ -48,17 +98,6 @@ jobs:
           name: nest-crud-tgz
           path: nest-util-nest-crud-*.tgz
           retention-days: 7
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest
-          files: |
-            nest-util-nest-crud-*.tgz
-          prerelease: true
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   ncnu:
     name: Build & Verify ncnu
@@ -98,16 +137,6 @@ jobs:
           name: ncnu-tgz
           path: ncnu-*.tgz
           retention-days: 7
-
-      - name: Update Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest
-          files: |
-            ncnu-*.tgz
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   nest-auth:
     name: Build & Verify nest-auth
@@ -149,12 +178,49 @@ jobs:
           path: nest-util-nest-auth-*.tgz
           retention-days: 7
 
-      - name: Update Release
+  release:
+    name: Publish release assets
+    runs-on: ubuntu-latest
+    needs:
+      - nest-audit
+      - nest-crud
+      - ncnu
+      - nest-auth
+    steps:
+      - name: Download nest-audit artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nest-audit-tgz
+          path: ./release-artifacts
+
+      - name: Download nest-crud artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nest-crud-tgz
+          path: ./release-artifacts
+
+      - name: Download ncnu artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ncnu-tgz
+          path: ./release-artifacts
+
+      - name: Download nest-auth artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nest-auth-tgz
+          path: ./release-artifacts
+
+      - name: Publish combined release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
           files: |
-            nest-util-nest-auth-*.tgz
+            release-artifacts/nest-util-nest-audit-*.tgz
+            release-artifacts/nest-util-nest-crud-*.tgz
+            release-artifacts/ncnu-*.tgz
+            release-artifacts/nest-util-nest-auth-*.tgz
           prerelease: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
