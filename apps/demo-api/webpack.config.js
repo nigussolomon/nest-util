@@ -9,6 +9,13 @@ module.exports = {
       devtoolModuleFilenameTemplate: '[absolute-resource-path]',
     }),
   },
+
+  resolve: {
+    alias: {
+      '@nest-util/nest-audit': join(__dirname, '../../libs/nest-audit/src/index.ts'),
+      '@nest-util/nest-file': join(__dirname, '../../libs/nest-file/src/index.ts'),
+    },
+  },
   plugins: [
     new NxAppWebpackPlugin({
       target: 'node',
