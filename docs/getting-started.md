@@ -13,7 +13,7 @@ This guide takes you from installation to a production-shaped feature using Nest
 
 In this guide, you will:
 
-1. Install `@nest-util/nest-crud`, `@nest-util/nest-auth`, and `ncnu`
+1. Install `@nest-util/nest-crud`, `@nest-util/nest-auth`, `@nest-util/nest-file`, and `ncnu`
 2. Generate a resource module using `ncnu`
 3. Register the generated resource in your app
 4. Add core global runtime configuration
@@ -27,6 +27,8 @@ In this guide, you will:
 ```bash
 pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-crud-0.0.1.tgz
 pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-auth-0.0.1.tgz
+pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-file-0.0.1.tgz
+pnpm add minio
 ```
 
 Install CLI globally:
@@ -172,4 +174,5 @@ Proceed to:
 - [Architecture](architecture.md)
 - [nest-crud](nest-crud.md)
 - [nest-auth](nest-auth.md)
+- [nest-file](nest-file.md)
 - [CI/CD & GitHub Pages](cicd.md)

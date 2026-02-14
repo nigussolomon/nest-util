@@ -6,7 +6,7 @@
     <title>Nest-Util | Production-ready NestJS utilities</title>
     <meta
       name="description"
-      content="Nest-Util provides reusable NestJS modules for CRUD, authentication, and code generation."
+      content="Nest-Util provides reusable NestJS modules for CRUD, authentication, encrypted file storage, and code generation."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,8 +37,8 @@
         <h1>Ship robust APIs faster with <span>Nest-Util</span>.</h1>
         <p class="hero-copy">
           A focused set of libraries and a CLI generator that remove repetitive
-          boilerplate for CRUD APIs, authentication, and maintainable NestJS
-          architecture.
+          boilerplate for CRUD APIs, authentication, secure encrypted file storage,
+          and maintainable NestJS architecture.
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="./guide.html#/getting-started"
@@ -51,7 +51,7 @@
       </section>
 
       <section class="stats">
-        <article><strong>3</strong><span>Core packages</span></article>
+        <article><strong>4</strong><span>Core packages</span></article>
         <article>
           <strong>Type-safe</strong><span>CRUD + DTO generation</span>
         </article>
@@ -76,6 +76,13 @@
             <p>
               Dynamic auth module with configurable user fields, password
               hashing, and token rotation.
+            </p>
+          </article>
+          <article>
+            <h3>@nest-util/nest-file</h3>
+            <p>
+              Store encrypted blobs in MinIO and keep file metadata in Postgres
+              with TypeORM owner attachments.
             </p>
           </article>
           <article>

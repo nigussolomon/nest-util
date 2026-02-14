@@ -6,6 +6,7 @@ Nest-Util is a toolkit for building production-ready NestJS backends quickly and
 
 - **`@nest-util/nest-crud`**: Generic CRUD base classes with filtering, pagination, and response helpers.
 - **`@nest-util/nest-auth`**: Dynamic JWT authentication module with refresh token rotation.
+- **`@nest-util/nest-file`**: Secure encrypted file storage on MinIO with metadata in Postgres via TypeORM.
 - **`ncnu`**: CLI generator that scaffolds entities, DTOs, services, and controllers.
 
 ## Why teams adopt Nest-Util
@@ -21,11 +22,12 @@ Nest-Util is a toolkit for building production-ready NestJS backends quickly and
 2. [Architecture](architecture.md)
 3. [nest-crud guide](nest-crud.md)
 4. [nest-auth guide](nest-auth.md)
-5. [ncnu guide](ncnu.md)
-6. [Examples](examples.md)
-7. [API Reference](api-reference.md)
-8. [CI/CD & GitHub Pages](cicd.md)
-9. [Troubleshooting](troubleshooting.md)
+5. [nest-file guide](nest-file.md)
+6. [ncnu guide](ncnu.md)
+7. [Examples](examples.md)
+8. [API Reference](api-reference.md)
+9. [CI/CD & GitHub Pages](cicd.md)
+10. [Troubleshooting](troubleshooting.md)
 
 ---
 
@@ -34,6 +36,8 @@ Nest-Util is a toolkit for building production-ready NestJS backends quickly and
 ```bash
 pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-crud-0.0.1.tgz
 pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-auth-0.0.1.tgz
+pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-file-0.0.1.tgz
+pnpm add minio
 pnpm add -g https://github.com/nigussolomon/nest-util/releases/download/latest/ncnu-0.0.1.tgz
 ```
 

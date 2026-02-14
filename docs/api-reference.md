@@ -54,3 +54,33 @@ Essential options:
 - `<field>:<type>` pairs for entity and DTO generation
 
 For implementation details, inspect source in `libs/ncnu/src/lib/generate.ts`.
+
+
+---
+
+## `@nest-util/nest-file`
+
+### `NestFileModule.forRoot(options)`
+
+Essential options:
+
+- `minio` connection options (`endPoint`, credentials, TLS/port)
+- `bucket` options (`bucket`, optional region, auto-create behavior)
+- `encryption.key` (base64-encoded 32-byte key)
+
+### `StoredFileService`
+
+Core methods:
+
+- `store(input)`
+- `getById(fileId)`
+- `listByOwner(ownerType, ownerId)`
+- `remove(fileId)`
+
+### `StoredFileEntity`
+
+Metadata persisted in Postgres:
+
+- object key + original file metadata
+- owner mapping (`ownerType`, `ownerId`)
+- encryption metadata (`iv`, `authTag`, `digest`, algorithm, key id)

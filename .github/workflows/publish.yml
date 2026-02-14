@@ -185,6 +185,48 @@ jobs:
           path: nest-util-nest-auth-*.tgz
           retention-days: 7
 
+
+  nest-file:
+    name: Build & Verify nest-file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test @nest-util/nest-file
+        run: pnpm nx test @nest-util/nest-file
+
+      - name: Build @nest-util/nest-file
+        run: pnpm nx build @nest-util/nest-file
+
+      - name: Create Tarball
+        run: |
+          cp libs/nest-file/package.json libs/nest-file/dist/package.json
+          cd libs/nest-file/dist
+          # Fix paths in package.json to be relative to the current folder (dist)
+          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
+          pnpm pack --pack-destination ../../../
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nest-file-tgz
+          path: nest-util-nest-file-*.tgz
+          retention-days: 7
+
   release:
     name: Publish release assets
     runs-on: ubuntu-latest
@@ -193,6 +235,7 @@ jobs:
       - nest-crud
       - ncnu
       - nest-auth
+      - nest-file
     steps:
       - name: Download nest-audit artifact
         uses: actions/download-artifact@v4
@@ -218,6 +261,12 @@ jobs:
           name: nest-auth-tgz
           path: ./release-artifacts
 
+      - name: Download nest-file artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nest-file-tgz
+          path: ./release-artifacts
+
       - name: Publish combined release
         uses: softprops/action-gh-release@v1
         with:
@@ -227,6 +276,7 @@ jobs:
             release-artifacts/nest-util-nest-crud-*.tgz
             release-artifacts/ncnu-*.tgz
             release-artifacts/nest-util-nest-auth-*.tgz
+            release-artifacts/nest-util-nest-file-*.tgz
           prerelease: true
           generate_release_notes: true
         env:

@@ -34,7 +34,7 @@ Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates
 
 ## 🏗️ Architecture Overview
 
-Nest-Util is composed of three main packages that work together seamlessly:
+Nest-Util is composed of four core packages plus a CLI that work together seamlessly:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -43,6 +43,7 @@ Nest-Util is composed of three main packages that work together seamlessly:
 │                                                           │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │   ncnu CLI  │  │  nest-crud   │  │  nest-auth    │  │
+│  │  nest-file  │  │              │  │               │  │
 │  │  Generator  │  │   Library    │  │   Library     │  │
 │  └─────────────┘  └──────────────┘  └───────────────┘  │
 │        │                  │                   │          │
@@ -127,6 +128,25 @@ A dynamic and flexible authentication library:
 - ✅ No sensitive data in auth responses
 - ✅ Configurable token expiration
 
+
+### 4. 🗂️ @nest-util/nest-file
+
+A secure encrypted file storage module for NestJS + TypeORM: 
+
+- **`NestFileModule`**: Dynamic module with `forRoot` and `forRootAsync` support
+- **`StoredFileService`**: Upload, download, list, and delete operations
+- **`StoredFileEntity`**: PostgreSQL metadata model with owner attachment (`ownerType`, `ownerId`)
+- **MinIO Storage**: Encrypted object storage for binary payloads
+- **Encryption**: AES-256-GCM encryption with integrity verification
+
+**File Security Features:**
+
+- ✅ Encrypted-at-rest object payloads
+- ✅ SHA-256 integrity digest verification on reads
+- ✅ File-to-entity attachment via owner references
+- ✅ MinIO bucket auto-creation option
+- ✅ TypeORM/Postgres metadata indexing
+
 ---
 
 ## 🛠️ Installation
@@ -150,8 +170,11 @@ pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest
 # Install nest-auth library
 pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-auth-0.0.1.tgz
 
-# Required peer dependencies
-pnpm add @nestjs/typeorm typeorm @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt
+# Install nest-file library
+pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-file-0.0.1.tgz
+
+# Required peer/runtime dependencies
+pnpm add @nestjs/typeorm typeorm @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt minio
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
