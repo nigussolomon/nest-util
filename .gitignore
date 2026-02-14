@@ -45,3 +45,6 @@ Thumbs.db
 
 test-output
 .env
+
+# Temporary binaries
+gitleaks
