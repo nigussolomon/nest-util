@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title>Nest-Util Documentation</title>
+    <meta
+      name="description"
+      content="Official documentation for Nest-Util packages and CLI."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      :root {
+        --theme-color: #e0234e;
+        --base-font-family: 'Inter', sans-serif;
+        --sidebar-width: 20rem;
+        --content-max-width: 70em;
+      }
+      .app-nav a {
+        color: #d8e4ff;
+      }
+    </style>
+  </head>
+  <body class="docsify-page">
+    <div id="app">Loading documentation...</div>
+    <script>
+      window.$docsify = {
+        name: 'Nest-Util',
+        repo: 'nigussolomon/nest-util',
+        homepage: 'README.md',
+        loadSidebar: true,
+        loadNavbar: true,
+        subMaxLevel: 3,
+        auto2top: true,
+        search: {
+          placeholder: 'Search docs',
+          noData: 'No matching section found',
+          depth: 3,
+        },
+      };
+    </script>
+    <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+    <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
+  </body>
+</html>

@@ -1,24 +1,56 @@
 # API Reference
 
-This section provides detailed API documentation for the core packages of `nest-util`.
+## `@nest-util/nest-crud`
 
-## Packages
+### `NestCrudService<T>`
 
-### 1. [@nest-util/nest-crud](nest-crud?id=api-reference)
+Common methods available in derived services:
 
-- **[NestCrudService](nest-crud?id=nestcrudservice-methods)**: Base service for CRUD operations.
-- **[CreateNestedCrudController](nest-crud?id=createnestedcrudcontroller)**: Factory for generating controllers.
-- **IBaseController**: Interface for controller type safety.
-- **TypeOrmExceptionFilter**: Global filter for handling DB errors.
+- `create(dto)`
+- `findAll(query)`
+- `findOne(id)`
+- `update(id, dto)`
+- `remove(id)`
 
-### 2. [@nest-util/nest-auth](nest-auth?id=api-reference)
+### `CreateNestedCrudController()`
 
-- **[AuthService](nest-auth?id=authservice)**: Service for login, register, and token management.
-- **[AuthModule](nest-auth?id=authmoduleoptions)**: Dynamic module for configuring authentication.
-- **[Guards](nest-auth?id=jwtauthguard)**: `JwtAuthGuard` for protecting routes.
-- **[Decorators](nest-auth?id=decorators)**: `@CurrentUser()`, `@Public()`, etc.
+Factory that produces REST handlers bound to provided entity and DTO types.
 
-### 3. [ncnu (CLI)](ncnu?id=cli-reference)
+### `TypeOrmExceptionFilter`
 
-- **[Command Syntax](ncnu?id=command-syntax)**: Usage of the generator tool.
-- **[Field Types](ncnu?id=field-types-reference)**: Supported data types for generation.
+Global filter that transforms TypeORM errors into predictable API errors.
+
+---
+
+## `@nest-util/nest-auth`
+
+### `NestAuthModule.forRoot(options)`
+
+Essential options:
+
+- `entity`
+- `jwtSecret`
+- `refreshSecret`
+- `fieldMap`
+- optional route toggles and custom DTO types
+
+### Decorators/guards
+
+- `@Public()`
+- `@CurrentUser()`
+- JWT auth guard and strategy exports
+
+---
+
+## `ncnu`
+
+### CLI flags
+
+- `--gen`: model/resource name
+- `--path`: output folder path
+
+### Positional field definitions
+
+- `<field>:<type>` pairs for entity and DTO generation
+
+For implementation details, inspect source in `libs/ncnu/src/lib/generate.ts`.
