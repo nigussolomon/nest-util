@@ -7,7 +7,7 @@
 
 **A modern, production-ready collection of NestJS utilities designed to accelerate development by providing reusable, battle-tested patterns for CRUD operations, authentication, and rapid code generation.**
 
-📖 **[View Full Documentation](https://nigussolomon.github.io/nest-util/)** | 🚀 **[Quick Start](#-quick-start)** | 💡 **[Examples](https://nigussolomon.github.io/nest-util/#/examples)**
+📖 **[View Full Documentation](https://nigussolomon.github.io/nest-util/guide.html#/)** | 🚀 **[Quick Start](#-quick-start)** | 💡 **[Examples](https://nigussolomon.github.io/nest-util/guide.html#/examples)**
 
 ---
 
@@ -22,13 +22,13 @@ Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates
 
 ### Why Nest-Util?
 
-| Problem | Nest-Util Solution |
-|---------|-------------------|
-| Writing the same CRUD logic for every entity | `@nest-util/nest-crud` - Generic CRUD service and controller factory |
-| Manually scaffolding entities, DTOs, services | `ncnu` - Code generator with smart type mapping |
-| Implementing secure JWT authentication | `@nest-util/nest-auth` - Flexible auth module with token rotation |
-| Inconsistent API responses | Built-in response interceptors and transformers |
-| Manual Swagger documentation | Automatic OpenAPI documentation with proper decorators |
+| Problem                                       | Nest-Util Solution                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------- |
+| Writing the same CRUD logic for every entity  | `@nest-util/nest-crud` - Generic CRUD service and controller factory |
+| Manually scaffolding entities, DTOs, services | `ncnu` - Code generator with smart type mapping                      |
+| Implementing secure JWT authentication        | `@nest-util/nest-auth` - Flexible auth module with token rotation    |
+| Inconsistent API responses                    | Built-in response interceptors and transformers                      |
+| Manual Swagger documentation                  | Automatic OpenAPI documentation with proper decorators               |
 
 ---
 
@@ -59,6 +59,7 @@ Nest-Util is composed of three main packages that work together seamlessly:
 ```
 
 **Typical Workflow:**
+
 1. Use `ncnu` to generate entities, DTOs, services, and controllers
 2. Generated code automatically extends `NestCrudService` and `CreateNestedCrudController`
 3. Add `@nest-util/nest-auth` for authentication on protected routes
@@ -81,6 +82,7 @@ A powerful and flexible CRUD library featuring:
 - **Response Interceptors**: Consistent API response format with metadata
 
 **Key Capabilities:**
+
 - ✅ Type-safe CRUD operations
 - ✅ Dynamic query filtering (`?filter[name_cont]=john&filter[age_gte]=18`)
 - ✅ Automatic Swagger documentation
@@ -98,6 +100,7 @@ A professional code generation CLI tool to scaffold your NestJS resources:
 - **Production Ready**: Generated code includes proper imports, decorators, and type annotations
 
 **What Gets Generated:**
+
 - `{model}.entity.ts` - TypeORM entity with proper column decorators
 - `create-{model}.dto.ts` - DTO for creation with validation decorators
 - `update-{model}.dto.ts` - DTO for updates with optional fields
@@ -116,6 +119,7 @@ A dynamic and flexible authentication library:
 - **Route Control**: Enable/disable auth endpoints via configuration
 
 **Security Features:**
+
 - ✅ JWT access and refresh token rotation
 - ✅ Bcrypt password hashing
 - ✅ Single-use refresh tokens with nonce validation
@@ -164,6 +168,7 @@ ncnu --help
 ```
 
 Alternatively, use with `npx`:
+
 ```bash
 npx https://github.com/nigussolomon/nest-util/releases/download/latest/ncnu-0.0.1.tgz --gen User --path ./src/app email:string
 ```
@@ -186,6 +191,7 @@ ncnu --gen Post --path apps/my-api/src/app \
 ```
 
 This generates:
+
 ```
 apps/my-api/src/app/post/
 ├── post.entity.ts
@@ -350,11 +356,10 @@ import { JwtAuthGuard, CurrentUser, AuthUser } from '@nest-util/nest-auth';
 
 @Controller('post')
 @UseGuards(JwtAuthGuard) // Protect all routes
-export class PostController extends CreateNestedCrudController(
-  CreatePostDto,
-  UpdatePostDto,
-  Post
-) implements IBaseController<CreatePostDto, UpdatePostDto, Post> {
+export class PostController
+  extends CreateNestedCrudController(CreatePostDto, UpdatePostDto, Post)
+  implements IBaseController<CreatePostDto, UpdatePostDto, Post>
+{
   constructor(override readonly service: PostService) {
     super(service);
   }
@@ -368,6 +373,7 @@ export class PostController extends CreateNestedCrudController(
 ```
 
 Authentication endpoints are now available:
+
 - `POST /auth/register` - Create new user
 - `POST /auth/login` - Login and get tokens
 - `POST /auth/refresh` - Refresh access token
@@ -447,6 +453,7 @@ GET /post?filter[published_eq]=true&filter[views_gte]=100&filter[title_cont]=nes
 ```
 
 **Supported Operators:**
+
 - `eq` - Equals
 - `cont` - Contains (case-insensitive)
 - `gte` - Greater than or equal
@@ -458,10 +465,12 @@ Add custom business logic while keeping CRUD functionality:
 
 ```typescript
 @Injectable()
-export class PostService extends NestCrudService<Post, CreatePostDto, UpdatePostDto> {
-  constructor(
-    @InjectRepository(Post) repository: Repository<Post>
-  ) {
+export class PostService extends NestCrudService<
+  Post,
+  CreatePostDto,
+  UpdatePostDto
+> {
+  constructor(@InjectRepository(Post) repository: Repository<Post>) {
     super({
       repository,
       allowedFilters: ['title', 'published', 'authorId'], // Whitelist filterable fields
@@ -486,11 +495,10 @@ Mix generated CRUD endpoints with custom routes:
 
 ```typescript
 @Controller('post')
-export class PostController extends CreateNestedCrudController(
-  CreatePostDto,
-  UpdatePostDto,
-  Post
-) implements IBaseController<CreatePostDto, UpdatePostDto, Post> {
+export class PostController
+  extends CreateNestedCrudController(CreatePostDto, UpdatePostDto, Post)
+  implements IBaseController<CreatePostDto, UpdatePostDto, Post>
+{
   constructor(override readonly service: PostService) {
     super(service);
   }
@@ -517,8 +525,9 @@ export class PostController extends CreateNestedCrudController(
 ### TypeScript Error: TS2742 (Inferred type is not portable)
 
 **Error:**
+
 ```
-The inferred type of 'MyController' cannot be named without a reference to 
+The inferred type of 'MyController' cannot be named without a reference to
 '../node_modules/@nestjs/common'. This is likely not portable.
 ```
 
@@ -526,13 +535,14 @@ The inferred type of 'MyController' cannot be named without a reference to
 Add explicit `implements IBaseController` to your controller:
 
 ```typescript
-import { CreateNestedCrudController, IBaseController } from '@nest-util/nest-crud';
+import {
+  CreateNestedCrudController,
+  IBaseController,
+} from '@nest-util/nest-crud';
 
-export class MyController extends CreateNestedCrudController(
-  CreateDto,
-  UpdateDto,
-  ResponseDto
-) implements IBaseController<CreateDto, UpdateDto, ResponseDto> {
+export class MyController
+  extends CreateNestedCrudController(CreateDto, UpdateDto, ResponseDto)
+  implements IBaseController<CreateDto, UpdateDto, ResponseDto> {
   // ...
 }
 ```
@@ -553,7 +563,7 @@ TypeOrmModule.forRoot({
   database: process.env.DB_NAME || 'mydb',
   entities: [__dirname + '/**/*.entity{.ts,.js}'],
   synchronize: process.env.NODE_ENV !== 'production', // Disable in production!
-})
+});
 ```
 
 ### Filtering Not Working
@@ -578,6 +588,7 @@ super({
 ### Authentication Token Issues
 
 Check that:
+
 1. Your user entity has `accessToken` and `refreshToken` fields
 2. JWT secret is consistent across requests
 3. Token fields are excluded from default queries (add `select: false` in entity)
@@ -591,11 +602,11 @@ refreshToken?: string;
 
 ## 📖 Documentation
 
-- **Full Documentation**: [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/)
-- **Getting Started Guide**: [Getting Started](https://nigussolomon.github.io/nest-util/#/getting-started)
-- **API Reference**: [API Documentation](https://nigussolomon.github.io/nest-util/#/api-reference)
-- **Examples**: [Real-World Examples](https://nigussolomon.github.io/nest-util/#/examples)
-- **Troubleshooting**: [Common Issues](https://nigussolomon.github.io/nest-util/#/troubleshooting)
+- **Full Documentation**: [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/guide.html#/)
+- **Getting Started Guide**: [Getting Started](https://nigussolomon.github.io/nest-util/guide.html#/getting-started)
+- **API Reference**: [API Documentation](https://nigussolomon.github.io/nest-util/guide.html#/api-reference)
+- **Examples**: [Real-World Examples](https://nigussolomon.github.io/nest-util/guide.html#/examples)
+- **Troubleshooting**: [Common Issues](https://nigussolomon.github.io/nest-util/guide.html#/troubleshooting)
 
 ---
 
@@ -623,5 +634,4 @@ If this project helped you, please give it a ⭐ on [GitHub](https://github.com/
 
 ---
 
-> [!TIP]
-> **GitHub Pages**: Detailed documentation is automatically deployed to GitHub Pages on every push to the `main` branch. Check it out at [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/).
+> [!TIP] > **GitHub Pages**: Detailed documentation is automatically deployed to GitHub Pages on every push to the `main` branch. Check it out at [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/guide.html#/).

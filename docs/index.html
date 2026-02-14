@@ -1,99 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Nest-Util | Professional NestJS Utilities</title>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A collection of powerful utilities for NestJS development, including a generic CRUD system and project generator.">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-  
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nest-Util | Production-ready NestJS utilities</title>
+    <meta
+      name="description"
+      content="Nest-Util provides reusable NestJS modules for CRUD, authentication, and code generation."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="logo" href="./">Nest-Util</a>
+      <nav>
+        <a href="./guide.html#/">Docs</a>
+        <a href="./guide.html#/getting-started">Get Started</a>
+        <a
+          href="https://github.com/nigussolomon/nest-util"
+          target="_blank"
+          rel="noreferrer"
+          >GitHub</a
+        >
+      </nav>
+    </header>
 
-  <!-- Themeable CSS -->
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css">
-  
-  <!-- Custom Styles -->
-  <style>
-    :root {
-      /* Branding Colors */
-      --theme-color: #E0234E;
-      --base-font-family: 'Inter', sans-serif;
-      --heading-font-family: 'Outfit', sans-serif;
-      
-      /* Refined UI */
-      --base-font-size: 16px;
-      --content-max-width: 65em;
-      --sidebar-width: 18rem;
-    }
+    <main>
+      <section class="hero">
+        <p class="eyebrow">NestJS developer toolkit</p>
+        <h1>Ship robust APIs faster with <span>Nest-Util</span>.</h1>
+        <p class="hero-copy">
+          A focused set of libraries and a CLI generator that remove repetitive
+          boilerplate for CRUD APIs, authentication, and maintainable NestJS
+          architecture.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="./guide.html#/getting-started"
+            >Start in 10 minutes</a
+          >
+          <a class="btn btn-secondary" href="./guide.html#/api-reference"
+            >Browse API reference</a
+          >
+        </div>
+      </section>
 
-    body {
-      font-family: var(--base-font-family);
-    }
+      <section class="stats">
+        <article><strong>3</strong><span>Core packages</span></article>
+        <article>
+          <strong>Type-safe</strong><span>CRUD + DTO generation</span>
+        </article>
+        <article>
+          <strong>Security-first</strong
+          ><span>JWT + refresh token rotation</span>
+        </article>
+      </section>
 
-    .markdown-section h1, .markdown-section h2, .markdown-section h3 {
-      font-family: var(--heading-font-family);
-      font-weight: 700;
-    }
+      <section class="features">
+        <h2>What you get out of the box</h2>
+        <div class="feature-grid">
+          <article>
+            <h3>@nest-util/nest-crud</h3>
+            <p>
+              Reusable CRUD services and controller factories with filtering,
+              pagination, and Swagger docs.
+            </p>
+          </article>
+          <article>
+            <h3>@nest-util/nest-auth</h3>
+            <p>
+              Dynamic auth module with configurable user fields, password
+              hashing, and token rotation.
+            </p>
+          </article>
+          <article>
+            <h3>ncnu CLI</h3>
+            <p>
+              Generate entities, DTOs, services, and controllers with strict
+              typing and consistent conventions.
+            </p>
+          </article>
+        </div>
+      </section>
 
-    /* Professional Touch */
-    .app-nav {
-      margin: 1rem 2rem;
-    }
+      <section class="workflow">
+        <h2>Typical workflow</h2>
+        <ol>
+          <li>
+            Generate a resource:
+            <code>ncnu --gen Post --path src/app title:string</code>
+          </li>
+          <li>
+            Extend generated services/controllers from Nest-Util base classes.
+          </li>
+          <li>
+            Secure routes with <code>@nest-util/nest-auth</code> and publish
+            with confidence.
+          </li>
+        </ol>
+      </section>
 
-    /* Logo Styling */
-    .sidebar .app-name-link img {
-      width: 120px;
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
-  <script>
-    window.$docsify = {
-      name: 'Nest-Util',
-      repo: 'nigussolomon/nest-util',
-      loadSidebar: true,
-      loadNavbar: true,
-      coverpage: true,
-      onlyCover: false,
-      auto2top: true,
-      subMaxLevel: 3,
-      executeScript: true,
-      
-      // Plugins
-      search: 'auto',
-      copyCode: {
-        buttonText: 'Copy',
-        errorText: 'Error',
-        successText: 'Copied'
-      },
-      pagination: {
-        previousText: 'Previous',
-        nextText: 'Next',
-        crossChapter: true,
-        crossChapterText: true
-      },
-      tabs: {
-        persist: true,
-        sync: true,
-        theme: 'classic',
-        tabComments: true,
-        tabHeadings: true
-      }
-    }
-  </script>
-  
-  <!-- Docsify Core -->
-  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  
-  <!-- Plugins -->
-  <script src="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify-tabs@1"></script>
-</body>
+      <section class="cta">
+        <h2>Ready to standardize your NestJS backend stack?</h2>
+        <p>
+          Use the docs to install, configure, and deploy Nest-Util with CI/CD
+          and GitHub Pages documentation.
+        </p>
+        <a class="btn btn-primary" href="./guide.html#/"
+          >Open full documentation</a
+        >
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>MIT Licensed · Built for teams shipping NestJS APIs at scale.</p>
+    </footer>
+  </body>
 </html>

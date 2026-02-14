@@ -1,104 +1,34 @@
-# Examples & Recipes
+# Examples
 
-Common patterns and advanced use cases for `nest-util`.
+## Blog API resource
 
-## 1. Soft Deletes
+```bash
+ncnu --gen Post --path apps/demo-api/src/app \
+  title:string content:string published:boolean authorId:number
+```
 
-TypeORM supports soft deletes out of the box. To enable them with `nest-crud`, simply add the `@DeleteDateColumn` to your entity. The `remove()` method in `NestCrudService` automatically handles soft deletes if this column exists.
+Common queries:
 
-```typescript
-// user.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn } from 'typeorm';
+- `GET /post?page=1&limit=10`
+- `GET /post?filter[published_eq]=true`
+- `GET /post?filter[title_cont]=nestjs`
 
-@Entity()
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
+## Admin + public route split
 
-  @Column()
-  name: string;
+- Mark read endpoints public with `@Public()`.
+- Keep create/update/delete protected with JWT guard.
 
-  @DeleteDateColumn() // <--- Add this
-  deletedAt?: Date;
+## Adding custom business logic
+
+Override generated service methods:
+
+```ts
+async create(dto: CreatePostDto) {
+  if (dto.title.length < 5) throw new BadRequestException('Title too short');
+  return super.create(dto);
 }
 ```
 
-Now, calling `DELETE /user/:id` will set `deletedAt` instead of removing the row.
+## API response standardization
 
-## 2. Custom Business Logic
-
-You often need to do more than just CRUD. You can override any method in your service.
-
-**Example: Sending an email after user creation**
-
-```typescript
-// user.service.ts
-@Injectable()
-export class UserService extends NestCrudService<User, CreateUserDto, UpdateUserDto> {
-  constructor(
-    @InjectRepository(User) repo: Repository<User>,
-    private mailService: MailService,
-  ) {
-    super({ repository: repo });
-  }
-
-  // Override the create method
-  async create(dto: CreateUserDto): Promise<User> {
-    // 1. Call the default implementation to save to DB
-    const newUser = await super.create(dto);
-
-    // 2. Add custom logic
-    await this.mailService.sendWelcome(newUser.email);
-
-    return newUser;
-  }
-}
-```
-
-## 3. Complex Filtering
-
-`nest-crud` supports rich filtering via query parameters.
-
-**Scenario:** Find all "active" users who joined "after 2023".
-
-**Request:**
-```http
-GET /users?filter[isActive_eq]=true&filter[createdAt_gte]=2023-01-01
-```
-
-**Service Configuration:**
-Make sure to whitelist these fields in your service:
-```typescript
-super({
-    repository,
-    allowedFilters: ['isActive', 'createdAt'] 
-});
-```
-
-## 4. File Uploads
-
-To handle file uploads alongside CRUD data, you can create a custom endpoint in your controller.
-
-```typescript
-// product.controller.ts
-@Controller('products')
-export class ProductController extends CreateNestedCrudController(...) {
-  
-  @Post(':id/image')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadImage(
-    @Param('id') id: number,
-    @UploadedFile() file: Express.Multer.File
-  ) {
-    // 1. Upload file to storage (S3, local, etc.)
-    const imageUrl = await this.storageService.upload(file);
-    
-    // 2. Update the product entity
-    return this.service.update(id, { imageUrl });
-  }
-}
-```
-
-## 5. Multiple Primary Keys / Composite Keys
-
-Currently, `nest-crud` is optimized for single `id` primary keys. For composite keys, it is recommended to create a dedicated service and controller manually, or extend the base classes and override `findOne`, `update`, and `remove` to handle the composite ID logic (e.g., parsing a combined string like `key1_key2`).
+Use built-in response interceptor from `nest-crud` globally to keep success shape consistent across all resources.

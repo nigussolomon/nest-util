@@ -1,87 +1,38 @@
 # Troubleshooting
 
-Common issues and how to fix them.
+## `filter[...]` query params not parsed correctly
 
-## Type Errors
+Set Express query parser to extended mode:
 
-### TS2742: The inferred type of '...' cannot be named
-
-**Error:**
-```
-The inferred type of 'UserController' cannot be named without a reference to '...'. This is likely not portable.
+```ts
+app.getHttpAdapter().getInstance().set('query parser', 'extended');
 ```
 
-**Cause:**
-TypeScript cannot determine the return type of the mixin class when generating declaration files.
+## Validation decorators not transforming values
 
-**Fix:**
-Explicitly implement the `IBaseController` interface in your controller.
+Enable transform + implicit conversion:
 
-```typescript
-export class UserController extends CreateNestedCrudController(...) 
-  implements IBaseController<CreateUserDto, UpdateUserDto, User> { // <--- Add this
-    // ...
-}
+```ts
+app.useGlobalPipes(
+  new ValidationPipe({ transform: true, enableImplicitConversion: true })
+);
 ```
 
-## Runtime Errors
+## Auth login fails due to field mismatch
 
-### "Query parser not configured" / Filters ignored
+Verify `fieldMap` in `NestAuthModule.forRoot` matches actual entity field names.
 
-**Symptom:**
-You pass `?filter[name_eq]=john` but it returns all results.
+## CLI command not found
 
-**Cause:**
-NestJS uses the default query parser which treats `filter[name_eq]` as a string key `filter[name_eq]`, not a nested object.
+Install globally and confirm in shell path:
 
-**Fix:**
-Enable "extended" query parsing in `main.ts`.
-
-```typescript
-// main.ts
-const app = await NestFactory.create(AppModule);
-app.getHttpAdapter().getInstance().set('query parser', 'extended'); 
-```
-
-### "No metadata found" / "Entity not found"
-
-**Symptom:**
-TypeORM errors complaining about missing metadata.
-
-**Cause:**
-Circular dependencies between entities or incorrect imports.
-
-**Fix:**
-- Use `forwardRef(() => OtherModule)` if you have circular module dependencies.
-- Ensure all entities are registered in `TypeOrmModule.forRoot({ entities: [...] })` or use `autoLoadEntities: true`.
-
-## Build & Generator
-
-### `ncnu` command not found
-
-**Fix:**
-Ensure you installed it globally:
 ```bash
-npm install -g ncnu
-# or
-pnpm add -g ncnu
+pnpm add -g <ncnu-tarball>
+ncnu --help
 ```
-Or check your system PATH.
 
-### Validation decorators not working
+## GitHub Pages not updating
 
-**Symptom:**
-Invalid data is saved to the DB.
-
-**Cause:**
-Global ValidationPipe is missing or misconfigured.
-
-**Fix:**
-Add this to `main.ts`:
-```typescript
-app.useGlobalPipes(new ValidationPipe({ 
-  transform: true, 
-  enableImplicitConversion: true,
-  whitelist: true 
-}));
-```
+- Confirm deploy workflow succeeded.
+- Ensure Pages source is set to GitHub Actions.
+- Check that files are under `docs/`.
