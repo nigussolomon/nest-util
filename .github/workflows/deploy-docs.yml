@@ -43,7 +43,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           fail: true
-          args: --no-progress --verbose --exclude-mail docs/**/*.md docs/*.html
+          args: --no-progress --verbose docs
 
   deploy:
     name: Deploy to GitHub Pages

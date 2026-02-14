@@ -1,16 +1,19 @@
 # `@nest-util/nest-auth`
 
-`nest-auth` is a configurable auth module for NestJS applications that need JWT auth without rigid schema constraints.
+`nest-auth` is a configurable authentication library for NestJS APIs that need JWT security without rigid schema assumptions.
 
-## Key capabilities
+## Feature summary
 
-- Dynamic user entity configuration
-- Login/register endpoints
-- Access token + refresh token generation
+- Dynamic user entity support
+- Configurable field mappings
+- Register/login endpoint support
+- Access + refresh token issuance
 - Refresh token rotation strategy
-- Route protection decorators and guards
+- Decorators and guards for route-level control
 
-## Configure the module
+---
+
+## Module configuration
 
 ```ts
 NestAuthModule.forRoot({
@@ -25,22 +28,71 @@ NestAuthModule.forRoot({
 });
 ```
 
-## Secure routes
+### Required settings
 
-- Mark public routes with `@Public()`.
-- Use default JWT auth guard for protected routes.
-- Read authenticated user with `@CurrentUser()`.
+- `entity`: TypeORM user entity
+- `jwtSecret`: access token signing secret
+- `refreshSecret`: refresh token signing secret
+- `fieldMap`: maps auth fields to your schema
 
-## Refresh token flow
+---
 
-1. User logs in and receives access + refresh tokens.
-2. Refresh endpoint validates token signature and nonce.
-3. Server rotates refresh token and invalidates previous token.
-4. Client stores new token pair.
+## Route security model
 
-## Hardening recommendations
+Use these helpers:
 
-- Use short access token TTL and longer refresh TTL.
-- Store refresh tokens server-side as hashed values when possible.
-- Rotate secrets through CI-managed environment variables.
-- Enforce rate limiting and account lockouts at API gateway level.
+- `@Public()` for anonymous routes
+- JWT guard for protected routes
+- `@CurrentUser()` to extract user payload
+
+### Typical controller layout
+
+- `POST /auth/register` (public)
+- `POST /auth/login` (public)
+- `POST /auth/refresh` (public with refresh token)
+- protected business routes guarded by JWT
+
+---
+
+## Refresh token rotation flow
+
+1. Client logs in and receives access + refresh tokens.
+2. Client sends refresh token to refresh endpoint.
+3. Server validates signature and nonce/version.
+4. Server issues new access/refresh pair.
+5. Previous refresh token becomes invalid.
+
+This lowers replay risk if a refresh token leaks.
+
+---
+
+## Hardening checklist
+
+- Keep access token expiry short
+- Keep refresh token expiry longer but bounded
+- Rotate JWT secrets periodically
+- Store secrets in CI/environment vaults
+- Hash refresh tokens at rest if possible
+- Add rate limiting on auth endpoints
+- Add account lockout / anomaly detection for brute-force patterns
+
+---
+
+## Custom DTO strategy
+
+You can bring your own DTOs for:
+
+- login payload shape
+- register payload shape
+- response schema consistency
+
+This is useful when your API contracts require strict business-specific validation and OpenAPI examples.
+
+---
+
+## Operational recommendations
+
+- Add logs for login success/failure and refresh events
+- Avoid returning sensitive user fields by default
+- Version your auth contracts as API evolves
+- Add end-to-end tests for token rotation edge cases

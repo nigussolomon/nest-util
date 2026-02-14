@@ -1,31 +1,95 @@
 # CI/CD & GitHub Pages
 
-This repository ships with hardened GitHub Actions workflows for quality, security, publishing, and docs deployment.
+This repository uses GitHub Actions for quality checks, security, packaging, and docs deployment.
 
-## CI principles applied
+## Pipeline goals
 
-- Least-privilege permissions per workflow
-- Concurrency groups to prevent duplicate runs
-- Pinned Node + pnpm versions
-- Deterministic dependency install via lockfile
-- Affected-project execution for efficient Nx monorepo checks
+- deterministic builds
+- least-privilege workflow permissions
+- reduced duplicate runs via concurrency groups
+- monorepo-aware execution using affected projects
+- validation-before-deploy for docs
 
-## Pipelines
+---
 
-- **CI**: lint, typecheck, test, and build on push/PR.
-- **Security**: dependency audit, secret scanning, CodeQL, dependency review.
-- **Publish**: package tarball creation and release bundling from `publish` branch.
-- **Docs deploy**: validates docs and publishes `docs/` to GitHub Pages.
+## CI workflow (`ci.yml`)
 
-## Publishing docs to GitHub Pages
+Main behavior:
 
-1. Ensure repository settings use **GitHub Actions** as Pages source.
-2. Push updates to `main`.
-3. `deploy-docs` workflow uploads `docs/` as Pages artifact.
-4. `actions/deploy-pages` publishes site.
+- Detects base/head SHAs for Nx affected analysis
+- Runs `lint`, `typecheck`, `test`, and `build` only where required
+- Uses lockfile-based dependency installation
+- Applies explicit job timeouts
 
-## Recommended branch protections
+Recommended branch policy:
 
-- Require CI + Security checks before merge.
-- Restrict direct pushes to `main` and `publish`.
-- Require signed commits for release branches.
+- Require CI passing before merge
+- Require up-to-date branch before merge
+
+---
+
+## Security workflow (`security.yml`)
+
+Checks include:
+
+- dependency audit (`pnpm audit --audit-level=high`)
+- secret scanning (Gitleaks)
+- CodeQL analysis
+- dependency review on pull requests
+
+Recommendations:
+
+- Triaging vulnerabilities weekly
+- Block merges on unresolved high severity findings
+- Keep dependency upgrade cadence predictable (weekly/biweekly)
+
+---
+
+## Publish workflow (`publish.yml`)
+
+Responsibilities:
+
+- build and verify each library package
+- create tarballs
+- upload build artifacts
+- compose release assets
+
+Recommendations:
+
+- protect `publish` branch
+- enforce signed release commits/tags
+- document release rollback procedure
+
+---
+
+## Docs deploy workflow (`deploy-docs.yml`)
+
+Flow:
+
+1. Validate required docs files exist
+2. Run link check across docs content
+3. Deploy to GitHub Pages on non-PR events
+
+This ensures broken documentation links are caught before publication.
+
+---
+
+## GitHub Pages setup
+
+In repository settings:
+
+1. Go to **Pages**
+2. Set source to **GitHub Actions**
+3. Ensure `deploy-docs.yml` is allowed to write Pages
+
+Deployment target is the `docs/` directory uploaded as an artifact.
+
+---
+
+## Operational checklist
+
+- [ ] CI required on `main`
+- [ ] Security required on `main`
+- [ ] Dependabot (or equivalent) enabled
+- [ ] Secrets stored in repository/environment secrets only
+- [ ] Release process documented for maintainers

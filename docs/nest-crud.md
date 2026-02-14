@@ -1,17 +1,20 @@
 # `@nest-util/nest-crud`
 
-`nest-crud` gives you reusable CRUD building blocks for TypeORM-based modules.
+`nest-crud` provides reusable CRUD foundations for TypeORM-based NestJS modules.
 
 ## Core exports
 
 - `NestCrudService<T>`
 - `CreateNestedCrudController<T, CreateDto, UpdateDto>()`
 - `TypeOrmExceptionFilter`
-- Filtering and pagination helper DTOs
+- filter/pagination DTO helpers
+- response decorators/interceptors
+
+---
 
 ## Service pattern
 
-Extend the base service with your entity:
+Extend the base service with your entity repository:
 
 ```ts
 @Injectable()
@@ -21,6 +24,16 @@ export class PostService extends NestCrudService<Post> {
   }
 }
 ```
+
+### Common inherited capabilities
+
+- Create entity from DTO
+- Find one/many entities
+- Filter and paginate list responses
+- Update and delete operations
+- Consistent error handling surface
+
+---
 
 ## Controller factory pattern
 
@@ -36,6 +49,16 @@ export class PostController extends CreateNestedCrudController(
   }
 }
 ```
+
+This gives you standard endpoints:
+
+- `POST /posts`
+- `GET /posts`
+- `GET /posts/:id`
+- `PATCH /posts/:id`
+- `DELETE /posts/:id`
+
+---
 
 ## Query features
 
@@ -53,13 +76,22 @@ GET /posts?filter[title_cont]=nestjs
 GET /posts?filter[views_gte]=100
 ```
 
-### Multiple filters
+### Compound filtering
 
 ```http
 GET /posts?filter[published_eq]=true&filter[views_gte]=100
 ```
 
-## Recommended global setup
+### Recommended operators
+
+- `_eq` equals
+- `_cont` contains (string search)
+- `_gte` greater than or equal
+- `_lte` less than or equal
+
+---
+
+## Global app setup required
 
 ```ts
 app.useGlobalPipes(
@@ -69,8 +101,38 @@ app.useGlobalFilters(new TypeOrmExceptionFilter());
 app.getHttpAdapter().getInstance().set('query parser', 'extended');
 ```
 
-## Extension tips
+Without `query parser = extended`, nested query keys like `filter[name_cont]` may fail parsing.
 
-- Override generated methods for business rules and permission checks.
-- Add domain-specific query helpers in your derived service.
-- Keep base behavior for pagination/filtering to preserve consistency.
+---
+
+## Extension patterns
+
+### Override create/update for business rules
+
+```ts
+async create(dto: CreatePostDto) {
+  if (dto.title.length < 5) {
+    throw new BadRequestException('Title too short');
+  }
+
+  return super.create(dto);
+}
+```
+
+### Add query guards by role
+
+Inject request user context and apply additional where constraints before delegating.
+
+### Keep base consistency
+
+Prefer extending methods rather than replacing all CRUD behavior so pagination/filtering remains consistent across teams.
+
+---
+
+## Best practices
+
+- Keep DTOs strict and explicit
+- Add DB indexes to frequently filtered columns
+- Use relation loading intentionally to avoid N+1 behavior
+- Document custom filters in each module README
+- Pair CRUD endpoints with auth guards where needed

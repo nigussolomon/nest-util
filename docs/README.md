@@ -2,18 +2,18 @@
 
 Nest-Util is a toolkit for building production-ready NestJS backends quickly and consistently.
 
-## Packages
+## Package overview
 
 - **`@nest-util/nest-crud`**: Generic CRUD base classes with filtering, pagination, and response helpers.
 - **`@nest-util/nest-auth`**: Dynamic JWT authentication module with refresh token rotation.
 - **`ncnu`**: CLI generator that scaffolds entities, DTOs, services, and controllers.
 
-## Why teams use Nest-Util
+## Why teams adopt Nest-Util
 
-- Reduce repeated CRUD/service/controller boilerplate.
-- Keep API responses and query capabilities consistent across modules.
-- Onboard engineers faster with predictable generated structure.
-- Ship faster with ready-to-use auth and resource generation patterns.
+- Reduce repeated CRUD and controller boilerplate
+- Keep API response/query behavior consistent across modules
+- Standardize auth patterns without locking into one schema shape
+- Shorten onboarding for new contributors
 
 ## Documentation map
 
@@ -43,4 +43,9 @@ pnpm add -g https://github.com/nigussolomon/nest-util/releases/download/latest/n
 ncnu --gen Post --path apps/demo-api/src/app title:string content:string published:boolean
 ```
 
-Then register your generated module and run your Nest application.
+## First-run recommendations
+
+- Add global validation + TypeORM exception filter
+- Configure query parser as `extended`
+- Add auth module and protect non-public routes
+- Add tests for generated resources before production release

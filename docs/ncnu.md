@@ -1,8 +1,8 @@
 # `ncnu` CLI Generator
 
-`ncnu` scaffolds complete CRUD resource files from a single command.
+`ncnu` scaffolds complete CRUD resource files from one command, reducing startup time for new features.
 
-## Command shape
+## Command syntax
 
 ```bash
 ncnu --gen <ModelName> --path <target-folder> <field:type> <field:type> ...
@@ -14,31 +14,57 @@ ncnu --gen <ModelName> --path <target-folder> <field:type> <field:type> ...
 ncnu --gen Invoice --path apps/demo-api/src/app amount:number paid:boolean dueDate:date
 ```
 
-## Supported field types
+## Supported primitive types
 
 - `string`
 - `number`
 - `boolean`
 - `date`
 
-## What gets generated
+---
 
-- Entity with columns
-- Create DTO
-- Update DTO
-- Service extending `NestCrudService`
-- Controller extending `CreateNestedCrudController`
+## Generated files
 
-## Recommended workflow
+For a model named `Invoice`:
 
-1. Generate resource with ncnu.
-2. Add relation fields and indexes manually (if needed).
-3. Register module in app.
-4. Protect endpoints with `nest-auth` where needed.
-5. Add resource tests before production rollout.
+- `invoice.entity.ts`
+- `create-invoice.dto.ts`
+- `update-invoice.dto.ts`
+- `invoice.service.ts`
+- `invoice.controller.ts`
 
-## Tips
+### Default behavior in generated files
 
-- Keep model names singular (`User`, `Post`, `Invoice`).
-- Use generated files as a baseline, then apply domain rules.
-- Re-run generation only for new resources; avoid overwriting customized files.
+- Entity columns are scaffolded with sensible defaults
+- Service extends `NestCrudService`
+- Controller extends `CreateNestedCrudController`
+- DTOs are ready for class-validator/class-transformer extension
+
+---
+
+## Practical workflow
+
+1. Generate resource with `ncnu`
+2. Add relations/indexes/constraints in entity
+3. Add business-specific validation in DTOs
+4. Register module in app
+5. Protect endpoints with `nest-auth`
+6. Add tests for domain behavior
+
+---
+
+## Naming and structure guidance
+
+- Use singular model names (`User`, `Project`, `Comment`)
+- Keep target path within your app module tree
+- Prefer one resource folder per domain aggregate
+
+---
+
+## Safety tips
+
+- Do not re-run generation on heavily customized files unless you plan to merge manually
+- Commit immediately after generation to keep clean diffs
+- Review generated decorators before production release
+
+For implementation details, see `libs/ncnu/src/lib/generate.ts`.
