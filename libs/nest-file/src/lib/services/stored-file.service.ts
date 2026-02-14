@@ -37,7 +37,8 @@ export class StoredFileService implements OnModuleInit {
     private readonly encryptionService: FileEncryptionService
   ) {
     this.bucketName = options.bucket.bucket;
-    const { Client } = require('minio') as {
+    const minioRequire = eval('require') as NodeRequire;
+    const { Client } = minioRequire('minio') as {
       Client: new (options: FileModuleOptions['minio']) => MinioClient;
     };
     this.client = new Client(options.minio);
