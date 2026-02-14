@@ -6,7 +6,10 @@ on:
 
 permissions:
   contents: write
-  actions: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   nest-audit:
@@ -17,14 +20,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -58,14 +62,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -91,7 +96,7 @@ jobs:
           # Fix paths in package.json to be relative to the current folder (dist)
           jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | .peerDependencies["@nest-util/nest-audit"] = "^0.0.1" | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
-        
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -107,14 +112,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -130,7 +136,7 @@ jobs:
           # Fix entry points and remove devDependencies
           jq '.main |= sub("\\.ts$"; ".js") | del(.devDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
-        
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -146,14 +152,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -170,7 +177,7 @@ jobs:
           # Fix paths in package.json to be relative to the current folder (dist)
           jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
-        
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

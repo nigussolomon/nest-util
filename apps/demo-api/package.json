@@ -85,6 +85,12 @@
         "options": {
           "passWithNoTests": true
         }
+      },
+      "typecheck": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "tsc --build apps/demo-api/tsconfig.app.json"
+        }
       }
     }
   },
