@@ -5,6 +5,11 @@
 ![TypeORM](https://img.shields.io/badge/TypeORM-FE0803?style=for-the-badge&logo=typeorm&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
 
+[![CI](https://github.com/nigussolomon/nest-util/actions/workflows/ci.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/ci.yml)
+[![Security](https://github.com/nigussolomon/nest-util/actions/workflows/security.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/security.yml)
+[![Deploy Documentation](https://github.com/nigussolomon/nest-util/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/deploy-docs.yml)
+[![Publish Libs](https://github.com/nigussolomon/nest-util/actions/workflows/publish.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/publish.yml)
+
 **A modern, production-ready collection of NestJS utilities designed to accelerate development by providing reusable, battle-tested patterns for CRUD operations, authentication, and rapid code generation.**
 
 📖 **[View Full Documentation](https://nigussolomon.github.io/nest-util/guide.html#/)** | 🚀 **[Quick Start](#-quick-start)** | 💡 **[Examples](https://nigussolomon.github.io/nest-util/guide.html#/examples)**
