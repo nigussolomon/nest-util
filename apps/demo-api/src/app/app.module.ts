@@ -14,6 +14,9 @@ import { Post } from './post/post.entity';
 import { AuthModule } from '@nest-util/nest-auth';
 import { User } from './user/user.entity';
 import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
+import { NestFileModule } from '@nest-util/nest-file';
+import { NestUtilNestAuditModule, AuditInterceptor } from '@nest-util/nest-audit';
+import { FileModule } from './file/file.module';
 
 @Module({
   imports: [
@@ -29,6 +32,27 @@ import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
     }),
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
+
+    NestUtilNestAuditModule,
+    NestFileModule.forRoot({
+      minio: {
+        endPoint: process.env.MINIO_ENDPOINT ?? 'localhost',
+        port: Number(process.env.MINIO_PORT ?? 9000),
+        useSSL: (process.env.MINIO_USE_SSL ?? 'false') === 'true',
+        accessKey: process.env.MINIO_ACCESS_KEY ?? 'minioadmin',
+        secretKey: process.env.MINIO_SECRET_KEY ?? 'minioadmin',
+      },
+      bucket: {
+        bucket: process.env.MINIO_BUCKET ?? 'demo-files',
+        makeBucketIfMissing: true,
+      },
+      encryption: {
+        key:
+          process.env.FILE_ENCRYPTION_KEY_BASE64 ??
+          'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+      },
+    }),
+    FileModule,
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',
@@ -52,6 +76,10 @@ import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
     {
       provide: APP_INTERCEPTOR,
       useClass: ResponseInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
 })
