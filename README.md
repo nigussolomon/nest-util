@@ -3,7 +3,6 @@
 ![NestJS](https://img.shields.io/badge/nestjs-%23E0234E.svg?style=for-the-badge&logo=nestjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![TypeORM](https://img.shields.io/badge/TypeORM-FE0803?style=for-the-badge&logo=typeorm&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
 
 [![CI](https://github.com/nigussolomon/nest-util/actions/workflows/ci.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/ci.yml)
 [![Security](https://github.com/nigussolomon/nest-util/actions/workflows/security.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/security.yml)
