@@ -14,6 +14,7 @@ import { Message } from '../decorators/response-message.decorator';
 import { CrudInterface } from '../interfaces/crud.interface';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
+import { Audit } from '@nest-util/nest-audit';
 
 export interface IBaseController<CD, UD, RD> {
   service: CrudInterface<CD, UD, RD>;
@@ -36,6 +37,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Get()
     @Message('fetched')
+    @Audit({ action: 'CREATE' })
     @ApiResponse({ type: [responseDto] })
     @ApiQuery({
       name: 'filter',
@@ -55,6 +57,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Get(':id')
     @Message('fetched')
+    @Audit({ action: 'READ_ONE' })
     @ApiResponse({ type: responseDto })
     findOne(@Param('id', ParseIntPipe) id: number) {
       return this.service.findOne(id);
@@ -62,6 +65,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Post()
     @Message('created')
+    @Audit({ action: 'CREATE' })
     @ApiBody({ type: createDto })
     @ApiResponse({ type: responseDto })
     create(@Body() dto: CD) {
@@ -70,6 +74,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Patch(':id')
     @Message('updated')
+    @Audit({ action: 'UPDATE' })
     @ApiBody({ type: updateDto })
     @ApiResponse({ type: responseDto })
     update(@Param('id', ParseIntPipe) id: number, @Body() dto: UD) {
@@ -78,6 +83,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Delete(':id')
     @Message('deleted')
+    @Audit({ action: 'DELETE' })
     remove(@Param('id', ParseIntPipe) id: number) {
       return this.service.remove(id);
     }

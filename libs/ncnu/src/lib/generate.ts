@@ -206,17 +206,33 @@ export class ${className}Service extends NestCrudService<
 `;
 }
 
+function pluralize(name: string) {
+  if (name.endsWith('y')) {
+    return name.slice(0, -1) + 'ies';
+  }
+  if (name.endsWith('s')) {
+    return name + 'es';
+  }
+  return name + 's';
+}
+
 function generateController(className: string, fileName: string) {
-  return `import { Controller } from '@nestjs/common';
+  const pluralName = pluralize(className);
+  return `import { Controller, UseGuards } from '@nestjs/common';
 import { CreateNestedCrudController, IBaseController } from '@nest-util/nest-crud';
 import { ${className}Service } from './${fileName}.service';
 import { ${className} } from './${fileName}.entity';
 import { Create${className}Dto } from './dtos/create-${fileName}.dto';
 import { Update${className}Dto } from './dtos/update-${fileName}.dto';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiExtraModels } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@nest-util/nest-auth';
 
 @ApiTags('${fileName}')
 @Controller('${fileName}')
+@EntityName({ singular: '${className}', plural: '${pluralName}' })
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+@ApiExtraModels(Create${className}Dto, Update${className}Dto, ${className})
 export class ${className}Controller extends CreateNestedCrudController(
   Create${className}Dto,
   Update${className}Dto,

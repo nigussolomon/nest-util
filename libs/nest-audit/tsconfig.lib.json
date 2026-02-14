@@ -17,11 +17,7 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src/**/*.ts"],
-  "references": [
-    {
-      "path": "../nest-audit/tsconfig.lib.json"
-    }
-  ],
+  "references": [],
   "exclude": [
     "jest.config.ts",
     "jest.config.cts",

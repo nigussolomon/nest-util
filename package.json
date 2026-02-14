@@ -2,7 +2,9 @@
   "name": "@nest-util/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "check": "nx run-many -t test build lint typecheck"
+  },
   "private": true,
   "devDependencies": {
     "@eslint/js": "^9.8.0",

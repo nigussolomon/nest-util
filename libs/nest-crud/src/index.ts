@@ -7,3 +7,4 @@ export * from './lib/decorators/response-message.decorator';
 export * from './lib/interceptors/response.interceptor';
 export * from './lib/interfaces/crud.interface';
 export * from './lib/helpers/exception-filter.helper';
+export { Audit, AuditLogEntity } from '@nest-util/nest-audit';
