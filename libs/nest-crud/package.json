@@ -18,10 +18,10 @@
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
-    "@nest-util/nest-audit": "workspace:*",
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
+    "@nest-util/nest-audit": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/swagger": "^11.2.6",
