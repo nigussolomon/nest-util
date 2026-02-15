@@ -77,4 +77,6 @@ export interface AuthModuleOptions {
    * DTO for refreshing tokens.
    */
   refreshDto?: Type<unknown>;
+
+  relations?: string[];
 }

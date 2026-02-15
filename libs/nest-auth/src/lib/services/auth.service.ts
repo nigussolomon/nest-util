@@ -1,4 +1,9 @@
-import { Injectable, Inject, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import type { Repository } from 'typeorm';
@@ -17,7 +22,9 @@ export class AuthService {
     private readonly jwtService: JwtService,
     @Inject(DataSource) private readonly dataSource: DataSource
   ) {
-    this.userRepository = this.dataSource.getRepository(this.options.userEntity) as Repository<Record<string, unknown>>;
+    this.userRepository = this.dataSource.getRepository(
+      this.options.userEntity
+    ) as Repository<Record<string, unknown>>;
   }
 
   async register(data: Record<string, unknown>): Promise<AuthUser> {
@@ -93,7 +100,7 @@ export class AuthService {
       if (!isTokenValid) {
         throw new UnauthorizedException('Refresh token reused or invalid');
       }
-      
+
       return await this.generateTokens(user);
     } catch (e: unknown) {
       if (e instanceof UnauthorizedException) throw e;
@@ -104,8 +111,9 @@ export class AuthService {
   async logout(userId: number | string): Promise<boolean> {
     const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
     const accessTokenField = this.options.accessTokenField || 'accessToken';
-    
-    const updateResult = await this.userRepository.createQueryBuilder()
+
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
       .update(this.options.userEntity)
       .set({ [refreshTokenField]: null, [accessTokenField]: null })
       .where('id = :id', { id: userId })
@@ -118,30 +126,33 @@ export class AuthService {
     return true;
   }
 
-  private async generateTokens(user: Record<string, unknown>): Promise<AuthTokens> {
+  private async generateTokens(
+    user: Record<string, unknown>
+  ): Promise<AuthTokens> {
     const identifierField = this.options.identifierField;
     const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
     const accessTokenField = this.options.accessTokenField || 'accessToken';
     const payload = { sub: user.id, [identifierField]: user[identifierField] };
-    
-    const refreshPayload = { 
-      ...payload, 
-      nonce: crypto.randomUUID() 
+
+    const refreshPayload = {
+      ...payload,
+      nonce: crypto.randomUUID(),
     };
 
-    const accessTokenPayload = { 
-      ...payload, 
-      nonce: crypto.randomUUID() 
+    const accessTokenPayload = {
+      ...payload,
+      nonce: crypto.randomUUID(),
     };
 
     const accessToken = this.jwtService.sign(accessTokenPayload, {
       secret: this.options.jwtSecret,
       expiresIn: '15m',
     });
-    
-    const refreshSecret = this.options.refreshTokenSecret || this.options.jwtSecret;
+
+    const refreshSecret =
+      this.options.refreshTokenSecret || this.options.jwtSecret;
     const refreshExpiresIn = this.options.refreshTokenExpiresIn || '7d';
-    
+
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: refreshSecret,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,10 +161,14 @@ export class AuthService {
 
     const hashedRefreshToken = await bcrypt.hash(refreshPayload.nonce, 10);
     const hashedAccessToken = await bcrypt.hash(accessTokenPayload.nonce, 10);
-    
-    const updateResult = await this.userRepository.createQueryBuilder()
+
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
       .update(this.options.userEntity)
-      .set({ [refreshTokenField]: hashedRefreshToken, [accessTokenField]: hashedAccessToken })
+      .set({
+        [refreshTokenField]: hashedRefreshToken,
+        [accessTokenField]: hashedAccessToken,
+      })
       .where('id = :id', { id: user.id as string | number })
       .execute();
 
@@ -181,13 +196,24 @@ export class AuthService {
     return userData as AuthUser;
   }
 
-  async validateUser(payload: { sub: string | number; nonce: string }): Promise<AuthUser | null> {
+  async validateUser(payload: {
+    sub: string | number;
+    nonce: string;
+  }): Promise<AuthUser | null> {
     const accessTokenField = this.options.accessTokenField || 'accessToken';
-    
-    const user = await this.userRepository.createQueryBuilder('user')
+
+    const query = this.userRepository
+      .createQueryBuilder('user')
       .addSelect(`user.${accessTokenField}`)
-      .where('user.id = :id', { id: payload.sub })
-      .getOne();
+      .where('user.id = :id', { id: payload.sub });
+
+    if (this.options.relations?.length) {
+      this.options.relations.forEach((relation) => {
+        query.leftJoinAndSelect(`user.${relation}`, relation);
+      });
+    }
+
+    const user = await query.getOne();
 
     const storedAccessToken = user ? user[accessTokenField] : null;
 
