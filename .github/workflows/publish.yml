@@ -94,7 +94,7 @@ jobs:
           cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
           cd libs/nest-crud/dist
           # Fix paths in package.json to be relative to the current folder (dist)
-          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | .peerDependencies["@nest-util/nest-audit"] = "^0.0.1" | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
+          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | .peerDependencies["@nest-util/nest-audit"] = "https://github.com/nigussolomon/nest-util/releases/download/latest/ncnu-0.0.1.tgz" | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
 
       - name: Upload Artifact
@@ -184,7 +184,6 @@ jobs:
           name: nest-auth-tgz
           path: nest-util-nest-auth-*.tgz
           retention-days: 7
-
 
   nest-file:
     name: Build & Verify nest-file
