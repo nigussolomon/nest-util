@@ -4,6 +4,15 @@ import { Repository } from 'typeorm';
 import { AuditLogEntity } from '../entities/audit-log.entity';
 import { CreateAuditLogInput } from '../interfaces/audit-log.interface';
 
+interface FindAuditLogsOptions {
+  entity?: string;
+  userId?: string;
+  startDate?: Date;
+  endDate?: Date;
+  page?: number;
+  limit?: number;
+}
+
 @Injectable()
 export class AuditService {
   constructor(
@@ -38,5 +47,52 @@ export class AuditService {
       entityId,
       ...options,
     });
+  }
+
+  async findAll(options: FindAuditLogsOptions = {}) {
+    const page = options.page ?? 1;
+    const limit = options.limit ?? 10;
+
+    const queryBuilder = this.repo
+      .createQueryBuilder('auditLog')
+      .orderBy('auditLog.createdAt', 'DESC');
+
+    if (options.entity) {
+      queryBuilder.andWhere('auditLog.entity = :entity', {
+        entity: options.entity,
+      });
+    }
+
+    if (options.userId) {
+      queryBuilder.andWhere('auditLog.userId = :userId', {
+        userId: options.userId,
+      });
+    }
+
+    if (options.startDate) {
+      queryBuilder.andWhere('auditLog.createdAt >= :startDate', {
+        startDate: options.startDate,
+      });
+    }
+
+    if (options.endDate) {
+      queryBuilder.andWhere('auditLog.createdAt <= :endDate', {
+        endDate: options.endDate,
+      });
+    }
+
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
   }
 }
