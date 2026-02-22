@@ -6,6 +6,7 @@ import {
 } from './nest-crud.controller';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
+import { NotFoundException } from '@nestjs/common';
 
 class MockDto {}
 class MockResponseDto {
@@ -25,6 +26,7 @@ describe('NestedCrudController Factory', () => {
 
   beforeEach(async () => {
     service = {
+      disabledEndpoints: [],
       findAll: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
@@ -172,6 +174,15 @@ describe('NestedCrudController Factory', () => {
 
       expect(service.remove).toHaveBeenCalledWith(id);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('disabledEndpoints', () => {
+    it('should block disabled endpoints', async () => {
+      service.disabledEndpoints = ['create'];
+
+      expect(() => controller.create({} as MockDto)).toThrow(NotFoundException);
+      expect(service.create).not.toHaveBeenCalled();
     });
   });
 });
