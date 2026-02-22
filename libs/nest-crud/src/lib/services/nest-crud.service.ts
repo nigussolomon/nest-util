@@ -4,7 +4,7 @@ import { applyFilters } from '../helpers/filter.helper';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
 import { applyPagination } from '../helpers/pagination.helper';
-import { CrudInterface } from '../interfaces/crud.interface';
+import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
 
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   repository: Repository<Entity>;
@@ -18,6 +18,7 @@ export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   toResponseDto?: (entity: Entity | Entity[]) => ResponseDto | ResponseDto[];
   createDtoClass?: Type<unknown>;
   updateDtoClass?: Type<unknown>;
+  disabledEndpoints?: readonly CrudEndpoint[];
 }
 
 @Injectable()
@@ -41,6 +42,7 @@ export class NestCrudService<
   ) => ResponseDto | ResponseDto[];
   protected readonly createDtoClass?: Type<unknown>;
   protected readonly updateDtoClass?: Type<unknown>;
+  readonly disabledEndpoints: readonly CrudEndpoint[];
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -50,6 +52,7 @@ export class NestCrudService<
     this.toResponseDto = options.toResponseDto;
     this.createDtoClass = options.createDtoClass;
     this.updateDtoClass = options.updateDtoClass;
+    this.disabledEndpoints = options.disabledEndpoints ?? [];
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
