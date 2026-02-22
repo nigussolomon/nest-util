@@ -44,7 +44,6 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Get()
     @Message('fetched')
-    @Audit({ action: 'CREATE' })
     @ApiResponse({ type: [responseDto] })
     @ApiQuery({
       name: 'filter',
@@ -65,7 +64,6 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     @Get(':id')
     @Message('fetched')
-    @Audit({ action: 'READ_ONE' })
     @ApiResponse({ type: responseDto })
     findOne(@Param('id', ParseIntPipe) id: number) {
       this.ensureEndpointEnabled('findOne');
