@@ -192,7 +192,10 @@ describe('NestedCrudController Factory', () => {
       const query = { page: 1, limit: 5, user_id: '1' };
       const expectedResult = { data: [], meta: { total: 0, page: 1, limit: 5 } };
 
-      service.findAuditLogs?.mockResolvedValue(expectedResult);
+      const findAuditLogsMock = service.findAuditLogs as jest.MockedFunction<
+        NonNullable<typeof service.findAuditLogs>
+      >;
+      findAuditLogsMock.mockResolvedValue(expectedResult);
 
       const result = await controller.findAuditLogs?.(query);
 
