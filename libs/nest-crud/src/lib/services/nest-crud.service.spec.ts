@@ -9,6 +9,7 @@ import {
 import { NestCrudService } from './nest-crud.service';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
+import { AuditLogEntity } from '@nest-util/nest-audit';
 
 class MockEntity {
   id!: number;
@@ -29,6 +30,7 @@ describe('NestCrudService', () => {
   >;
   let repository: jest.Mocked<Repository<MockEntity>>;
   let queryBuilder: jest.Mocked<SelectQueryBuilder<MockEntity>>;
+  let auditQueryBuilder: jest.Mocked<SelectQueryBuilder<AuditLogEntity>>;
 
   beforeEach(async () => {
     queryBuilder = {
@@ -40,6 +42,19 @@ describe('NestCrudService', () => {
       getManyAndCount: jest.fn(),
     } as unknown as jest.Mocked<SelectQueryBuilder<MockEntity>>;
 
+    auditQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn(),
+    } as unknown as jest.Mocked<SelectQueryBuilder<AuditLogEntity>>;
+
+    const auditRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(auditQueryBuilder),
+    };
+
     repository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       findOne: jest.fn(),
@@ -47,6 +62,10 @@ describe('NestCrudService', () => {
       save: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      metadata: { name: 'MockEntity' },
+      manager: {
+        getRepository: jest.fn().mockReturnValue(auditRepo),
+      },
     } as unknown as jest.Mocked<Repository<MockEntity>>;
 
     const options = {
@@ -186,6 +205,31 @@ describe('NestCrudService', () => {
       repository.delete.mockResolvedValue({ affected: 0 } as DeleteResult);
 
       await expect(service.remove(1)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findAuditLogs', () => {
+    it('should list audit logs by entity name with pagination', async () => {
+      auditQueryBuilder.getManyAndCount.mockResolvedValue([[{ id: '1' } as AuditLogEntity], 1]);
+
+      const result = await service.findAuditLogs({ page: 2, limit: 10 });
+
+      expect(repository.manager.getRepository).toHaveBeenCalledWith(AuditLogEntity);
+      expect(auditQueryBuilder.where).toHaveBeenCalledWith(
+        'auditLog.entity = :entity',
+        { entity: 'MockEntity' }
+      );
+      expect(auditQueryBuilder.skip).toHaveBeenCalledWith(10);
+      expect(auditQueryBuilder.take).toHaveBeenCalledWith(10);
+      expect(result).toEqual({
+        data: [{ id: '1' }],
+        meta: {
+          total: 1,
+          page: 2,
+          limit: 10,
+          totalPages: 1,
+        },
+      });
     });
   });
 });
