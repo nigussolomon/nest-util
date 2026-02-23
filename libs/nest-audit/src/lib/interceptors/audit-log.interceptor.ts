@@ -22,10 +22,7 @@ export class AuditInterceptor implements NestInterceptor {
     private readonly reflector: Reflector
   ) {}
 
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler<unknown>
-  ): Observable<unknown> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const handler = context.getHandler();
     const auditOptions = this.reflector.get<AuditOptions>(
       AUDIT_METADATA_KEY,

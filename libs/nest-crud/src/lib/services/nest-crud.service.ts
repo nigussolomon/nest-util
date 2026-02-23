@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, Type } from '@nestjs/common';
 import { ObjectLiteral, Repository } from 'typeorm';
-import { AuditLogEntity } from '@nest-util/nest-audit';
 import { applyFilters } from '../helpers/filter.helper';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
@@ -164,56 +163,5 @@ export class NestCrudService<
     }
 
     return true;
-  }
-
-  async findAuditLogs(query: {
-    user_id?: string;
-    start_date?: string;
-    end_date?: string;
-    page?: number;
-    limit?: number;
-  }) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 10;
-
-    const qb = this.repo.manager
-      .getRepository(AuditLogEntity)
-      .createQueryBuilder('auditLog')
-      .where('auditLog.entity = :entity', {
-        entity: this.repo.metadata.name,
-      })
-      .orderBy('auditLog.createdAt', 'DESC');
-
-    if (query.user_id) {
-      qb.andWhere('auditLog.userId = :userId', {
-        userId: query.user_id,
-      });
-    }
-
-    if (query.start_date) {
-      qb.andWhere('auditLog.createdAt >= :startDate', {
-        startDate: new Date(query.start_date),
-      });
-    }
-
-    if (query.end_date) {
-      qb.andWhere('auditLog.createdAt <= :endDate', {
-        endDate: new Date(query.end_date),
-      });
-    }
-
-    qb.skip((page - 1) * limit).take(limit);
-
-    const [data, total] = await qb.getManyAndCount();
-
-    return {
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
-    };
   }
 }
