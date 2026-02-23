@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { CallHandler, ExecutionContext } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Type } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { of } from 'rxjs';
 import { AUDIT_METADATA_KEY } from '../decorators/audit-log.decorator';
@@ -19,7 +19,7 @@ describe('AuditInterceptor', () => {
     handle: () => of({ ok: true }),
   };
 
-  const buildContext = (controller: Function): ExecutionContext => {
+  const buildContext = (controller: Type<unknown>): ExecutionContext => {
     const handler = () => undefined;
 
     Reflect.defineMetadata(
@@ -80,7 +80,11 @@ describe('AuditInterceptor', () => {
     );
 
     class TestController {}
-    (TestController as any).prototype.service = {
+    (
+      TestController as unknown as {
+        prototype: { service: { repository: { target: typeof UserEntity } } };
+      }
+    ).prototype.service = {
       repository: { target: UserEntity },
     };
 
