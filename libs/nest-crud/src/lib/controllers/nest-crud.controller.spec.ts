@@ -6,6 +6,7 @@ import {
 } from './nest-crud.controller';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
+import { NotFoundException } from '@nestjs/common';
 
 class MockDto {}
 class MockResponseDto {
@@ -25,11 +26,13 @@ describe('NestedCrudController Factory', () => {
 
   beforeEach(async () => {
     service = {
+      disabledEndpoints: [],
       findAll: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      findAuditLogs: jest.fn(),
     };
 
     class TestController extends TestControllerBase {
@@ -172,6 +175,38 @@ describe('NestedCrudController Factory', () => {
 
       expect(service.remove).toHaveBeenCalledWith(id);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('disabledEndpoints', () => {
+    it('should block disabled endpoints', async () => {
+      service.disabledEndpoints = ['create'];
+
+      expect(() => controller.create({} as MockDto)).toThrow(NotFoundException);
+      expect(service.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAuditLogs', () => {
+    it('should call service.findAuditLogs with query params', async () => {
+      const query = { page: 1, limit: 5, user_id: '1' };
+      const expectedResult = { data: [], meta: { total: 0, page: 1, limit: 5 } };
+
+      const findAuditLogsMock = service.findAuditLogs as jest.MockedFunction<
+        NonNullable<typeof service.findAuditLogs>
+      >;
+      findAuditLogsMock.mockResolvedValue(expectedResult);
+
+      const result = await controller.findAuditLogs?.(query);
+
+      expect(service.findAuditLogs).toHaveBeenCalledWith(query);
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('should throw when audit logs endpoint is not available', () => {
+      service.findAuditLogs = undefined;
+
+      expect(() => controller.findAuditLogs?.({})).toThrow(NotFoundException);
     });
   });
 });

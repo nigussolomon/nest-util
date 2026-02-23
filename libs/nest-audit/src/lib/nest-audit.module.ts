@@ -5,7 +5,6 @@ import { AuditService } from './services/audit-log.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AuditLogEntity])],
-  controllers: [],
   providers: [AuditService],
   exports: [AuditService],
 })

@@ -17,6 +17,7 @@ describe('AuditService', () => {
           useValue: {
             create: jest.fn(),
             save: jest.fn(),
+            createQueryBuilder: jest.fn(),
           },
         },
       ],
@@ -95,5 +96,42 @@ describe('AuditService', () => {
 
     expect(repo.save).toHaveBeenCalled();
     expect(result).toEqual(createdEntity);
+  });
+
+  it('should list audit logs with filters and pagination', async () => {
+    const queryBuilder = {
+      orderBy: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[{ id: '1' }], 1]),
+    };
+
+    (repo.createQueryBuilder as jest.Mock).mockReturnValue(queryBuilder);
+
+    const result = await service.findAll({
+      entity: 'User',
+      userId: '7',
+      startDate: new Date('2024-01-01T00:00:00.000Z'),
+      endDate: new Date('2024-01-31T23:59:59.999Z'),
+      page: 2,
+      limit: 5,
+    });
+
+    expect(repo.createQueryBuilder).toHaveBeenCalledWith('auditLog');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'auditLog.entity = :entity',
+      { entity: 'User' }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'auditLog.userId = :userId',
+      { userId: '7' }
+    );
+    expect(queryBuilder.skip).toHaveBeenCalledWith(5);
+    expect(queryBuilder.take).toHaveBeenCalledWith(5);
+    expect(result).toEqual({
+      data: [{ id: '1' }],
+      meta: { total: 1, page: 2, limit: 5, totalPages: 1 },
+    });
   });
 });

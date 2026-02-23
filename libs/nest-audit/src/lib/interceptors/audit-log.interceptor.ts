@@ -12,6 +12,9 @@ import {
   AuditOptions,
 } from '../decorators/audit-log.decorator';
 
+const CONTROLLER_ENTITY_NAME_KEY = 'entityName';
+const ENTITY_ENTITY_NAME_KEY = 'custom:entityName';
+
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   constructor(
@@ -19,7 +22,10 @@ export class AuditInterceptor implements NestInterceptor {
     private readonly reflector: Reflector
   ) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler<unknown>
+  ): Observable<unknown> {
     const handler = context.getHandler();
     const auditOptions = this.reflector.get<AuditOptions>(
       AUDIT_METADATA_KEY,
@@ -38,19 +44,7 @@ export class AuditInterceptor implements NestInterceptor {
     let entityName = auditOptions.entity;
 
     if (!entityName) {
-      try {
-        const controllerInstance = context.getClass().prototype;
-        const serviceInstance = controllerInstance?.service;
-        const repositoryTarget = serviceInstance?.repository?.target;
-
-        const meta = repositoryTarget
-          ? Reflect.getMetadata('custom:entityName', repositoryTarget)
-          : null;
-
-        entityName = meta?.singular ?? 'Resource';
-      } catch {
-        entityName = 'Resource';
-      }
+      entityName = this.resolveEntityName(context);
     }
 
     return next.handle().pipe(
@@ -70,5 +64,30 @@ export class AuditInterceptor implements NestInterceptor {
         });
       })
     );
+  }
+
+  private resolveEntityName(context: ExecutionContext): string {
+    const controllerClass = context.getClass();
+    const controllerMeta = Reflect.getMetadata(
+      CONTROLLER_ENTITY_NAME_KEY,
+      controllerClass
+    );
+
+    if (controllerMeta?.singular) {
+      return controllerMeta.singular;
+    }
+
+    try {
+      const controllerInstance = controllerClass.prototype;
+      const serviceInstance = controllerInstance?.service;
+      const repositoryTarget = serviceInstance?.repository?.target;
+      const entityMeta = repositoryTarget
+        ? Reflect.getMetadata(ENTITY_ENTITY_NAME_KEY, repositoryTarget)
+        : null;
+
+      return entityMeta?.singular ?? 'Resource';
+    } catch {
+      return 'Resource';
+    }
   }
 }

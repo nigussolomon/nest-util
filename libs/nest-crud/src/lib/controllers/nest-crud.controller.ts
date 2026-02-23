@@ -2,6 +2,7 @@ import {
   Body,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -11,10 +12,10 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { Message } from '../decorators/response-message.decorator';
-import { CrudInterface } from '../interfaces/crud.interface';
+import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
-import { Audit } from '@nest-util/nest-audit';
+import { Audit, ListAuditLogsDto } from '@nest-util/nest-audit';
 
 export interface IBaseController<CD, UD, RD> {
   service: CrudInterface<CD, UD, RD>;
@@ -25,6 +26,7 @@ export interface IBaseController<CD, UD, RD> {
   create(dto: CD): Promise<RD>;
   update(id: number, dto: UD): Promise<RD>;
   remove(id: number): Promise<boolean>;
+  findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
 }
 
 export function CreateNestedCrudController<CD, UD, RD>(
@@ -32,12 +34,17 @@ export function CreateNestedCrudController<CD, UD, RD>(
   updateDto: Type<UD>,
   responseDto: Type<RD>
 ): Type<IBaseController<CD, UD, RD>> {
-  abstract class BaseController implements IBaseController<CD, UD, RD> {
+  class BaseController implements IBaseController<CD, UD, RD> {
     constructor(public readonly service: CrudInterface<CD, UD, RD>) {}
+
+    private ensureEndpointEnabled(endpoint: CrudEndpoint): void {
+      if (this.service.disabledEndpoints?.includes(endpoint)) {
+        throw new NotFoundException('Resource not found');
+      }
+    }
 
     @Get()
     @Message('fetched')
-    @Audit({ action: 'CREATE' })
     @ApiResponse({ type: [responseDto] })
     @ApiQuery({
       name: 'filter',
@@ -52,15 +59,8 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
     findAll(@Query() query: PaginationDto & FilterDto) {
+      this.ensureEndpointEnabled('findAll');
       return this.service.findAll(query);
-    }
-
-    @Get(':id')
-    @Message('fetched')
-    @Audit({ action: 'READ_ONE' })
-    @ApiResponse({ type: responseDto })
-    findOne(@Param('id', ParseIntPipe) id: number) {
-      return this.service.findOne(id);
     }
 
     @Post()
@@ -69,6 +69,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @ApiBody({ type: createDto })
     @ApiResponse({ type: responseDto })
     create(@Body() dto: CD) {
+      this.ensureEndpointEnabled('create');
       return this.service.create(dto);
     }
 
@@ -78,6 +79,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @ApiBody({ type: updateDto })
     @ApiResponse({ type: responseDto })
     update(@Param('id', ParseIntPipe) id: number, @Body() dto: UD) {
+      this.ensureEndpointEnabled('update');
       return this.service.update(id, dto);
     }
 
@@ -85,7 +87,28 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @Message('deleted')
     @Audit({ action: 'DELETE' })
     remove(@Param('id', ParseIntPipe) id: number) {
+      this.ensureEndpointEnabled('remove');
       return this.service.remove(id);
+    }
+
+    @Get('auditlogs')
+    @Message('fetched')
+    findAuditLogs(@Query() query: ListAuditLogsDto) {
+      this.ensureEndpointEnabled('findAuditLogs');
+
+      if (!this.service.findAuditLogs) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.findAuditLogs(query);
+    }
+
+    @Get(':id')
+    @Message('fetched')
+    @ApiResponse({ type: responseDto })
+    findOne(@Param('id', ParseIntPipe) id: number) {
+      this.ensureEndpointEnabled('findOne');
+      return this.service.findOne(id);
     }
   }
 
