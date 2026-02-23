@@ -3,11 +3,6 @@ import { IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator'
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ListAuditLogsDto {
-  @ApiPropertyOptional({ description: 'Filter by entity name' })
-  @IsOptional()
-  @IsString()
-  entity?: string;
-
   @ApiPropertyOptional({
     name: 'user_id',
     description: 'Filter by user identifier',

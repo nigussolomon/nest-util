@@ -63,14 +63,6 @@ export function CreateNestedCrudController<CD, UD, RD>(
       return this.service.findAll(query);
     }
 
-    @Get(':id')
-    @Message('fetched')
-    @ApiResponse({ type: responseDto })
-    findOne(@Param('id', ParseIntPipe) id: number) {
-      this.ensureEndpointEnabled('findOne');
-      return this.service.findOne(id);
-    }
-
     @Post()
     @Message('created')
     @Audit({ action: 'CREATE' })
@@ -109,6 +101,14 @@ export function CreateNestedCrudController<CD, UD, RD>(
       }
 
       return this.service.findAuditLogs(query);
+    }
+
+    @Get(':id')
+    @Message('fetched')
+    @ApiResponse({ type: responseDto })
+    findOne(@Param('id', ParseIntPipe) id: number) {
+      this.ensureEndpointEnabled('findOne');
+      return this.service.findOne(id);
     }
   }
 
