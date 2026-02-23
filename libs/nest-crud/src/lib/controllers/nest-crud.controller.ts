@@ -15,7 +15,7 @@ import { Message } from '../decorators/response-message.decorator';
 import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
-import { Audit, ListAuditLogsDto } from '@nest-util/nest-audit';
+import { Audit } from '@nest-util/nest-audit';
 
 export interface IBaseController<CD, UD, RD> {
   service: CrudInterface<CD, UD, RD>;
@@ -26,7 +26,6 @@ export interface IBaseController<CD, UD, RD> {
   create(dto: CD): Promise<RD>;
   update(id: number, dto: UD): Promise<RD>;
   remove(id: number): Promise<boolean>;
-  findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
 }
 
 export function CreateNestedCrudController<CD, UD, RD>(
@@ -97,18 +96,6 @@ export function CreateNestedCrudController<CD, UD, RD>(
     remove(@Param('id', ParseIntPipe) id: number) {
       this.ensureEndpointEnabled('remove');
       return this.service.remove(id);
-    }
-
-    @Get('auditlogs')
-    @Message('fetched')
-    findAuditLogs(@Query() query: ListAuditLogsDto) {
-      this.ensureEndpointEnabled('findAuditLogs');
-
-      if (!this.service.findAuditLogs) {
-        throw new NotFoundException('Resource not found');
-      }
-
-      return this.service.findAuditLogs(query);
     }
   }
 

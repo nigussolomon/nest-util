@@ -6,16 +6,7 @@ export type CrudEndpoint =
   | 'findOne'
   | 'create'
   | 'update'
-  | 'remove'
-  | 'findAuditLogs';
-
-export interface AuditLogQuery {
-  user_id?: string;
-  start_date?: string;
-  end_date?: string;
-  page?: number;
-  limit?: number;
-}
+  | 'remove';
 
 export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   disabledEndpoints?: readonly CrudEndpoint[];
@@ -32,6 +23,4 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   update(id: number, dto: UpdateDto): Promise<ResponseDto>;
 
   remove(id: number): Promise<boolean>;
-
-  findAuditLogs?(query: AuditLogQuery): Promise<unknown>;
 }
