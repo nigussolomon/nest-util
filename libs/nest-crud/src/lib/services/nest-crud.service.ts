@@ -10,7 +10,7 @@ import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   repository: Repository<Entity>;
   allowedFilters?: readonly (keyof Entity)[];
-  include?: readonly (keyof Entity)[];
+  include?: readonly string[];
   relations?: {
     property: keyof Entity;
     repo: Repository<ObjectLiteral>;
@@ -32,7 +32,7 @@ export class NestCrudService<
 {
   protected readonly repo: Repository<Entity>;
   protected readonly allowedFilters: readonly (keyof Entity)[];
-  protected readonly include: readonly (keyof Entity)[];
+  protected readonly include: readonly string[];
   protected readonly relations: {
     property: keyof Entity;
     repo: Repository<ObjectLiteral>;
@@ -92,7 +92,15 @@ export class NestCrudService<
 
     if (this.include.length > 0) {
       this.include.forEach((relation) => {
-        qb.leftJoinAndSelect(`e.${String(relation)}`, String(relation));
+        const parts = relation.split('.');
+        if (parts.length === 1) {
+          qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
+        } else {
+          const parentAlias = parts.slice(0, -1).join('_');
+          const field = parts[parts.length - 1];
+          const alias = parts.join('_');
+          qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
+        }
       });
     }
 

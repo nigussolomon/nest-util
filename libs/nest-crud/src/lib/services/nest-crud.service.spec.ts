@@ -21,6 +21,30 @@ class MockResponseDto {
   name!: string;
 }
 
+/** Helper that builds a NestCrudService with the given include list. */
+function buildServiceWithIncludes(
+  repo: jest.Mocked<Repository<MockEntity>>,
+  include: string[]
+) {
+  return new NestCrudService<
+    MockEntity,
+    Partial<MockEntity>,
+    Partial<MockEntity>,
+    MockResponseDto
+  >({
+    repository: repo,
+    allowedFilters: ['name'] as const,
+    include,
+    relations: [],
+    toResponseDto: (entity: MockEntity | MockEntity[]) => {
+      if (Array.isArray(entity)) {
+        return entity.map((e) => ({ id: e.id, name: e.name }));
+      }
+      return { id: entity.id, name: entity.name };
+    },
+  });
+}
+
 describe('NestCrudService', () => {
   let service: NestCrudService<
     MockEntity,
@@ -128,6 +152,62 @@ describe('NestCrudService', () => {
         }),
       });
     });
+
+    it('should call leftJoinAndSelect for a simple (top-level) include relation', async () => {
+      const svc = buildServiceWithIncludes(repository, ['tags']);
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({ page: 1, limit: 10 });
+
+      // Simple relation: leftJoinAndSelect(`e.tags`, `tags`)
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'e.tags',
+        'tags'
+      );
+    });
+
+    it('should call leftJoinAndSelect with parent alias for a nested include relation', async () => {
+      // 'author.profile' → parent alias 'author', field 'profile', alias 'author_profile'
+      const svc = buildServiceWithIncludes(repository, [
+        'author',
+        'author.profile',
+      ]);
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({ page: 1, limit: 10 });
+
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'e.author',
+        'author'
+      );
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'author.profile',
+        'author_profile'
+      );
+    });
+
+    it('should call leftJoinAndSelect with correct alias for deeply nested relations', async () => {
+      // 'a.b.c' → parent alias 'a_b', field 'c', alias 'a_b_c'
+      const svc = buildServiceWithIncludes(repository, ['a', 'a.b', 'a.b.c']);
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({ page: 1, limit: 10 });
+
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('e.a', 'a');
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('a.b', 'a_b');
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'a_b.c',
+        'a_b_c'
+      );
+    });
+
+    it('should not call leftJoinAndSelect when include is empty', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({ page: 1, limit: 10 });
+
+      expect(queryBuilder.leftJoinAndSelect).not.toHaveBeenCalled();
+    });
   });
 
   describe('findOne', () => {
@@ -143,6 +223,23 @@ describe('NestCrudService', () => {
       });
 
       expect(result).toEqual({ id: 1, name: 'test' });
+    });
+
+    it('should forward the include list as relations to findOne', async () => {
+      const svc = buildServiceWithIncludes(repository, [
+        'author',
+        'author.profile',
+      ]);
+      const entity: MockEntity = { id: 2, name: 'with-relations' };
+      repository.findOne.mockResolvedValue(entity);
+
+      const result = await svc.findOne(2);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 2 },
+        relations: ['author', 'author.profile'],
+      });
+      expect(result).toEqual({ id: 2, name: 'with-relations' });
     });
 
     it('should throw NotFoundException if entity does not exist', async () => {
@@ -210,11 +307,16 @@ describe('NestCrudService', () => {
 
   describe('findAuditLogs', () => {
     it('should list audit logs by entity name with pagination', async () => {
-      auditQueryBuilder.getManyAndCount.mockResolvedValue([[{ id: '1' } as AuditLogEntity], 1]);
+      auditQueryBuilder.getManyAndCount.mockResolvedValue([
+        [{ id: '1' } as AuditLogEntity],
+        1,
+      ]);
 
       const result = await service.findAuditLogs({ page: 2, limit: 10 });
 
-      expect(repository.manager.getRepository).toHaveBeenCalledWith(AuditLogEntity);
+      expect(repository.manager.getRepository).toHaveBeenCalledWith(
+        AuditLogEntity
+      );
       expect(auditQueryBuilder.where).toHaveBeenCalledWith(
         'auditLog.entity = :entity',
         { entity: 'MockEntity' }
