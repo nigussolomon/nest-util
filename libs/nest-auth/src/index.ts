@@ -10,3 +10,7 @@ export * from './lib/decorators/public';
 export * from './lib/decorators/current-user';
 export * from './lib/interfaces/user.interface';
 export * from './lib/decorators/auth-options';
+export * from './lib/decorators/required-permissions';
+export * from './lib/decorators/roles';
+export * from './lib/decorators/allow-any-permission';
+export * from './lib/guards/permissions.guard';

@@ -29,6 +29,9 @@ export class User {
   @Column({ default: true })
   isActive!: boolean;
 
+  @Column('simple-array', { default: 'viewer' })
+  roles!: string[];
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

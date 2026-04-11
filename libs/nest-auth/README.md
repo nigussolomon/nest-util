@@ -61,6 +61,52 @@ getProfile(@CurrentUser() user: AuthUser) {
 | GET  | `/auth/me` | Get current user profile | Yes (JWT) |
 | POST | `/auth/logout` | Logout user | Yes (JWT) |
 
+## RBAC (Role-Based Access Control)
+
+`@nest-util/nest-auth` now supports a simple static/hybrid RBAC strategy using normalized permissions in the format:
+
+- `resource:action` (examples: `posts:read`, `users:write`)
+
+### RBAC module options
+
+```ts
+AuthModule.forRoot({
+  // existing options...
+  rbac: {
+    enabled: true,
+    rolesField: 'roles',
+    permissionsField: 'permissions',
+    denyByDefault: true,
+    rolePermissions: {
+      admin: ['users:read', 'users:write', 'posts:read', 'posts:write'],
+      editor: ['posts:read', 'posts:write'],
+      viewer: ['posts:read'],
+    },
+  },
+});
+```
+
+### Route decorators
+
+- `@RequirePermissions(...permissions)` for explicit route permissions
+- `@AllowRoles(...roles)` for role shortcut access
+- `@AllowAnyPermission()` to bypass deny-by-default for selected protected routes
+
+Example:
+
+```ts
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('posts:read')
+@Get()
+findAll() {}
+```
+
+### Migration notes
+
+- Existing auth-only setups remain compatible: RBAC is optional.
+- To enforce RBAC globally on protected routes, set `rbac.enabled = true` and `denyByDefault = true`, then annotate routes with RBAC metadata.
+- Keep sensitive data handling unchanged: password/token fields are still removed from auth responses.
+
 ## Development
 
 - **Building**: `nx build nest-auth`

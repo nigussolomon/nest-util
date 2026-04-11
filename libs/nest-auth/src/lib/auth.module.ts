@@ -9,6 +9,7 @@ import { RouteDisabledGuard } from './guards/route-disabled.guard';
 import { CreateAuthController } from './controllers/auth.controller';
 import { JwtStrategy } from './guards/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 
 @Global()
 @Module({})
@@ -39,6 +40,7 @@ export class AuthModule {
         RouteDisabledGuard,
         JwtStrategy,
         JwtAuthGuard,
+        PermissionsGuard,
       ],
       exports: [
         AUTH_OPTIONS,
@@ -49,6 +51,7 @@ export class AuthModule {
         RouteDisabledGuard,
         JwtStrategy,
         JwtAuthGuard,
+        PermissionsGuard,
       ],
     };
   }

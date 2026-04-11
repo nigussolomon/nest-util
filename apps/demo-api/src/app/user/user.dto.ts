@@ -4,6 +4,7 @@ import {
   IsString,
   IsBoolean,
   IsOptional,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
@@ -24,6 +25,16 @@ export class CreateUserDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    default: ['viewer'],
+    description: 'Assigned RBAC roles',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  roles?: string[];
 }
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {}
@@ -40,6 +51,9 @@ export class UserResponseDto {
 
   @ApiProperty()
   isActive!: boolean;
+
+  @ApiProperty({ type: [String] })
+  roles!: string[];
 
   @ApiProperty()
   createdAt!: Date;

@@ -13,20 +13,26 @@ import {
   StoredFileService,
   UploadFileDto,
 } from '@nest-util/nest-file';
-import { JwtAuthGuard } from '@nest-util/nest-auth';
+import {
+  AllowRoles,
+  JwtAuthGuard,
+  PermissionsGuard,
+  RequirePermissions,
+} from '@nest-util/nest-auth';
 import { Audit } from '@nest-util/nest-audit';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DemoUploadFileDto } from './file.dto';
 
 @ApiTags('Files')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('files')
 @FileOwnerEntity('user')
 export class FileController {
   constructor(private readonly fileService: StoredFileService) {}
 
   @Post()
+  @RequirePermissions('files:write')
   @Audit({ action: 'upload-file', entity: 'StoredFile' })
   @ApiOperation({ summary: 'Upload a base64-encoded file to encrypted storage' })
   @ApiBody({ type: DemoUploadFileDto })
@@ -41,6 +47,7 @@ export class FileController {
   }
 
   @Get(':id')
+  @RequirePermissions('files:read')
   @Audit({ action: 'get-file', entity: 'StoredFile' })
   @ApiOperation({ summary: 'Fetch and decrypt a file by id' })
   async get(@Param('id', ParseUUIDPipe) id: string) {
@@ -54,6 +61,7 @@ export class FileController {
   }
 
   @Get(':ownerType/:ownerId')
+  @AllowRoles('admin')
   @Audit({ action: 'list-owner-files', entity: 'StoredFile' })
   @ApiOperation({ summary: 'List files for an owner' })
   async listByOwner(
@@ -64,6 +72,7 @@ export class FileController {
   }
 
   @Delete(':id')
+  @RequirePermissions('files:write')
   @Audit({ action: 'delete-file', entity: 'StoredFile' })
   @ApiOperation({ summary: 'Delete a stored file' })
   async remove(@Param('id', ParseUUIDPipe) id: string) {

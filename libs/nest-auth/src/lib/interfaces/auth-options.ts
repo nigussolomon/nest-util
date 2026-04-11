@@ -1,5 +1,43 @@
 import { Type } from '@nestjs/common';
 
+export interface RbacOptions {
+  /**
+   * Enable RBAC evaluation in PermissionsGuard.
+   * @default false
+   */
+  enabled?: boolean;
+
+  /**
+   * User object field containing assigned roles.
+   * @default 'roles'
+   */
+  rolesField?: string;
+
+  /**
+   * User object field containing directly assigned permissions.
+   * @default 'permissions'
+   */
+  permissionsField?: string;
+
+  /**
+   * Static role to permissions map.
+   */
+  rolePermissions?: Record<string, string[]>;
+
+  /**
+   * Optional custom permissions resolver.
+   */
+  resolvePermissions?: (
+    user: Record<string, unknown>
+  ) => string[] | Promise<string[]>;
+
+  /**
+   * Deny access for protected routes without permission metadata.
+   * Defaults to true when RBAC is enabled, false otherwise.
+   */
+  denyByDefault?: boolean;
+}
+
 export interface AuthModuleOptions {
   /**
    * The TypeORM entity for users.
@@ -79,4 +117,9 @@ export interface AuthModuleOptions {
   refreshDto?: Type<unknown>;
 
   relations?: string[];
+
+  /**
+   * RBAC options.
+   */
+  rbac?: RbacOptions;
 }

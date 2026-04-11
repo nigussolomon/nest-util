@@ -44,6 +44,7 @@ Use these helpers:
 - `@Public()` for anonymous routes
 - JWT guard for protected routes
 - `@CurrentUser()` to extract user payload
+- `PermissionsGuard` + RBAC decorators for role/permission enforcement
 
 ### Typical controller layout
 
@@ -96,3 +97,48 @@ This is useful when your API contracts require strict business-specific validati
 - Avoid returning sensitive user fields by default
 - Version your auth contracts as API evolves
 - Add end-to-end tests for token rotation edge cases
+
+---
+
+## RBAC with permissions
+
+Use normalized permission keys:
+
+- `resource:action` (for example `users:read`, `users:write`, `files:read`)
+
+### Configure RBAC
+
+```ts
+AuthModule.forRoot({
+  // existing auth options
+  rbac: {
+    enabled: true,
+    rolesField: 'roles',
+    denyByDefault: true,
+    rolePermissions: {
+      admin: ['users:read', 'users:write', 'posts:read', 'posts:write'],
+      editor: ['posts:read', 'posts:write', 'comments:read', 'comments:write'],
+      viewer: ['posts:read', 'comments:read'],
+    },
+  },
+});
+```
+
+### Route metadata
+
+- `@RequirePermissions(...permissions)` for explicit checks
+- `@AllowRoles(...roles)` for role shortcut checks
+- `@AllowAnyPermission()` for protected routes that should bypass deny-by-default
+
+```ts
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('posts:read')
+@Get('posts')
+findAllPosts() {}
+```
+
+### Migration guidance
+
+- RBAC is opt-in and does not break existing JWT-only consumers.
+- When `rbac.enabled` + `denyByDefault` are on, protected routes require RBAC metadata.
+- Start with static `rolePermissions` and later add DB-backed permission resolution with `rbac.resolvePermissions`.
