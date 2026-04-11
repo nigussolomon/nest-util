@@ -111,15 +111,16 @@ Use normalized permission keys:
 ```ts
 AuthModule.forRoot({
   // existing auth options
+  relations: ['roles', 'roles.permissions'],
   rbac: {
     enabled: true,
     rolesField: 'roles',
+    roleNameField: 'name',
+    rolePermissionsField: 'permissions',
+    permissionNameField: 'key',
     denyByDefault: true,
-    rolePermissions: {
-      admin: ['users:read', 'users:write', 'posts:read', 'posts:write'],
-      editor: ['posts:read', 'posts:write', 'comments:read', 'comments:write'],
-      viewer: ['posts:read', 'comments:read'],
-    },
+    // optional static fallback:
+    // rolePermissions: { admin: ['users:read'] }
   },
 });
 ```
@@ -141,4 +142,5 @@ findAllPosts() {}
 
 - RBAC is opt-in and does not break existing JWT-only consumers.
 - When `rbac.enabled` + `denyByDefault` are on, protected routes require RBAC metadata.
-- Start with static `rolePermissions` and later add DB-backed permission resolution with `rbac.resolvePermissions`.
+- You can use DB-backed role entities directly when the authenticated user includes nested role permission relations.
+- For demo-api, permissions are discoverable at `/permissions` and support filtering/search via `filter[resource_eq]`, `filter[resource_cont]`, `filter[key_cont]`.

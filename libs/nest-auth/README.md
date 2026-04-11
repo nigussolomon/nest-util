@@ -72,19 +72,25 @@ getProfile(@CurrentUser() user: AuthUser) {
 ```ts
 AuthModule.forRoot({
   // existing options...
+  relations: ['roles', 'roles.permissions'],
   rbac: {
     enabled: true,
     rolesField: 'roles',
+    roleNameField: 'name',
+    rolePermissionsField: 'permissions',
+    permissionNameField: 'key',
     permissionsField: 'permissions',
     denyByDefault: true,
-    rolePermissions: {
-      admin: ['users:read', 'users:write', 'posts:read', 'posts:write'],
-      editor: ['posts:read', 'posts:write'],
-      viewer: ['posts:read'],
-    },
+    // optional static fallback:
+    // rolePermissions: { admin: ['users:read'] }
   },
 });
 ```
+
+This supports both:
+
+- static/hybrid permissions (`rolePermissions`)
+- dynamic DB-backed role entities (e.g. `user.roles[].permissions[].key`)
 
 ### Route decorators
 
