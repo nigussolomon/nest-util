@@ -5,16 +5,15 @@ import { CreateUserDto, UpdateUserDto, UserResponseDto } from './user.dto';
 import {
   CreateNestedCrudController,
   EntityName,
+  FilterDto,
   IBaseController,
+  PaginationDto,
 } from '@nest-util/nest-crud';
 import {
-  AllowRoles,
   JwtAuthGuard,
   PermissionsGuard,
   RequirePermissions,
 } from '@nest-util/nest-auth';
-import { FilterDto } from '@nest-util/nest-crud';
-import { PaginationDto } from '@nest-util/nest-crud';
 
 const UsersCrudControllerBase = CreateNestedCrudController(
   CreateUserDto,
@@ -30,7 +29,6 @@ const UsersCrudControllerBase = CreateNestedCrudController(
 @ApiExtraModels(CreateUserDto, UpdateUserDto, UserResponseDto)
 @Controller('users')
 @EntityName({ singular: 'User', plural: 'Users' })
-@AllowRoles('admin')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class UsersController extends UsersCrudControllerBase {

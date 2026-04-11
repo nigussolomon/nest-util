@@ -57,11 +57,9 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    if (
-      (!requiredPermissions || requiredPermissions.length === 0) &&
-      (!allowedRoles || allowedRoles.length === 0) &&
-      !rbac?.enabled
-    ) {
+    const hasMetadata =
+      Boolean(requiredPermissions?.length) || Boolean(allowedRoles?.length);
+    if (!rbac?.enabled && !hasMetadata) {
       return true;
     }
 
@@ -104,9 +102,11 @@ export class PermissionsGuard implements CanActivate {
     if (Array.isArray(rawRoles)) {
       return new Set(
         rawRoles
-          .filter((role): role is string => typeof role === 'string')
+          .filter(
+            (role): role is string =>
+              typeof role === 'string' && role.trim().length > 0
+          )
           .map((role) => role.trim())
-          .filter(Boolean)
       );
     }
 
@@ -134,7 +134,7 @@ export class PermissionsGuard implements CanActivate {
         .forEach((permission) => permissions.add(permission));
     } else if (
       typeof directPermissions === 'string' &&
-      directPermissions.trim().length > 0
+      directPermissions.trim()
     ) {
       permissions.add(directPermissions.trim());
     }

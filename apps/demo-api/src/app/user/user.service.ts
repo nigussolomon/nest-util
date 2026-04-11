@@ -21,15 +21,15 @@ export class UsersService extends NestCrudService<
       allowedFilters: ['id', 'name', 'email', 'isActive'],
       toResponseDto: (entity) => {
         if (Array.isArray(entity)) {
-            return entity.map((e) => ({
-              id: e.id,
-              email: e.email,
-              name: e.name,
-              isActive: e.isActive,
-              roles: e.roles,
-              createdAt: e.createdAt,
-              updatedAt: e.updatedAt,
-            }));
+          return entity.map((e) => ({
+            id: e.id,
+            email: e.email,
+            name: e.name,
+            isActive: e.isActive,
+            roles: e.roles,
+            createdAt: e.createdAt,
+            updatedAt: e.updatedAt,
+          }));
         }
         return {
           id: entity.id,
