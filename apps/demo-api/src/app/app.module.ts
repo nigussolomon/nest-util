@@ -14,7 +14,10 @@ import { Post } from './post/post.entity';
 import { AuthModule } from '@nest-util/nest-auth';
 import { User } from './user/user.entity';
 import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
-import { NestUtilNestAuditModule, AuditInterceptor } from '@nest-util/nest-audit';
+import {
+  NestUtilNestAuditModule,
+  AuditInterceptor,
+} from '@nest-util/nest-audit';
 import { FileModule } from './file/file.module';
 
 @Module({
@@ -31,9 +34,7 @@ import { FileModule } from './file/file.module';
     }),
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
-
     NestUtilNestAuditModule,
-    FileModule,
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',
