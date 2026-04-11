@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NestCrudService } from '@nest-util/nest-crud';
@@ -74,6 +74,12 @@ export class PermissionService extends NestCrudService<
     const resource = dto.resource?.trim();
     const action = dto.action?.trim();
     const key = dto.key?.trim() || (resource && action ? `${resource}:${action}` : '');
+
+    if (!key) {
+      throw new BadRequestException(
+        'Permission key is required (provide key or both resource and action)'
+      );
+    }
 
     return {
       ...dto,

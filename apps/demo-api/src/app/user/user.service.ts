@@ -56,8 +56,11 @@ export class UsersService extends NestCrudService<
 
   override async create(dto: CreateUserDto): Promise<UserResponseDto> {
     const roles = await this.resolveRoles(dto.roleIds);
-    const payload = { ...dto };
-    delete payload.roleIds;
+    const payload = {
+      email: dto.email,
+      name: dto.name,
+      isActive: dto.isActive,
+    };
     const created = await this.repo.save(
       this.repo.create({
         ...payload,

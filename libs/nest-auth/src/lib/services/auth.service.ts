@@ -217,7 +217,7 @@ export class AuthService {
 
         let parentAlias = 'user';
         parts.forEach((part, index) => {
-          const alias = parts.slice(0, index + 1).join('_');
+          const alias = `rel_${parts.slice(0, index + 1).join('__')}`;
           query.leftJoinAndSelect(`${parentAlias}.${part}`, alias);
           parentAlias = alias;
         });

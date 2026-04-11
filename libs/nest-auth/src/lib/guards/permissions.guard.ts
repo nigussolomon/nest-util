@@ -104,8 +104,11 @@ export class PermissionsGuard implements CanActivate {
       const roles = new Set<string>();
 
       rawRoles.forEach((role) => {
-        if (typeof role === 'string' && role.trim()) {
-          roles.add(role.trim());
+        if (typeof role === 'string') {
+          const normalizedRole = role.trim();
+          if (normalizedRole) {
+            roles.add(normalizedRole);
+          }
           return;
         }
 
@@ -148,8 +151,11 @@ export class PermissionsGuard implements CanActivate {
 
     if (Array.isArray(directPermissions)) {
       directPermissions.forEach((permission) => {
-        if (typeof permission === 'string' && permission.trim()) {
-          permissions.add(permission.trim());
+        if (typeof permission === 'string') {
+          const normalizedPermission = permission.trim();
+          if (normalizedPermission) {
+            permissions.add(normalizedPermission);
+          }
           return;
         }
 
@@ -184,8 +190,11 @@ export class PermissionsGuard implements CanActivate {
         if (!Array.isArray(rolePermissions)) return;
 
         rolePermissions.forEach((permission) => {
-          if (typeof permission === 'string' && permission.trim()) {
-            permissions.add(permission.trim());
+          if (typeof permission === 'string') {
+            const normalizedPermission = permission.trim();
+            if (normalizedPermission) {
+              permissions.add(normalizedPermission);
+            }
             return;
           }
 

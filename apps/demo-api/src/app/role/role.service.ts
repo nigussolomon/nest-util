@@ -55,8 +55,10 @@ export class RoleService extends NestCrudService<
 
   override async create(dto: CreateRoleDto): Promise<RoleResponseDto> {
     const permissions = await this.resolvePermissions(dto.permissionIds);
-    const payload = { ...dto };
-    delete payload.permissionIds;
+    const payload = {
+      name: dto.name,
+      description: dto.description,
+    };
     const created = await this.repo.save(
       this.repo.create({
         ...payload,
