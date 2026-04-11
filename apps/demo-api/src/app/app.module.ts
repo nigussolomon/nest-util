@@ -16,6 +16,10 @@ import { User } from './user/user.entity';
 import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
 import { NestUtilNestAuditModule, AuditInterceptor } from '@nest-util/nest-audit';
 import { FileModule } from './file/file.module';
+import { RoleModule } from './role/role.module';
+import { PermissionModule } from './permission/permission.module';
+import { Role } from './role/role.entity';
+import { Permission } from './permission/permission.entity';
 
 @Module({
   imports: [
@@ -29,8 +33,10 @@ import { FileModule } from './file/file.module';
       autoLoadEntities: true,
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([Post, Comment]),
+    TypeOrmModule.forFeature([Post, Comment, Role, Permission]),
     UserModule,
+    RoleModule,
+    PermissionModule,
 
     NestUtilNestAuditModule,
     FileModule,
@@ -47,24 +53,14 @@ import { FileModule } from './file/file.module';
       loginDto: LoginDto,
       registerDto: RegisterDto,
       refreshDto: RefreshDto,
+      relations: ['roles', 'roles.permissions'],
       rbac: {
         enabled: true,
         rolesField: 'roles',
+        roleNameField: 'name',
+        rolePermissionsField: 'permissions',
+        permissionNameField: 'key',
         denyByDefault: true,
-        rolePermissions: {
-          admin: [
-            'users:read',
-            'users:write',
-            'posts:read',
-            'posts:write',
-            'comments:read',
-            'comments:write',
-            'files:read',
-            'files:write',
-          ],
-          editor: ['posts:read', 'posts:write', 'comments:read', 'comments:write'],
-          viewer: ['posts:read', 'comments:read', 'files:read'],
-        },
       },
     }),
   ],

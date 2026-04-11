@@ -97,17 +97,33 @@ export class PermissionsGuard implements CanActivate {
     rbac?: RbacOptions
   ): Set<string> {
     const rolesField = rbac?.rolesField || 'roles';
+    const roleNameField = rbac?.roleNameField || 'name';
     const rawRoles = user[rolesField];
 
     if (Array.isArray(rawRoles)) {
-      return new Set(
-        rawRoles
-          .filter(
-            (role): role is string =>
-              typeof role === 'string' && role.trim().length > 0
-          )
-          .map((role) => role.trim())
-      );
+      const roles = new Set<string>();
+
+      rawRoles.forEach((role) => {
+        if (typeof role === 'string' && role.trim()) {
+          roles.add(role.trim());
+          return;
+        }
+
+        if (
+          role &&
+          typeof role === 'object' &&
+          typeof (role as Record<string, unknown>)[roleNameField] === 'string'
+        ) {
+          const roleName = (
+            (role as Record<string, unknown>)[roleNameField] as string
+          ).trim();
+          if (roleName) {
+            roles.add(roleName);
+          }
+        }
+      });
+
+      return roles;
     }
 
     if (typeof rawRoles === 'string' && rawRoles.trim()) {
@@ -123,20 +139,77 @@ export class PermissionsGuard implements CanActivate {
     rbac?: RbacOptions
   ): Promise<Set<string>> {
     const permissionsField = rbac?.permissionsField || 'permissions';
+    const rolePermissionsField = rbac?.rolePermissionsField || 'permissions';
+    const permissionNameField = rbac?.permissionNameField || 'key';
+    const rolesField = rbac?.rolesField || 'roles';
     const directPermissions = user[permissionsField];
     const permissions = new Set<string>();
+    const rawRoles = user[rolesField];
 
     if (Array.isArray(directPermissions)) {
-      directPermissions
-        .filter(
-          (permission): permission is string => typeof permission === 'string'
-        )
-        .forEach((permission) => permissions.add(permission));
+      directPermissions.forEach((permission) => {
+        if (typeof permission === 'string' && permission.trim()) {
+          permissions.add(permission.trim());
+          return;
+        }
+
+        if (
+          permission &&
+          typeof permission === 'object' &&
+          typeof (permission as Record<string, unknown>)[permissionNameField] ===
+            'string'
+        ) {
+          const permissionName = (
+            (permission as Record<string, unknown>)[permissionNameField] as string
+          ).trim();
+          if (permissionName) {
+            permissions.add(permissionName);
+          }
+        }
+      });
     } else if (
       typeof directPermissions === 'string' &&
       directPermissions.trim()
     ) {
       permissions.add(directPermissions.trim());
+    }
+
+    if (Array.isArray(rawRoles)) {
+      rawRoles.forEach((role) => {
+        if (!role || typeof role !== 'object') return;
+
+        const rolePermissions = (role as Record<string, unknown>)[
+          rolePermissionsField
+        ];
+        if (!Array.isArray(rolePermissions)) return;
+
+        rolePermissions.forEach((permission) => {
+          if (typeof permission === 'string' && permission.trim()) {
+            permissions.add(permission.trim());
+            return;
+          }
+
+          if (permission && typeof permission === 'object') {
+            const permissionObject = permission as Record<string, unknown>;
+            const permissionName = permissionObject[permissionNameField];
+            if (typeof permissionName === 'string' && permissionName.trim()) {
+              permissions.add(permissionName.trim());
+              return;
+            }
+
+            const resource = permissionObject.resource;
+            const action = permissionObject.action;
+            if (
+              typeof resource === 'string' &&
+              resource.trim() &&
+              typeof action === 'string' &&
+              action.trim()
+            ) {
+              permissions.add(`${resource.trim()}:${action.trim()}`);
+            }
+          }
+        });
+      });
     }
 
     const rolePermissions = rbac?.rolePermissions ?? {};

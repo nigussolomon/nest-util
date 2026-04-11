@@ -209,7 +209,18 @@ export class AuthService {
 
     if (this.options.relations?.length) {
       this.options.relations.forEach((relation) => {
-        query.leftJoinAndSelect(`user.${relation}`, relation);
+        const parts = relation.split('.');
+        if (parts.length === 1) {
+          query.leftJoinAndSelect(`user.${parts[0]}`, parts[0]);
+          return;
+        }
+
+        let parentAlias = 'user';
+        parts.forEach((part, index) => {
+          const alias = parts.slice(0, index + 1).join('_');
+          query.leftJoinAndSelect(`${parentAlias}.${part}`, alias);
+          parentAlias = alias;
+        });
       });
     }
 

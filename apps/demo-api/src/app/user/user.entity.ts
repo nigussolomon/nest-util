@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
+import { Role } from '../role/role.entity';
 
 @Entity('users')
 export class User {
@@ -29,8 +32,13 @@ export class User {
   @Column({ default: true })
   isActive!: boolean;
 
-  @Column('simple-array', { default: 'viewer' })
-  roles!: string[];
+  @ManyToMany(() => Role, (role) => role.users, { eager: true })
+  @JoinTable({
+    name: 'user_roles',
+    joinColumn: { name: 'userId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'roleId', referencedColumnName: 'id' },
+  })
+  roles!: Role[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

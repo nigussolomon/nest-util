@@ -14,10 +14,29 @@ export interface RbacOptions {
   rolesField?: string;
 
   /**
+   * Role object field containing role name.
+   * Used when rolesField points to an array of role objects.
+   * @default 'name'
+   */
+  roleNameField?: string;
+
+  /**
+   * Role object field containing role permissions.
+   * @default 'permissions'
+   */
+  rolePermissionsField?: string;
+
+  /**
    * User object field containing directly assigned permissions.
    * @default 'permissions'
    */
   permissionsField?: string;
+
+  /**
+   * Permission object field containing permission key (e.g. "users:read").
+   * @default 'key'
+   */
+  permissionNameField?: string;
 
   /**
    * Static role to permissions map.
