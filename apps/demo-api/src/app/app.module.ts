@@ -18,7 +18,6 @@ import {
   NestUtilNestAuditModule,
   AuditInterceptor,
 } from '@nest-util/nest-audit';
-import { FileModule } from './file/file.module';
 
 @Module({
   imports: [
