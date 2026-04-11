@@ -9,6 +9,9 @@ import { RouteDisabledGuard } from './guards/route-disabled.guard';
 import { CreateAuthController } from './controllers/auth.controller';
 import { JwtStrategy } from './guards/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
+import { RoleEntity } from './entities/role.entity';
+import { UserRoleEntity } from './entities/user-role.entity';
 
 @Global()
 @Module({})
@@ -28,7 +31,11 @@ export class AuthModule {
             expiresIn: (options.expiresIn ?? '1h') as any,
           },
         }),
-        TypeOrmModule.forFeature([options.userEntity]),
+        TypeOrmModule.forFeature([
+          options.userEntity,
+          RoleEntity,
+          UserRoleEntity,
+        ]),
       ],
       providers: [
         {
@@ -39,6 +46,7 @@ export class AuthModule {
         RouteDisabledGuard,
         JwtStrategy,
         JwtAuthGuard,
+        PermissionsGuard,
       ],
       exports: [
         AUTH_OPTIONS,
@@ -49,6 +57,7 @@ export class AuthModule {
         RouteDisabledGuard,
         JwtStrategy,
         JwtAuthGuard,
+        PermissionsGuard,
       ],
     };
   }

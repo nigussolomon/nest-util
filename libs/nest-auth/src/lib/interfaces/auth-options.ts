@@ -1,4 +1,5 @@
 import { Type } from '@nestjs/common';
+import { AuthRbacOptions } from './rbac-options.interface';
 
 export interface AuthModuleOptions {
   /**
@@ -79,4 +80,6 @@ export interface AuthModuleOptions {
   refreshDto?: Type<unknown>;
 
   relations?: string[];
+
+  rbac?: AuthRbacOptions;
 }
