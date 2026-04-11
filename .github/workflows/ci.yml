@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  CI: true
+  NX_DAEMON: false
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -19,23 +23,12 @@ defaults:
     shell: bash
 
 jobs:
-  setup:
-    name: Detect affected projects
+  check:
+    name: Check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      base: ${{ steps.shas.outputs.base }}
-      head: ${{ steps.shas.outputs.head }}
-      affected-lint: ${{ steps.affected.outputs.lint }}
-      affected-test: ${{ steps.affected.outputs.test }}
-      affected-build: ${{ steps.affected.outputs.build }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        id: shas
 
       - uses: pnpm/action-setup@v4
         with:
@@ -50,100 +43,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check affected projects
-        id: affected
-        run: |
-          BASE_SHA="${{ steps.shas.outputs.base }}"
-          HEAD_SHA="${{ steps.shas.outputs.head }}"
-
-          echo "lint=$(pnpm nx show projects --affected --base=$BASE_SHA --head=$HEAD_SHA -t lint | wc -l | xargs)" >> "$GITHUB_OUTPUT"
-          echo "test=$(pnpm nx show projects --affected --base=$BASE_SHA --head=$HEAD_SHA -t test | wc -l | xargs)" >> "$GITHUB_OUTPUT"
-          echo "build=$(pnpm nx show projects --affected --base=$BASE_SHA --head=$HEAD_SHA -t build | wc -l | xargs)" >> "$GITHUB_OUTPUT"
-
-  lint:
-    name: Lint
-    needs: setup
-    if: needs.setup.outputs.affected-lint != '0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm nx affected -t lint --base=${{ needs.setup.outputs.base }} --head=${{ needs.setup.outputs.head }}
-
-  typecheck:
-    name: Typecheck
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm nx affected -t typecheck --base=${{ needs.setup.outputs.base }} --head=${{ needs.setup.outputs.head }}
-
-  test:
-    name: Test
-    needs: setup
-    if: needs.setup.outputs.affected-test != '0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm nx affected -t test --base=${{ needs.setup.outputs.base }} --head=${{ needs.setup.outputs.head }} --coverage
-
-  build:
-    name: Build
-    needs: [setup, lint, typecheck, test]
-    if: |
-      always() &&
-      needs.setup.outputs.affected-build != '0' &&
-      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
-      needs.typecheck.result == 'success' &&
-      (needs.test.result == 'success' || needs.test.result == 'skipped')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm nx affected -t build --base=${{ needs.setup.outputs.base }} --head=${{ needs.setup.outputs.head }}
+      - name: Run checks
+        run: pnpm check
