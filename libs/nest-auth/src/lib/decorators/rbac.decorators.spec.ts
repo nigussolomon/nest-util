@@ -20,6 +20,9 @@ describe('RBAC decorators', () => {
       TestClass.prototype,
       'method'
     );
+    if (!descriptor) {
+      throw new Error('Descriptor not found');
+    }
     RequirePermissions('posts:read', 'posts:write')(
       TestClass.prototype,
       'method',

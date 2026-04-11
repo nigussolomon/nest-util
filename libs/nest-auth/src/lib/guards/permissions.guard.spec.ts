@@ -79,7 +79,7 @@ describe('PermissionsGuard', () => {
           viewer: ['posts:read'],
         },
       },
-    } as AuthModuleOptions);
+    } as unknown as AuthModuleOptions);
 
     await expect(
       guard.canActivate(
@@ -126,7 +126,7 @@ describe('PermissionsGuard', () => {
           viewer: ['users:read'],
         },
       },
-    } as AuthModuleOptions);
+    } as unknown as AuthModuleOptions);
 
     await expect(
       guard.canActivate(
