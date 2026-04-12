@@ -113,7 +113,7 @@ export const buildCrudPermissionsFromRegistry = (
     if (!availablePermissions.has(permissionKey)) {
       if (options.strict !== false) {
         throw new Error(
-          `Missing permission \"${permissionKey}\" in auth permission registry`
+          `Missing permission "${permissionKey}" in auth permission registry`
         );
       }
 
