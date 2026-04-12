@@ -29,6 +29,7 @@ import { RolePermissionsDto } from '../dtos/role-permissions.dto';
 import { Permissions } from '../decorators/permissions';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { resolvePermissionRegistry } from '../helpers/permission-registry.helper';
+import { resolvePermissions } from '../helpers/permission.helper';
 
 const ADMIN_ROUTE_PERMISSION = 'admin.access';
 
@@ -111,6 +112,19 @@ export function CreateAuthController(
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     async me(@CurrentUser() user: AuthUser): Promise<AuthUser> {
       return user;
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Get('me/permissions')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get current user effective permissions' })
+    @ApiResponse({
+      status: 200,
+      description: 'Return current user permissions',
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    getMyPermissions(@CurrentUser() user: AuthUser): string[] {
+      return resolvePermissions(user, this.options.rbac);
     }
 
     @UseGuards(JwtAuthGuard)

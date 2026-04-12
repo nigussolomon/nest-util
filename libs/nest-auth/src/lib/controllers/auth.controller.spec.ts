@@ -140,6 +140,20 @@ describe('AuthController', () => {
     });
   });
 
+  describe('getMyPermissions', () => {
+    it('should return resolved direct and role permissions for the current user', () => {
+      const user = {
+        id: 1,
+        permissions: ['posts.read'],
+        roles: [{ permissions: ['posts.create'] }],
+      };
+
+      const result = controller.getMyPermissions(user);
+
+      expect(result).toEqual(['posts.read', 'posts.create']);
+    });
+  });
+
   describe('logout', () => {
     it('should call authService.logout with user id', async () => {
       const user = { id: 1 };
