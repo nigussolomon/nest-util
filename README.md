@@ -457,6 +457,9 @@ GET /post?filter[or][0][title_cont]=nestjs&filter[or][1][title_cont]=typeorm
 GET /post?filter[and][0][status_ne]=archived&filter[and][1][views_in]=100,200,300
 ```
 
+> For nested keys like `filter[or][0][title_cont]`, set Express query parsing to extended mode:
+> `app.getHttpAdapter().getInstance().set('query parser', 'extended')`.
+
 **Supported Operators:**
 
 - `eq` - Equals
