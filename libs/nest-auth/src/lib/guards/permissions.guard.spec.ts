@@ -1,6 +1,5 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AUTH_OPTIONS } from '../constants';
 import { PermissionsGuard } from './permissions.guard';
 
 describe('PermissionsGuard', () => {
@@ -14,7 +13,7 @@ describe('PermissionsGuard', () => {
       switchToHttp: () => ({
         getRequest: () => ({ user }),
       }),
-    }) as unknown as ExecutionContext;
+    } as unknown as ExecutionContext);
 
   beforeEach(() => {
     reflector = {

@@ -1,5 +1,5 @@
 import { Entity, OneToMany } from 'typeorm';
-import { RoleEntity } from '../../../../../libs/nest-auth/src/lib/entities/role.entity';
+import { RoleEntity } from '@nest-util/nest-auth';
 import { UserRole } from './user-role.entity';
 
 @Entity('roles')
