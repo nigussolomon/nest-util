@@ -9,6 +9,8 @@
 - Register/login endpoint support
 - Access + refresh token issuance
 - Refresh token rotation strategy
+- Exported RBAC entities for roles and user-role assignments
+- Permission decorator + guard with overridable evaluation logic
 - Decorators and guards for route-level control
 
 ---
@@ -43,7 +45,64 @@ Use these helpers:
 
 - `@Public()` for anonymous routes
 - JWT guard for protected routes
+- `@Permissions(...)` + `PermissionsGuard` for RBAC checks
 - `@CurrentUser()` to extract user payload
+
+## RBAC building blocks
+
+`@nest-util/nest-auth` now exports:
+
+- `RoleEntity`
+- `UserRoleEntity`
+- `Permissions(...)`
+- `PermissionsGuard`
+
+The entities are intentionally generic so you can either use them directly or extend them in your app.
+
+### Example configuration
+
+```ts
+AuthModule.forRoot({
+  userEntity: User,
+  identifierField: 'email',
+  passkeyField: 'password',
+  jwtSecret: process.env.JWT_SECRET!,
+  relations: ['roles'],
+  rbac: {
+    userRolesRelation: 'roles',
+    rolesKey: 'roles',
+    rolePermissionsKey: 'permissions',
+    requireAllPermissions: true,
+  },
+});
+```
+
+### Example route protection
+
+```ts
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Permissions('posts.create')
+@Post()
+createPost() {
+  // ...
+}
+```
+
+### Custom permission evaluation
+
+If your user object does not expose permissions in a default shape, provide a custom evaluator:
+
+```ts
+AuthModule.forRoot({
+  // ...
+  rbac: {
+    permissionEvaluator: ({ user, requiredPermissions }) => {
+      const grants = new Set(user.customPermissions as string[] | undefined);
+      return requiredPermissions.every((permission) => grants.has(permission));
+    },
+  },
+});
+```
 
 ### Typical controller layout
 

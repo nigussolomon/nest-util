@@ -207,9 +207,28 @@ export class AuthService {
       .addSelect(`user.${accessTokenField}`)
       .where('user.id = :id', { id: payload.sub });
 
-    if (this.options.relations?.length) {
-      this.options.relations.forEach((relation) => {
-        query.leftJoinAndSelect(`user.${relation}`, relation);
+    const relations = new Set(this.options.relations ?? []);
+    if (this.options.rbac?.userRolesRelation) {
+      relations.add(this.options.rbac.userRolesRelation);
+    }
+
+    if (relations.size > 0) {
+      const joinedAliases = new Set<string>();
+
+      relations.forEach((relation) => {
+        const segments = relation.split('.');
+        let parentAlias = 'user';
+        let currentPath = '';
+
+        segments.forEach((segment) => {
+          currentPath = currentPath ? `${currentPath}.${segment}` : segment;
+          const alias = currentPath.replace(/\./g, '_');
+          if (!joinedAliases.has(alias)) {
+            query.leftJoinAndSelect(`${parentAlias}.${segment}`, alias);
+            joinedAliases.add(alias);
+          }
+          parentAlias = alias;
+        });
       });
     }
 

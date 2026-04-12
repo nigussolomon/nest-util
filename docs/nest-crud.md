@@ -50,6 +50,34 @@ export class PostController extends CreateNestedCrudController(
 }
 ```
 
+### Integrate with `PermissionsGuard` (no method overrides)
+
+```ts
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Controller('posts')
+export class PostController extends CreateNestedCrudController(
+  CreatePostDto,
+  UpdatePostDto,
+  PostResponseDto,
+  {
+    permissions: {
+      findAll: 'posts.read',
+      findOne: 'posts.read',
+      create: 'posts.create',
+      update: 'posts.update',
+      remove: 'posts.delete',
+      findAuditLogs: 'posts.audit.read',
+    },
+  }
+) {
+  constructor(public readonly service: PostService) {
+    super(service);
+  }
+}
+```
+
+`CreateNestedCrudController` writes the same metadata key used by `@Permissions(...)`, so `PermissionsGuard` works on generated CRUD handlers automatically.
+
 This gives you standard endpoints:
 
 - `POST /posts`

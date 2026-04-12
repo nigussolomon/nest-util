@@ -1,5 +1,10 @@
-import { Controller, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiExtraModels, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiExtraModels,
+  ApiBearerAuth,
+  ApiOkResponse,
+} from '@nestjs/swagger';
 import { UsersService } from './user.service';
 import { CreateUserDto, UpdateUserDto, UserResponseDto } from './user.dto';
 import {
@@ -7,7 +12,14 @@ import {
   EntityName,
   IBaseController,
 } from '@nest-util/nest-crud';
-import { JwtAuthGuard } from '@nest-util/nest-auth';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Permissions,
+  PermissionsGuard,
+} from '@nest-util/nest-auth';
+import { AssignRoleDto } from './assign-role.dto';
+import { RoleResponseDto } from './role-response.dto';
 
 const UsersCrudControllerBase = CreateNestedCrudController(
   CreateUserDto,
@@ -28,5 +40,28 @@ const UsersCrudControllerBase = CreateNestedCrudController(
 export class UsersController extends UsersCrudControllerBase {
   constructor(override readonly service: UsersService) {
     super(service);
+  }
+
+  @Post(':id/roles')
+  @ApiOkResponse({ type: RoleResponseDto })
+  async assignRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignRoleDto
+  ) {
+    return this.service.assignRole(id, dto);
+  }
+
+  @Get(':id/roles')
+  @ApiOkResponse({ type: RoleResponseDto, isArray: true })
+  async listRoles(@Param('id', ParseIntPipe) id: number) {
+    return this.service.listRoles(id);
+  }
+
+  @Get('me/rbac-example')
+  @UseGuards(PermissionsGuard)
+  @Permissions('users.manage')
+  @ApiOkResponse({ type: UserResponseDto })
+  getRbacExample(@CurrentUser() user: UserResponseDto) {
+    return user;
   }
 }

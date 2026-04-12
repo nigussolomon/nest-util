@@ -17,6 +17,18 @@ import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
 import { Audit, ListAuditLogsDto } from '@nest-util/nest-audit';
 
+export const AUTH_PERMISSIONS_METADATA_KEY = 'auth:permissions';
+
+export type CrudEndpointPermissions = string | readonly string[];
+
+export type CrudPermissionsMap = Partial<
+  Record<CrudEndpoint, CrudEndpointPermissions>
+>;
+
+export interface CrudControllerFactoryOptions {
+  permissions?: CrudPermissionsMap;
+}
+
 export interface IBaseController<CD, UD, RD> {
   service: CrudInterface<CD, UD, RD>;
   findAll(
@@ -29,10 +41,66 @@ export interface IBaseController<CD, UD, RD> {
   findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
 }
 
+const toPermissionList = (
+  permissionValue: CrudEndpointPermissions
+): string[] => {
+  if (Array.isArray(permissionValue)) {
+    return [
+      ...permissionValue.filter((permission): permission is string =>
+        Boolean(permission)
+      ),
+    ];
+  }
+
+  return typeof permissionValue === 'string' && permissionValue
+    ? [permissionValue]
+    : [];
+};
+
+const applyPermissionMetadata = (
+  controllerClass: Type<unknown>,
+  permissions?: CrudPermissionsMap
+): void => {
+  if (!permissions) {
+    return;
+  }
+
+  for (const endpoint of Object.keys(permissions) as CrudEndpoint[]) {
+    const permissionValue = permissions[endpoint];
+
+    if (!permissionValue) {
+      continue;
+    }
+
+    const permissionList = toPermissionList(permissionValue);
+
+    if (permissionList.length === 0) {
+      continue;
+    }
+
+    const handler = (
+      controllerClass as unknown as {
+        prototype: Record<string, unknown>;
+      }
+    ).prototype[endpoint];
+
+    if (typeof handler !== 'function') {
+      continue;
+    }
+
+    Reflect.defineMetadata(
+      AUTH_PERMISSIONS_METADATA_KEY,
+      permissionList,
+      handler
+    );
+  }
+};
+
 export function CreateNestedCrudController<CD, UD, RD>(
   createDto: Type<CD>,
   updateDto: Type<UD>,
-  responseDto: Type<RD>
+  responseDto: Type<RD>,
+  options?: CrudControllerFactoryOptions
 ): Type<IBaseController<CD, UD, RD>> {
   class BaseController implements IBaseController<CD, UD, RD> {
     constructor(public readonly service: CrudInterface<CD, UD, RD>) {}
@@ -111,6 +179,8 @@ export function CreateNestedCrudController<CD, UD, RD>(
       return this.service.findOne(id);
     }
   }
+
+  applyPermissionMetadata(BaseController, options?.permissions);
 
   return BaseController as Type<IBaseController<CD, UD, RD>>;
 }

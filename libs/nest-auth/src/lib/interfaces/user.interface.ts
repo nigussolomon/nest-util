@@ -1,5 +1,7 @@
 export class AuthUser {
   id!: number | string;
+  permissions?: string[];
+  roles?: unknown[];
   [key: string]: unknown;
 }
 

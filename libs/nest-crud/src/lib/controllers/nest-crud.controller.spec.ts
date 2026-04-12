@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CrudInterface } from '../interfaces/crud.interface';
 import {
+  AUTH_PERMISSIONS_METADATA_KEY,
   CreateNestedCrudController,
   IBaseController,
 } from './nest-crud.controller';
@@ -190,7 +191,10 @@ describe('NestedCrudController Factory', () => {
   describe('findAuditLogs', () => {
     it('should call service.findAuditLogs with query params', async () => {
       const query = { page: 1, limit: 5, user_id: '1' };
-      const expectedResult = { data: [], meta: { total: 0, page: 1, limit: 5 } };
+      const expectedResult = {
+        data: [],
+        meta: { total: 0, page: 1, limit: 5 },
+      };
 
       const findAuditLogsMock = service.findAuditLogs as jest.MockedFunction<
         NonNullable<typeof service.findAuditLogs>
@@ -207,6 +211,47 @@ describe('NestedCrudController Factory', () => {
       service.findAuditLogs = undefined;
 
       expect(() => controller.findAuditLogs?.({})).toThrow(NotFoundException);
+    });
+  });
+
+  describe('permission integration', () => {
+    it('should attach auth permission metadata to configured CRUD handlers', () => {
+      const PermissionedControllerBase = CreateNestedCrudController(
+        MockDto,
+        MockDto,
+        MockResponseDto,
+        {
+          permissions: {
+            findAll: 'posts.read',
+            create: ['posts.create', 'posts.write'],
+          },
+        }
+      );
+
+      class PermissionedController extends PermissionedControllerBase {
+        constructor() {
+          super(service);
+        }
+      }
+
+      const findAllPermissions = Reflect.getMetadata(
+        AUTH_PERMISSIONS_METADATA_KEY,
+        PermissionedController.prototype.findAll
+      );
+
+      const createPermissions = Reflect.getMetadata(
+        AUTH_PERMISSIONS_METADATA_KEY,
+        PermissionedController.prototype.create
+      );
+
+      const updatePermissions = Reflect.getMetadata(
+        AUTH_PERMISSIONS_METADATA_KEY,
+        PermissionedController.prototype.update
+      );
+
+      expect(findAllPermissions).toEqual(['posts.read']);
+      expect(createPermissions).toEqual(['posts.create', 'posts.write']);
+      expect(updatePermissions).toBeUndefined();
     });
   });
 });

@@ -37,6 +37,7 @@ describe('AuthService', () => {
       update: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue({
         addSelect: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         getOne: jest.fn(),
         update: jest.fn().mockReturnThis(),
@@ -213,6 +214,51 @@ describe('AuthService', () => {
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(null);
       await expect(service.validateUser({ sub: 99, nonce: 'any' })).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should load the configured RBAC relation during validation', async () => {
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue({
+        id: 1,
+        email: 'test@example.com',
+        accessToken: 'hashed-at',
+        roles: [],
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          AuthService,
+          {
+            provide: AUTH_OPTIONS,
+            useValue: {
+              ...mockOptions,
+              rbac: {
+                userRolesRelation: 'roles',
+              },
+            },
+          },
+          {
+            provide: DataSource,
+            useValue: {
+              getRepository: jest.fn().mockReturnValue(repository),
+            },
+          },
+          {
+            provide: JwtService,
+            useValue: jwtService,
+          },
+        ],
+      }).compile();
+
+      service = module.get<AuthService>(AuthService);
+
+      await service.validateUser({ sub: 1, nonce: 'at-nonce' });
+
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'user.roles',
+        'roles'
+      );
     });
   });
 });
