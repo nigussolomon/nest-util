@@ -3,6 +3,8 @@ import {
   Inject,
   UnauthorizedException,
   ConflictException,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
@@ -12,10 +14,15 @@ import * as crypto from 'crypto';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
+import { RoleEntity } from '../entities/role.entity';
+import { UserRoleEntity } from '../entities/user-role.entity';
+import { CreateRoleDto } from '../dtos/create-role.dto';
 
 @Injectable()
 export class AuthService {
   private readonly userRepository: Repository<Record<string, unknown>>;
+  private readonly roleRepository: Repository<RoleEntity>;
+  private readonly userRoleRepository: Repository<UserRoleEntity>;
 
   constructor(
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
@@ -25,6 +32,8 @@ export class AuthService {
     this.userRepository = this.dataSource.getRepository(
       this.options.userEntity
     ) as Repository<Record<string, unknown>>;
+    this.roleRepository = this.dataSource.getRepository(RoleEntity);
+    this.userRoleRepository = this.dataSource.getRepository(UserRoleEntity);
   }
 
   async register(data: Record<string, unknown>): Promise<AuthUser> {
@@ -124,6 +133,133 @@ export class AuthService {
     }
 
     return true;
+  }
+
+  async createRole(data: CreateRoleDto): Promise<RoleEntity> {
+    const roleName = typeof data.name === 'string' ? data.name.trim() : '';
+
+    if (!roleName) {
+      throw new BadRequestException('Role name is required');
+    }
+
+    const existingRole = await this.roleRepository.findOne({
+      where: { name: roleName },
+    });
+
+    if (existingRole) {
+      throw new ConflictException('Role already exists');
+    }
+
+    const role = this.roleRepository.create({
+      name: roleName,
+      description:
+        typeof data.description === 'string'
+          ? data.description.trim() || undefined
+          : undefined,
+      permissions: this.toPermissionArray(data.permissions),
+    });
+
+    return await this.roleRepository.save(role);
+  }
+
+  async assignRoleToUser(userId: number, roleId: number): Promise<RoleEntity> {
+    await this.assertUserExists(userId);
+
+    const role = await this.roleRepository.findOne({ where: { id: roleId } });
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const existingAssignment = await this.userRoleRepository.findOne({
+      where: { userId, roleId },
+    });
+
+    if (!existingAssignment) {
+      const assignment = this.userRoleRepository.create({ userId, roleId });
+      await this.userRoleRepository.save(assignment);
+    }
+
+    return role;
+  }
+
+  async assignPermissionsToRole(
+    roleId: number,
+    permissions: unknown
+  ): Promise<RoleEntity> {
+    const role = await this.roleRepository.findOne({ where: { id: roleId } });
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const parsedPermissions = this.toPermissionArray(permissions);
+    if (parsedPermissions.length === 0) {
+      throw new BadRequestException('Permissions are required');
+    }
+
+    const currentPermissions = Array.isArray(role.permissions)
+      ? role.permissions
+      : [];
+
+    role.permissions = [
+      ...new Set([...currentPermissions, ...parsedPermissions]),
+    ];
+    return await this.roleRepository.save(role);
+  }
+
+  async removePermissionsFromRole(
+    roleId: number,
+    permissions: unknown
+  ): Promise<RoleEntity> {
+    const role = await this.roleRepository.findOne({ where: { id: roleId } });
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const parsedPermissions = this.toPermissionArray(permissions);
+    if (parsedPermissions.length === 0) {
+      throw new BadRequestException('Permissions are required');
+    }
+
+    const currentPermissions = Array.isArray(role.permissions)
+      ? role.permissions
+      : [];
+
+    role.permissions = currentPermissions.filter(
+      (permission) => !parsedPermissions.includes(permission)
+    );
+
+    return await this.roleRepository.save(role);
+  }
+
+  async removeRoleFromUser(userId: number, roleId: number): Promise<boolean> {
+    await this.assertUserExists(userId);
+
+    const role = await this.roleRepository.findOne({ where: { id: roleId } });
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const result = await this.userRoleRepository.delete({ userId, roleId });
+    return (result.affected ?? 0) > 0;
+  }
+
+  async getUserRoles(userId: number): Promise<RoleEntity[]> {
+    await this.assertUserExists(userId);
+
+    const assignments = await this.userRoleRepository.find({
+      where: { userId },
+      relations: ['role'],
+    });
+
+    return assignments
+      .map((assignment) => assignment.role)
+      .filter((role): role is RoleEntity => Boolean(role));
+  }
+
+  async getAllRoles(): Promise<RoleEntity[]> {
+    return await this.roleRepository.find({
+      order: { id: 'ASC' },
+    });
   }
 
   private async generateTokens(
@@ -249,5 +385,30 @@ export class AuthService {
     }
 
     return this.removeSensitiveData(user);
+  }
+
+  private async assertUserExists(userId: number): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId } as never,
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+  }
+
+  private toPermissionArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const permissions = value
+      .filter(
+        (permission): permission is string =>
+          typeof permission === 'string' && permission.trim().length > 0
+      )
+      .map((permission) => permission.trim());
+
+    return [...new Set(permissions)];
   }
 }

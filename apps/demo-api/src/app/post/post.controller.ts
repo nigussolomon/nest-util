@@ -17,7 +17,7 @@ const PostCrudControllerBase = CreateNestedCrudController(
   {
     permissions: {
       findAll: 'posts.read',
-      findOne: 'posts.read',
+      findOne: 'post.read',
       create: 'posts.create',
       update: 'posts.update',
       remove: 'posts.delete',
