@@ -230,11 +230,14 @@ describe('NestCrudService', () => {
 
       expect(sql).toContain('AND');
       expect(sql).toContain('OR');
-      expect(sql).toContain('e.name ILIKE');
-      expect(sql).toContain('e.name =');
-      expect(Object.values(params)).toEqual(
-        expect.arrayContaining(['%ni%', 'Alice', 'Bob'])
-      );
+      expect(sql).toContain('e.name ILIKE :filter_0');
+      expect(sql).toContain('e.name = :filter_1');
+      expect(sql).toContain('e.name = :filter_2');
+      expect(params).toMatchObject({
+        filter_0: '%ni%',
+        filter_1: 'Alice',
+        filter_2: 'Bob',
+      });
     });
 
     it('should support advanced operators in and filters', async () => {
@@ -254,10 +257,12 @@ describe('NestCrudService', () => {
       ];
 
       expect(sql).toContain('!=');
-      expect(sql).toContain('IN (:...');
-      expect(Object.values(params)).toEqual(
-        expect.arrayContaining(['Eve', ['Alice', 'Bob']])
-      );
+      expect(sql).toContain('e.name != :filter_0');
+      expect(sql).toContain('e.name IN (:...filter_1)');
+      expect(params).toMatchObject({
+        filter_0: 'Eve',
+        filter_1: ['Alice', 'Bob'],
+      });
     });
   });
 
