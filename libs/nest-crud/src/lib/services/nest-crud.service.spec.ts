@@ -208,6 +208,57 @@ describe('NestCrudService', () => {
 
       expect(queryBuilder.leftJoinAndSelect).not.toHaveBeenCalled();
     });
+
+    it('should support OR groups while preserving default AND behavior', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          name_cont: 'ni',
+          or: [{ name_eq: 'Alice' }, { name_eq: 'Bob' }],
+        },
+      });
+
+      expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(sql).toContain('AND');
+      expect(sql).toContain('OR');
+      expect(sql).toContain('e.name ILIKE');
+      expect(sql).toContain('e.name =');
+      expect(Object.values(params)).toEqual(
+        expect.arrayContaining(['%ni%', 'Alice', 'Bob'])
+      );
+    });
+
+    it('should support advanced operators in and filters', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          and: [{ name_ne: 'Eve' }, { name_in: 'Alice,Bob' }],
+        },
+      });
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(sql).toContain('!=');
+      expect(sql).toContain('IN (:...');
+      expect(Object.values(params)).toEqual(
+        expect.arrayContaining(['Eve', ['Alice', 'Bob']])
+      );
+    });
   });
 
   describe('findOne', () => {

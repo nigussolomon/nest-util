@@ -121,8 +121,11 @@ export function CreateNestedCrudController<CD, UD, RD>(
       explode: true,
       type: 'object',
       description:
-        'Filters in format filter[field_operator]=value. Operators: eq, cont, gte, lte',
-      example: { name_cont: 'Alice', isActive_eq: 'true' },
+        'Filters in format filter[field_operator]=value. Operators: eq, ne, cont, notcont, starts, ends, gte, lte, gt, lt, in, nin, isnull. Grouping keys: and, or',
+      example: {
+        name_cont: 'Alice',
+        or: [{ name_eq: 'Bob' }, { name_eq: 'Carol' }],
+      },
     })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
