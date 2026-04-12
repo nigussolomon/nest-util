@@ -208,6 +208,103 @@ describe('NestCrudService', () => {
 
       expect(queryBuilder.leftJoinAndSelect).not.toHaveBeenCalled();
     });
+
+    it('should support OR groups while preserving default AND behavior', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          name_cont: 'ni',
+          or: [{ name_eq: 'Alice' }, { name_eq: 'Bob' }],
+        },
+      });
+
+      expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(sql).toContain('AND');
+      expect(sql).toContain('OR');
+      expect(sql).toContain('e.name ILIKE :filter_0');
+      expect(sql).toContain('e.name = :filter_1');
+      expect(sql).toContain('e.name = :filter_2');
+      expect(params).toMatchObject({
+        filter_0: '%ni%',
+        filter_1: 'Alice',
+        filter_2: 'Bob',
+      });
+    });
+
+    it('should support advanced operators in and filters', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          and: [{ name_ne: 'Eve' }, { name_in: 'Alice,Bob' }],
+        },
+      });
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(sql).toContain('!=');
+      expect(sql).toContain('AND');
+      expect(sql).toContain('e.name != :filter_0');
+      expect(sql).toContain('e.name IN (:...filter_1)');
+      expect(params).toMatchObject({
+        filter_0: 'Eve',
+        filter_1: ['Alice', 'Bob'],
+      });
+    });
+
+    it('should ignore invalid isnull and empty in values', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          name_isnull: 'maybe',
+          name_in: '',
+        },
+      });
+
+      expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('should ignore unsafe and disallowed fields', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          '1name_eq': 'bad',
+          id_eq: 42,
+          name_eq: 'allowed',
+        },
+      });
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(sql).toContain('e.name = :filter_0');
+      expect(sql).not.toContain('id');
+      expect(params).toMatchObject({
+        filter_0: 'allowed',
+      });
+    });
   });
 
   describe('findOne', () => {

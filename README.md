@@ -449,14 +449,37 @@ GET /post?filter[createdAt_lte]=2024-01-01
 
 // Combine multiple filters
 GET /post?filter[published_eq]=true&filter[views_gte]=100&filter[title_cont]=nest
+
+// OR groups (requires `query parser = extended`)
+GET /post?filter[or][0][title_cont]=nestjs&filter[or][1][title_cont]=typeorm
+
+// Nested group with advanced operators
+GET /post?filter[and][0][status_ne]=archived&filter[and][1][views_in]=100,200,300
 ```
+
+> For nested keys like `filter[or][0][title_cont]`, set Express query parsing to extended mode:
+> `app.getHttpAdapter().getInstance().set('query parser', 'extended')`.
 
 **Supported Operators:**
 
 - `eq` - Equals
+- `ne` - Not equals
 - `cont` - Contains (case-insensitive)
+- `notcont` - Does not contain (case-insensitive)
+- `starts` - Starts with (case-insensitive)
+- `ends` - Ends with (case-insensitive)
 - `gte` - Greater than or equal
 - `lte` - Less than or equal
+- `gt` - Greater than
+- `lt` - Less than
+- `in` - Matches any value from a comma-separated list
+- `nin` - Does not match values from a comma-separated list
+- `isnull` - `true` for `IS NULL`, `false` for `IS NOT NULL`
+
+**Grouping Keys:**
+
+- `and` - Combine nested filters with AND
+- `or` - Combine nested filters with OR
 
 ### Extending CRUD Services
 
