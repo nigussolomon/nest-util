@@ -8,21 +8,21 @@ import { Post } from './post.entity';
 import { CreatePostDto } from './create-post.dto';
 import { UpdatePostDto } from './update-post.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
+import {
+  buildCrudPermissionsFromRegistry,
+  JwtAuthGuard,
+  PermissionsGuard,
+} from '@nest-util/nest-auth';
+import { permissionRegistry } from '../auth/permission-registry';
 
 const PostCrudControllerBase = CreateNestedCrudController(
   CreatePostDto,
   UpdatePostDto,
   Post,
   {
-    permissions: {
-      findAll: 'posts.read',
-      findOne: 'post.read',
-      create: 'posts.create',
-      update: 'posts.update',
-      remove: 'posts.delete',
-      findAuditLogs: 'posts.audit.read',
-    },
+    permissions: buildCrudPermissionsFromRegistry(permissionRegistry, {
+      resource: 'posts',
+    }),
   }
 ) as abstract new (service: PostService) => IBaseController<
   CreatePostDto,

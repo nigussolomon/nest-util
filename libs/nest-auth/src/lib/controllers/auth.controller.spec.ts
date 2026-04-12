@@ -30,6 +30,14 @@ describe('AuthController', () => {
       email = '';
       password = '';
     },
+    permissionRegistry: {
+      resources: [
+        {
+          resource: 'users',
+          permissions: ['read', 'manage'],
+        },
+      ],
+    },
   };
 
   beforeEach(async () => {
@@ -144,10 +152,27 @@ describe('AuthController', () => {
     });
   });
 
+  describe('getRegisteredPermissions', () => {
+    it('should return configured registry and flattened permissions', () => {
+      const result = controller.getRegisteredPermissions();
+
+      expect(result).toEqual({
+        resources: [
+          {
+            resource: 'users',
+            permissions: ['users.read', 'users.manage'],
+          },
+        ],
+        permissions: ['admin.access', 'users.manage', 'users.read'],
+      });
+    });
+  });
+
   describe('admin route permissions', () => {
     it('should require admin.access on admin auth routes', () => {
       const methodNames = [
         'createRole',
+        'getRegisteredPermissions',
         'getAllRoles',
         'assignRoleToUser',
         'assignPermissionsToRole',

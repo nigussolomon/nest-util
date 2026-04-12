@@ -1,5 +1,6 @@
 import { Type } from '@nestjs/common';
 import { AuthRbacOptions } from './rbac-options.interface';
+import { PermissionRegistryConfig } from './permission-registry.interface';
 
 export interface AuthModuleOptions {
   /**
@@ -82,4 +83,6 @@ export interface AuthModuleOptions {
   relations?: string[];
 
   rbac?: AuthRbacOptions;
+
+  permissionRegistry?: PermissionRegistryConfig;
 }

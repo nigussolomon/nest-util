@@ -14,6 +14,7 @@ import { Post } from './post/post.entity';
 import { AuthModule } from '@nest-util/nest-auth';
 import { User } from './user/user.entity';
 import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
+import { permissionRegistry } from './auth/permission-registry';
 import {
   NestUtilNestAuditModule,
   AuditInterceptor,
@@ -53,6 +54,7 @@ import {
         rolesKey: 'userRoles',
         nestedRoleKey: 'role',
       },
+      permissionRegistry,
     }),
   ],
   controllers: [AppController, PostController, CommentController],

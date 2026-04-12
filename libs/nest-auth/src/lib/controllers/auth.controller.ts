@@ -28,6 +28,7 @@ import { CreateRoleDto } from '../dtos/create-role.dto';
 import { RolePermissionsDto } from '../dtos/role-permissions.dto';
 import { Permissions } from '../decorators/permissions';
 import { PermissionsGuard } from '../guards/permissions.guard';
+import { resolvePermissionRegistry } from '../helpers/permission-registry.helper';
 
 const ADMIN_ROUTE_PERMISSION = 'admin.access';
 
@@ -120,6 +121,19 @@ export function CreateAuthController(
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     async logout(@CurrentUser() user: AuthUser): Promise<boolean> {
       return await this.authService.logout(user.id);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
+    @Get('permissions')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Fetch registered permission catalog' })
+    @ApiResponse({
+      status: 200,
+      description: 'Permission catalog successfully fetched',
+    })
+    getRegisteredPermissions() {
+      return resolvePermissionRegistry(this.options.permissionRegistry);
     }
 
     @UseGuards(JwtAuthGuard, PermissionsGuard)
