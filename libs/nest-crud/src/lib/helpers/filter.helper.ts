@@ -3,6 +3,7 @@ import { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 type FilterGroup = Record<string, unknown>;
 
 type FilterCombinator = 'and' | 'or';
+const SAFE_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 const toArrayValue = (value: unknown): unknown[] => {
   if (Array.isArray(value)) {
@@ -163,7 +164,7 @@ const buildExpression = (
 
     const { field, operator } = parsed;
 
-    if (!/^[a-zA-Z0-9_]+$/.test(field)) continue;
+    if (!SAFE_FIELD_PATTERN.test(field)) continue;
     if (!allowedFilters.includes(field)) continue;
 
     const condition = buildCondition(field, operator, value, paramIndex);
