@@ -12,6 +12,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { RoleEntity } from './entities/role.entity';
 import { UserRoleEntity } from './entities/user-role.entity';
+import { Reflector } from '@nestjs/core';
 
 @Global()
 @Module({})
@@ -47,6 +48,7 @@ export class AuthModule {
         JwtStrategy,
         JwtAuthGuard,
         PermissionsGuard,
+        Reflector,
       ],
       exports: [
         AUTH_OPTIONS,
@@ -58,6 +60,7 @@ export class AuthModule {
         JwtStrategy,
         JwtAuthGuard,
         PermissionsGuard,
+        Reflector,
       ],
     };
   }
