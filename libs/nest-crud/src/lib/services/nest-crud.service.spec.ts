@@ -265,6 +265,46 @@ describe('NestCrudService', () => {
         filter_1: ['Alice', 'Bob'],
       });
     });
+
+    it('should ignore invalid isnull and empty in values', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          name_isnull: 'maybe',
+          name_in: '',
+        },
+      });
+
+      expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('should ignore unsafe and disallowed fields', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: {
+          '1name_eq': 'bad',
+          id_eq: 42,
+          name_eq: 'allowed',
+        },
+      });
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(sql).toContain('e.name = :filter_0');
+      expect(sql).not.toContain('id');
+      expect(params).toMatchObject({
+        filter_0: 'allowed',
+      });
+    });
   });
 
   describe('findOne', () => {
