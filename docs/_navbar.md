@@ -1,4 +1,0 @@
-- [Landing](./)
-- [Docs](guide.html#/)
-- [Getting Started](guide.html#/getting-started)
-- [GitHub](https://github.com/nigussolomon/nest-util)

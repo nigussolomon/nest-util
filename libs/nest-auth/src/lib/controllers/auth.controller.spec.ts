@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import { ForbiddenException } from '@nestjs/common';
+import { PERMISSIONS_KEY } from '../decorators/permissions';
+import { PermissionsGuard } from '../guards/permissions.guard';
+import { Reflector } from '@nestjs/core';
 
 import { CreateAuthController } from './auth.controller';
 
@@ -12,13 +15,29 @@ describe('AuthController', () => {
   let authService: any;
 
   const mockOptions = {
-    userEntity: class User { id = 1 },
+    userEntity: class User {
+      id = 1;
+    },
     identifierField: 'email',
     passkeyField: 'password',
     jwtSecret: 'test-secret',
     disabledRoutes: [] as string[],
-    loginDto: class LoginDto { email = ''; password = '' },
-    registerDto: class RegisterDto { email = ''; password = '' },
+    loginDto: class LoginDto {
+      email = '';
+      password = '';
+    },
+    registerDto: class RegisterDto {
+      email = '';
+      password = '';
+    },
+    permissionRegistry: {
+      resources: [
+        {
+          resource: 'users',
+          permissions: ['read', 'manage'],
+        },
+      ],
+    },
   };
 
   beforeEach(async () => {
@@ -41,6 +60,14 @@ describe('AuthController', () => {
         {
           provide: AUTH_OPTIONS,
           useValue: mockOptions,
+        },
+        {
+          provide: PermissionsGuard,
+          useValue: { canActivate: jest.fn().mockReturnValue(true) },
+        },
+        {
+          provide: Reflector,
+          useValue: { getAllAndOverride: jest.fn() },
         },
       ],
     }).compile();
@@ -99,7 +126,9 @@ describe('AuthController', () => {
     });
 
     it('should throw ForbiddenException if token is missing', async () => {
-      await expect(controller.refresh({ refreshToken: '' })).rejects.toThrow(ForbiddenException);
+      await expect(controller.refresh({ refreshToken: '' })).rejects.toThrow(
+        ForbiddenException
+      );
     });
   });
 
@@ -108,6 +137,20 @@ describe('AuthController', () => {
       const user = { id: 1, email: 'test@test.com' };
       const result = await controller.me(user);
       expect(result).toEqual(user);
+    });
+  });
+
+  describe('getMyPermissions', () => {
+    it('should return resolved direct and role permissions for the current user', () => {
+      const user = {
+        id: 1,
+        permissions: ['posts.read'],
+        roles: [{ permissions: ['posts.create'] }],
+      };
+
+      const result = controller.getMyPermissions(user);
+
+      expect(result).toEqual(['posts.read', 'posts.create']);
     });
   });
 
@@ -120,6 +163,49 @@ describe('AuthController', () => {
 
       expect(authService.logout).toHaveBeenCalledWith(1);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('getRegisteredPermissions', () => {
+    it('should return configured registry and flattened permissions', () => {
+      const result = controller.getRegisteredPermissions();
+
+      expect(result).toEqual({
+        resources: [
+          {
+            resource: 'users',
+            permissions: ['users.read', 'users.manage'],
+          },
+        ],
+        permissions: ['admin.access', 'users.manage', 'users.read'],
+      });
+    });
+  });
+
+  describe('admin route permissions', () => {
+    it('should require admin.access on admin auth routes', () => {
+      const methodNames = [
+        'createRole',
+        'getRegisteredPermissions',
+        'getAllRoles',
+        'assignRoleToUser',
+        'assignPermissionsToRole',
+        'removePermissionsFromRole',
+        'removeRoleFromUser',
+        'getUserRoles',
+      ] as const;
+
+      for (const methodName of methodNames) {
+        const handler = controller[methodName];
+        expect(handler).toBeDefined();
+
+        const requiredPermissions = Reflect.getMetadata(
+          PERMISSIONS_KEY,
+          handler
+        ) as string[];
+
+        expect(requiredPermissions).toEqual(['admin.access']);
+      }
     });
   });
 });

@@ -11,7 +11,7 @@
 
 **A modern, production-ready collection of NestJS utilities designed to accelerate development by providing reusable, battle-tested patterns for CRUD operations, authentication, and rapid code generation.**
 
-📖 **[View Full Documentation](https://nigussolomon.github.io/nest-util/guide.html#/)** | 🚀 **[Quick Start](#-quick-start)** | 💡 **[Examples](https://nigussolomon.github.io/nest-util/guide.html#/examples)**
+📖 **[Docs Index](./docs/README.md)** | 🚀 **[Quick Start](#-quick-start)** | ⚙️ **[demo-api config](./docs/demo-api/README.md)**
 
 ---
 
@@ -31,6 +31,7 @@ Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates
 | Writing the same CRUD logic for every entity  | `@nest-util/nest-crud` - Generic CRUD service and controller factory |
 | Manually scaffolding entities, DTOs, services | `ncnu` - Code generator with smart type mapping                      |
 | Implementing secure JWT authentication        | `@nest-util/nest-auth` - Flexible auth module with token rotation    |
+| Tracking entity-level mutations               | `@nest-util/nest-audit` - Audit logs for create/update/delete flows  |
 | Inconsistent API responses                    | Built-in response interceptors and transformers                      |
 | Manual Swagger documentation                  | Automatic OpenAPI documentation with proper decorators               |
 
@@ -38,37 +39,32 @@ Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates
 
 ## 🏗️ Architecture Overview
 
-Nest-Util is composed of four core packages plus a CLI that work together seamlessly:
+Nest-Util is composed of focused modules that integrate into the same NestJS app.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Your NestJS App                      │
-├─────────────────────────────────────────────────────────┤
-│                                                           │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │   ncnu CLI  │  │  nest-crud   │  │  nest-auth    │  │
-│  │  nest-file  │  │              │  │               │  │
-│  │  Generator  │  │   Library    │  │   Library     │  │
-│  └─────────────┘  └──────────────┘  └───────────────┘  │
-│        │                  │                   │          │
-│        │                  │                   │          │
-│        ▼                  ▼                   ▼          │
-│  Generates Code ───> Uses CRUD ────> Secures Routes     │
-│                      Components      with Auth          │
-└─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-              ┌──────────────────┐
-              │  TypeORM + DB    │
-              └──────────────────┘
-```
+**Architecture Components:**
+
+- `ncnu`: generates entities, DTOs, services, and controllers
+- `@nest-util/nest-crud`: provides reusable CRUD service/controller building blocks
+- `@nest-util/nest-auth`: handles JWT auth, refresh tokens, and permissions
+- `@nest-util/nest-audit`: records audit events for mutating operations
+- `TypeORM + Database`: persistence layer used by all runtime modules
+
+### Integration Flow
+
+1. Configure TypeORM and entity loading.
+2. Add `NestUtilNestAuditModule`.
+3. Add `AuthModule.forRoot(...)`.
+4. Build services with `NestCrudService`.
+5. Build controllers with `CreateNestedCrudController(...)`.
+6. Configure `main.ts` globals (validation pipe, query parser, Swagger, DB exception filter).
 
 **Typical Workflow:**
 
 1. Use `ncnu` to generate entities, DTOs, services, and controllers
 2. Generated code automatically extends `NestCrudService` and `CreateNestedCrudController`
 3. Add `@nest-util/nest-auth` for authentication on protected routes
-4. Get automatic pagination, filtering, Swagger docs, and error handling
+4. Enable `@nest-util/nest-audit` interceptor for mutation logging
+5. Get automatic pagination, filtering, Swagger docs, and error handling
 
 ---
 
@@ -132,27 +128,6 @@ A dynamic and flexible authentication library:
 - ✅ No sensitive data in auth responses
 - ✅ Configurable token expiration
 
-
-### 4. 🗂️ @nest-util/nest-file
-
-A secure encrypted file storage module for NestJS + TypeORM: 
-
-- **`NestFileModule`**: Dynamic module with `forRoot` and `forRootAsync` support
-- **`StoredFileService`**: Upload, download, list, and delete operations
-- **`StoredFileEntity`**: PostgreSQL metadata model with owner attachment (`ownerType`, `ownerId`)
-- **MinIO Storage**: Encrypted object storage for binary payloads
-- **Encryption**: AES-256-GCM encryption with integrity verification
-
-**File Security Features:**
-
-- ✅ Encrypted-at-rest object payloads
-- ✅ SHA-256 integrity digest verification on reads
-- ✅ File-to-entity attachment via owner references
-- ✅ MinIO bucket auto-creation option
-- ✅ TypeORM/Postgres metadata indexing
-
----
-
 ## 🛠️ Installation
 
 ### Prerequisites
@@ -174,11 +149,8 @@ pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest
 # Install nest-auth library
 pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-auth-0.0.1.tgz
 
-# Install nest-file library
-pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-file-0.0.1.tgz
-
 # Required peer/runtime dependencies
-pnpm add @nestjs/typeorm typeorm @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt minio
+pnpm add @nestjs/typeorm typeorm @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
@@ -477,14 +449,37 @@ GET /post?filter[createdAt_lte]=2024-01-01
 
 // Combine multiple filters
 GET /post?filter[published_eq]=true&filter[views_gte]=100&filter[title_cont]=nest
+
+// OR groups (requires `query parser = extended`)
+GET /post?filter[or][0][title_cont]=nestjs&filter[or][1][title_cont]=typeorm
+
+// Nested group with advanced operators
+GET /post?filter[and][0][status_ne]=archived&filter[and][1][views_in]=100,200,300
 ```
+
+> For nested keys like `filter[or][0][title_cont]`, set Express query parsing to extended mode:
+> `app.getHttpAdapter().getInstance().set('query parser', 'extended')`.
 
 **Supported Operators:**
 
 - `eq` - Equals
+- `ne` - Not equals
 - `cont` - Contains (case-insensitive)
+- `notcont` - Does not contain (case-insensitive)
+- `starts` - Starts with (case-insensitive)
+- `ends` - Ends with (case-insensitive)
 - `gte` - Greater than or equal
 - `lte` - Less than or equal
+- `gt` - Greater than
+- `lt` - Less than
+- `in` - Matches any value from a comma-separated list
+- `nin` - Does not match values from a comma-separated list
+- `isnull` - `true` for `IS NULL`, `false` for `IS NOT NULL`
+
+**Grouping Keys:**
+
+- `and` - Combine nested filters with AND
+- `or` - Combine nested filters with OR
 
 ### Extending CRUD Services
 
@@ -629,11 +624,11 @@ refreshToken?: string;
 
 ## 📖 Documentation
 
-- **Full Documentation**: [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/guide.html#/)
-- **Getting Started Guide**: [Getting Started](https://nigussolomon.github.io/nest-util/guide.html#/getting-started)
-- **API Reference**: [API Documentation](https://nigussolomon.github.io/nest-util/guide.html#/api-reference)
-- **Examples**: [Real-World Examples](https://nigussolomon.github.io/nest-util/guide.html#/examples)
-- **Troubleshooting**: [Common Issues](https://nigussolomon.github.io/nest-util/guide.html#/troubleshooting)
+- **Docs Index**: [docs/README.md](./docs/README.md)
+- **demo-api setup**: [docs/demo-api/README.md](./docs/demo-api/README.md)
+- **nest-auth guide**: [docs/nest-auth/README.md](./docs/nest-auth/README.md)
+- **nest-crud guide**: [docs/nest-crud/README.md](./docs/nest-crud/README.md)
+- **nest-audit guide**: [docs/nest-audit/README.md](./docs/nest-audit/README.md)
 
 ---
 
@@ -661,4 +656,5 @@ If this project helped you, please give it a ⭐ on [GitHub](https://github.com/
 
 ---
 
-> [!TIP] > **GitHub Pages**: Detailed documentation is automatically deployed to GitHub Pages on every push to the `main` branch. Check it out at [nigussolomon.github.io/nest-util](https://nigussolomon.github.io/nest-util/guide.html#/).
+> [!TIP]
+> Start from [docs/README.md](./docs/README.md). The module guides are split by package and include demo-api-specific configuration notes.
