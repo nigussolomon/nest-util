@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import { ForbiddenException } from '@nestjs/common';
+import { PERMISSIONS_KEY } from '../decorators/permissions';
+import { PermissionsGuard } from '../guards/permissions.guard';
+import { Reflector } from '@nestjs/core';
 
 import { CreateAuthController } from './auth.controller';
 
@@ -12,13 +15,21 @@ describe('AuthController', () => {
   let authService: any;
 
   const mockOptions = {
-    userEntity: class User { id = 1 },
+    userEntity: class User {
+      id = 1;
+    },
     identifierField: 'email',
     passkeyField: 'password',
     jwtSecret: 'test-secret',
     disabledRoutes: [] as string[],
-    loginDto: class LoginDto { email = ''; password = '' },
-    registerDto: class RegisterDto { email = ''; password = '' },
+    loginDto: class LoginDto {
+      email = '';
+      password = '';
+    },
+    registerDto: class RegisterDto {
+      email = '';
+      password = '';
+    },
   };
 
   beforeEach(async () => {
@@ -41,6 +52,14 @@ describe('AuthController', () => {
         {
           provide: AUTH_OPTIONS,
           useValue: mockOptions,
+        },
+        {
+          provide: PermissionsGuard,
+          useValue: { canActivate: jest.fn().mockReturnValue(true) },
+        },
+        {
+          provide: Reflector,
+          useValue: { getAllAndOverride: jest.fn() },
         },
       ],
     }).compile();
@@ -99,7 +118,9 @@ describe('AuthController', () => {
     });
 
     it('should throw ForbiddenException if token is missing', async () => {
-      await expect(controller.refresh({ refreshToken: '' })).rejects.toThrow(ForbiddenException);
+      await expect(controller.refresh({ refreshToken: '' })).rejects.toThrow(
+        ForbiddenException
+      );
     });
   });
 
@@ -120,6 +141,32 @@ describe('AuthController', () => {
 
       expect(authService.logout).toHaveBeenCalledWith(1);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('admin route permissions', () => {
+    it('should require admin.access on admin auth routes', () => {
+      const methodNames = [
+        'createRole',
+        'getAllRoles',
+        'assignRoleToUser',
+        'assignPermissionsToRole',
+        'removePermissionsFromRole',
+        'removeRoleFromUser',
+        'getUserRoles',
+      ] as const;
+
+      for (const methodName of methodNames) {
+        const handler = controller[methodName];
+        expect(handler).toBeDefined();
+
+        const requiredPermissions = Reflect.getMetadata(
+          PERMISSIONS_KEY,
+          handler
+        ) as string[];
+
+        expect(requiredPermissions).toEqual(['admin.access']);
+      }
     });
   });
 });

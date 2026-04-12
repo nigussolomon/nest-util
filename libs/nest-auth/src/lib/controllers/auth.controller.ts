@@ -26,6 +26,10 @@ import { CurrentUser } from '../decorators/current-user';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 import { CreateRoleDto } from '../dtos/create-role.dto';
 import { RolePermissionsDto } from '../dtos/role-permissions.dto';
+import { Permissions } from '../decorators/permissions';
+import { PermissionsGuard } from '../guards/permissions.guard';
+
+const ADMIN_ROUTE_PERMISSION = 'admin.access';
 
 export function CreateAuthController(
   options: AuthModuleOptions
@@ -118,7 +122,8 @@ export function CreateAuthController(
       return await this.authService.logout(user.id);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('roles')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a role' })
@@ -130,7 +135,8 @@ export function CreateAuthController(
       return await this.authService.createRole(data);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Get('roles')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Fetch all roles' })
@@ -139,7 +145,8 @@ export function CreateAuthController(
       return await this.authService.getAllRoles();
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('users/:userId/roles/:roleId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Assign a role to a user' })
@@ -155,7 +162,8 @@ export function CreateAuthController(
       return await this.authService.assignRoleToUser(userId, roleId);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('roles/:roleId/permissions')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Assign permissions to a role' })
@@ -176,7 +184,8 @@ export function CreateAuthController(
       );
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Delete('roles/:roleId/permissions')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Remove permissions from a role' })
@@ -197,7 +206,8 @@ export function CreateAuthController(
       );
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Delete('users/:userId/roles/:roleId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Remove a role from a user' })
@@ -213,7 +223,8 @@ export function CreateAuthController(
       return await this.authService.removeRoleFromUser(userId, roleId);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
     @Get('users/:userId/roles')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Fetch roles assigned to a user' })
