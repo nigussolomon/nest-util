@@ -257,6 +257,7 @@ describe('NestCrudService', () => {
       ];
 
       expect(sql).toContain('!=');
+      expect(sql).toContain('AND');
       expect(sql).toContain('e.name != :filter_0');
       expect(sql).toContain('e.name IN (:...filter_1)');
       expect(params).toMatchObject({
