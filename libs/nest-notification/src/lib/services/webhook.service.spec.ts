@@ -80,4 +80,68 @@ describe('WebhookService', () => {
       service.send({ url: 'https://example.com/hook', payload: {} })
     ).rejects.toThrow('Webhook request failed with status 500');
   });
+
+  it('should reject non-http/https protocols', async () => {
+    await expect(
+      service.send({ url: 'file:///etc/passwd', payload: {} })
+    ).rejects.toThrow('Webhook URL must use http or https protocol');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('should reject invalid URLs', async () => {
+    await expect(
+      service.send({ url: 'not-a-url', payload: {} })
+    ).rejects.toThrow('Invalid webhook URL');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('should reject hosts not in allowedHosts when configured', async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        WebhookService,
+        {
+          provide: NOTIFICATION_MODULE_OPTIONS,
+          useValue: {
+            webhook: {
+              allowedHosts: ['hooks.allowed.com'],
+            },
+          },
+        },
+      ],
+    }).compile();
+
+    const restrictedService = module.get<WebhookService>(WebhookService);
+
+    await expect(
+      restrictedService.send({ url: 'https://evil.com/hook', payload: {} })
+    ).rejects.toThrow('not in the allowed list');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('should allow hosts in the allowedHosts list', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        WebhookService,
+        {
+          provide: NOTIFICATION_MODULE_OPTIONS,
+          useValue: {
+            webhook: {
+              allowedHosts: ['hooks.allowed.com'],
+            },
+          },
+        },
+      ],
+    }).compile();
+
+    const restrictedService = module.get<WebhookService>(WebhookService);
+
+    await expect(
+      restrictedService.send({ url: 'https://hooks.allowed.com/event', payload: {} })
+    ).resolves.not.toThrow();
+  });
 });

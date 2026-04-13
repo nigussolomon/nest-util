@@ -16,6 +16,12 @@ export interface WebhookOptions {
   secret?: string;
   /** Timeout in milliseconds for webhook HTTP calls (default: 5000) */
   timeoutMs?: number;
+  /**
+   * Optional allowlist of hostnames permitted as webhook targets.
+   * When set, any URL whose hostname is not in this list will be rejected.
+   * Example: ['hooks.example.com', 'api.myapp.io']
+   */
+  allowedHosts?: string[];
 }
 
 export interface NotificationModuleOptions {
