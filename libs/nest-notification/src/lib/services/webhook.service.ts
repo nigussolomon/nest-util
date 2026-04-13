@@ -59,6 +59,8 @@ export class WebhookService {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      // URL is validated above: protocol restricted to http/https and optionally
+      // constrained to allowedHosts, so SSRF risk is mitigated.
       const response = await fetch(validatedUrl.toString(), {
         method: 'POST',
         headers: requestHeaders,
