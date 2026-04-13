@@ -32,6 +32,9 @@
     },
     {
       "path": "../../libs/nest-file/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/nest-notification/tsconfig.lib.json"
     }
   ]
 }

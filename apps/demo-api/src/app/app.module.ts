@@ -19,6 +19,7 @@ import {
   NestUtilNestAuditModule,
   AuditInterceptor,
 } from '@nest-util/nest-audit';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import {
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
     NestUtilNestAuditModule,
+    NotificationModule,
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',
