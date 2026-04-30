@@ -32,7 +32,7 @@ export interface CrudControllerFactoryOptions {
 export interface IBaseController<CD, UD, RD> {
   service: CrudInterface<CD, UD, RD>;
   findAll(
-    query: PaginationDto & FilterDto
+    query: PaginationDto & FilterDto,
   ): Promise<{ data: RD[]; meta?: unknown } | RD[]>;
   findOne(id: number): Promise<RD>;
   create(dto: CD): Promise<RD>;
@@ -42,12 +42,12 @@ export interface IBaseController<CD, UD, RD> {
 }
 
 const toPermissionList = (
-  permissionValue: CrudEndpointPermissions
+  permissionValue: CrudEndpointPermissions,
 ): string[] => {
   if (Array.isArray(permissionValue)) {
     return [
       ...permissionValue.filter((permission): permission is string =>
-        Boolean(permission)
+        Boolean(permission),
       ),
     ];
   }
@@ -59,7 +59,7 @@ const toPermissionList = (
 
 const applyPermissionMetadata = (
   controllerClass: Type<unknown>,
-  permissions?: CrudPermissionsMap
+  permissions?: CrudPermissionsMap,
 ): void => {
   if (!permissions) {
     return;
@@ -91,7 +91,7 @@ const applyPermissionMetadata = (
     Reflect.defineMetadata(
       AUTH_PERMISSIONS_METADATA_KEY,
       permissionList,
-      handler
+      handler,
     );
   }
 };
@@ -100,7 +100,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
   createDto: Type<CD>,
   updateDto: Type<UD>,
   responseDto: Type<RD>,
-  options?: CrudControllerFactoryOptions
+  options?: CrudControllerFactoryOptions,
 ): Type<IBaseController<CD, UD, RD>> {
   class BaseController implements IBaseController<CD, UD, RD> {
     constructor(public readonly service: CrudInterface<CD, UD, RD>) {}
@@ -123,12 +123,14 @@ export function CreateNestedCrudController<CD, UD, RD>(
       description:
         'Filters in format filter[field_operator]=value. Operators: eq, ne, cont, notcont, starts, ends, gte, lte, gt, lt, in, nin, isnull. Grouping keys: and, or',
       example: {
-        name_cont: 'Alice',
+        name_cont: 'Bob',
         or: [{ name_eq: 'Bob' }, { name_eq: 'Carol' }],
       },
     })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
+    @ApiQuery({ name: 'orderBy', required: false, type: String })
+    @ApiQuery({ name: 'orderDirection', required: false, enum: ['ASC', 'DESC'] })
     findAll(@Query() query: PaginationDto & FilterDto) {
       this.ensureEndpointEnabled('findAll');
       return this.service.findAll(query);
