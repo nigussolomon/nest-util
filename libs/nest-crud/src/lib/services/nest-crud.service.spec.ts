@@ -63,6 +63,7 @@ describe('NestCrudService', () => {
       take: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn(),
     } as unknown as jest.Mocked<SelectQueryBuilder<MockEntity>>;
 
@@ -225,7 +226,7 @@ describe('NestCrudService', () => {
 
       const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
         string,
-        Record<string, unknown>,
+        Record<string, unknown>
       ];
 
       expect(sql).toContain('AND');
@@ -253,7 +254,7 @@ describe('NestCrudService', () => {
 
       const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
         string,
-        Record<string, unknown>,
+        Record<string, unknown>
       ];
 
       expect(sql).toContain('!=');
@@ -296,7 +297,7 @@ describe('NestCrudService', () => {
 
       const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
         string,
-        Record<string, unknown>,
+        Record<string, unknown>
       ];
 
       expect(sql).toContain('e.name = :filter_0');
@@ -304,6 +305,106 @@ describe('NestCrudService', () => {
       expect(params).toMatchObject({
         filter_0: 'allowed',
       });
+    });
+
+    it('should not call orderBy when orderBy is not specified', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+      });
+
+      expect(queryBuilder.orderBy).not.toHaveBeenCalled();
+    });
+
+    it('should apply orderBy with DESC direction by default', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: 'createdAt',
+      });
+
+      expect(queryBuilder.orderBy).toHaveBeenCalledWith('e.createdAt', 'DESC');
+    });
+
+    it('should apply orderBy with ASC direction when specified', async () => {
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: 'name',
+        orderDirection: 'ASC',
+      });
+
+      expect(queryBuilder.orderBy).toHaveBeenCalledWith('e.name', 'ASC');
+    });
+
+    it('should respect allowedSortFields when specified', async () => {
+      const serviceWithSortFields = new NestCrudService<
+        MockEntity,
+        Partial<MockEntity>,
+        Partial<MockEntity>,
+        MockResponseDto
+      >({
+        repository,
+        allowedFilters: ['name'] as const,
+        allowedSortFields: ['name'] as const,
+        include: [],
+        relations: [],
+        toResponseDto: (entity: MockEntity | MockEntity[]) => {
+          if (Array.isArray(entity)) {
+            return entity.map((e) => ({ id: e.id, name: e.name }));
+          }
+          return { id: entity.id, name: entity.name };
+        },
+      });
+
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await serviceWithSortFields.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: 'name',
+        orderDirection: 'ASC',
+      });
+
+      expect(queryBuilder.orderBy).toHaveBeenCalledWith('e.name', 'ASC');
+    });
+
+    it('should not apply orderBy when field is not in allowedSortFields', async () => {
+      const serviceWithSortFields = new NestCrudService<
+        MockEntity,
+        Partial<MockEntity>,
+        Partial<MockEntity>,
+        MockResponseDto
+      >({
+        repository,
+        allowedFilters: ['name'] as const,
+        allowedSortFields: ['name'] as const,
+        include: [],
+        relations: [],
+        toResponseDto: (entity: MockEntity | MockEntity[]) => {
+          if (Array.isArray(entity)) {
+            return entity.map((e) => ({ id: e.id, name: e.name }));
+          }
+          return { id: entity.id, name: entity.name };
+        },
+      });
+
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await serviceWithSortFields.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: 'id',
+        orderDirection: 'ASC',
+      });
+
+      expect(queryBuilder.orderBy).not.toHaveBeenCalled();
     });
   });
 

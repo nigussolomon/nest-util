@@ -10,6 +10,7 @@ import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   repository: Repository<Entity>;
   allowedFilters?: readonly (keyof Entity)[];
+  allowedSortFields?: readonly (keyof Entity)[];
   include?: readonly string[];
   relations?: {
     property: keyof Entity;
@@ -32,6 +33,7 @@ export class NestCrudService<
 {
   protected readonly repo: Repository<Entity>;
   protected readonly allowedFilters: readonly (keyof Entity)[];
+  protected readonly allowedSortFields: readonly (keyof Entity)[];
   protected readonly include: readonly string[];
   protected readonly relations: {
     property: keyof Entity;
@@ -48,6 +50,7 @@ export class NestCrudService<
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
     this.allowedFilters = options.allowedFilters ?? [];
+    this.allowedSortFields = options.allowedSortFields ?? [];
     this.include = options.include ?? [];
     this.relations = options.relations ?? [];
     this.toResponseDto = options.toResponseDto;
@@ -107,6 +110,16 @@ export class NestCrudService<
     applyFilters(qb, query.filter, this.allowedFilters);
 
     const paginationMeta = applyPagination(qb, query);
+
+    if (query.orderBy) {
+      const orderDirection = query.orderDirection === 'ASC' ? 'ASC' : 'DESC';
+      if (
+        this.allowedSortFields.length === 0 ||
+        this.allowedSortFields.includes(query.orderBy as keyof Entity)
+      ) {
+        qb.orderBy(`e.${query.orderBy}`, orderDirection);
+      }
+    }
 
     const [entities, total] = await qb.getManyAndCount();
 
