@@ -22,7 +22,8 @@ describe('AuthService', () => {
     accessToken = 'hashed-at';
   };
 
-  const mockOptions = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mockOptions: any = {
     userEntity: mockUserEntity,
     identifierField: 'email',
     passkeyField: 'password',
@@ -30,6 +31,8 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
+    mockOptions.otp = undefined;
+
     repository = {
       findOne: jest.fn(),
       create: jest.fn(),
@@ -86,11 +89,17 @@ describe('AuthService', () => {
       repository.findOne.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
       repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
-      repository.save.mockResolvedValue({ id: 1, ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
 
       const result = await service.register(dto);
 
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { email: dto.email } });
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { email: dto.email },
+      });
       expect(bcrypt.hash).toHaveBeenCalledWith(dto.password, 10);
       expect(repository.save).toHaveBeenCalled();
       expect(result.email).toBe(dto.email);
@@ -106,11 +115,19 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('should successfully login and return access/refresh tokens and user without sensitive data', async () => {
-      const credentials = { email: 'test@example.com', password: 'password123' };
-      const user = { id: 1, email: credentials.email, password: 'hashedPassword', refreshToken: 'oldToken' };
+      const credentials = {
+        email: 'test@example.com',
+        password: 'password123',
+      };
+      const user = {
+        id: 1,
+        email: credentials.email,
+        password: 'hashedPassword',
+        refreshToken: 'oldToken',
+      };
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(user);
-      
+
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedRefreshToken');
       jwtService.sign.mockReturnValue('mock-token');
@@ -119,8 +136,12 @@ describe('AuthService', () => {
       const result = await service.login(credentials);
 
       expect(repository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(queryBuilder.addSelect).toHaveBeenCalledWith(`user.${mockOptions.passkeyField}`);
-      expect(queryBuilder.where).toHaveBeenCalledWith({ [mockOptions.identifierField]: credentials.email });
+      expect(queryBuilder.addSelect).toHaveBeenCalledWith(
+        `user.${mockOptions.passkeyField}`
+      );
+      expect(queryBuilder.where).toHaveBeenCalledWith({
+        [mockOptions.identifierField]: credentials.email,
+      });
       expect(queryBuilder.update).toHaveBeenCalled();
       expect(queryBuilder.execute).toHaveBeenCalled();
       expect(result.access_token).toBeDefined();
@@ -132,24 +153,148 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException if user not found', async () => {
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(null);
-      await expect(service.login({ email: 'none@example.com', password: 'any' })).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.login({ email: 'none@example.com', password: 'any' })
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException if password invalid', async () => {
-      const user = { id: 1, email: 'test@example.com', password: 'hashedPassword' };
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hashedPassword',
+      };
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(user);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.login({ email: 'test@example.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.login({ email: 'test@example.com', password: 'wrong' })
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('requestOtp', () => {
+    it('should request OTP and call configured delivery callback for existing user', async () => {
+      const deliverCode = jest.fn().mockResolvedValue(undefined);
+      mockOptions.otp = {
+        enabled: true,
+        deliverCode,
+      };
+
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        otpRequestAttempts: 0,
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
+
+      const result = await service.requestOtp({ email: 'test@example.com' });
+
+      expect(result).toEqual({ success: true });
+      expect(deliverCode).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identifier: 'test@example.com',
+          code: expect.any(String),
+          channel: 'email',
+        })
+      );
+    });
+
+    it('should return success without delivery for unknown user to avoid enumeration', async () => {
+      const deliverCode = jest.fn().mockResolvedValue(undefined);
+      mockOptions.otp = {
+        enabled: true,
+        deliverCode,
+      };
+
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(null);
+
+      const result = await service.requestOtp({ email: 'none@example.com' });
+
+      expect(result).toEqual({
+        success: expect.any(Boolean),
+        message: expect.any(String),
+      });
+      expect(deliverCode).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('loginWithOtp', () => {
+    it('should login with OTP and return tokens', async () => {
+      mockOptions.otp = {
+        enabled: true,
+        deliverCode: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        otpCodeHash: 'hashed-otp',
+        otpCodeExpiresAt: new Date(Date.now() + 60_000),
+        otpRequestAttempts: 0,
+      };
+
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-token');
+      jwtService.sign.mockReturnValue('mock-token');
+
+      const result = await service.loginWithOtp({
+        email: 'test@example.com',
+        otpCode: '123456',
+      });
+
+      expect(result.access_token).toBe('mock-token');
+      expect(result.refresh_token).toBe('mock-token');
+      expect(result.user.email).toBe('test@example.com');
+    });
+
+    it('should reject invalid OTP', async () => {
+      mockOptions.otp = {
+        enabled: true,
+        deliverCode: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        otpCodeHash: 'hashed-otp',
+        otpCodeExpiresAt: new Date(Date.now() + 60_000),
+        otpRequestAttempts: 0,
+      };
+
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.loginWithOtp({
+          email: 'test@example.com',
+          otpCode: '000000',
+        })
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
   describe('refresh', () => {
     it('should successfully refresh tokens', async () => {
       const oldRefreshToken = 'validToken';
-      const user = { id: 1, email: 'test@example.com', refreshToken: 'hashedOldToken', password: 'hash' };
-      
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        refreshToken: 'hashedOldToken',
+        password: 'hash',
+      };
+
       jwtService.verify.mockReturnValue({ sub: 1, nonce: 'old-nonce' });
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(user);
@@ -166,8 +311,12 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException if token invalid', async () => {
-      jwtService.verify.mockImplementation(() => { throw new Error(); });
-      await expect(service.refresh('invalid')).rejects.toThrow(UnauthorizedException);
+      jwtService.verify.mockImplementation(() => {
+        throw new Error();
+      });
+      await expect(service.refresh('invalid')).rejects.toThrow(
+        UnauthorizedException
+      );
     });
   });
 
@@ -192,7 +341,12 @@ describe('AuthService', () => {
 
   describe('validateUser', () => {
     it('should return user without sensitive data if found and token valid', async () => {
-      const user = { id: 1, email: 'test@example.com', password: 'hash', accessToken: 'hashed-at' };
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hash',
+        accessToken: 'hashed-at',
+      };
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(user);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -202,18 +356,26 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException if token invalid', async () => {
-      const user = { id: 1, email: 'test@example.com', accessToken: 'hashed-at' };
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        accessToken: 'hashed-at',
+      };
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(user);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.validateUser({ sub: 1, nonce: 'wrong-nonce' })).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.validateUser({ sub: 1, nonce: 'wrong-nonce' })
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(null);
-      await expect(service.validateUser({ sub: 99, nonce: 'any' })).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.validateUser({ sub: 99, nonce: 'any' })
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should load the configured RBAC relation during validation', async () => {

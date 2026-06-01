@@ -44,6 +44,8 @@ describe('AuthController', () => {
     authService = {
       register: jest.fn(),
       login: jest.fn(),
+      requestOtp: jest.fn(),
+      loginWithOtp: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
     };
@@ -127,6 +129,44 @@ describe('AuthController', () => {
 
     it('should throw ForbiddenException if token is missing', async () => {
       await expect(controller.refresh({ refreshToken: '' })).rejects.toThrow(
+        ForbiddenException
+      );
+    });
+  });
+
+  describe('requestOtp', () => {
+    it('should call authService.requestOtp if not disabled', async () => {
+      const payload = { email: 'test@test.com' };
+      authService.requestOtp.mockResolvedValue({ success: true });
+
+      const result = await controller.requestOtp(payload);
+
+      expect(authService.requestOtp).toHaveBeenCalledWith(payload);
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should throw ForbiddenException if otp/request is disabled', async () => {
+      mockOptions.disabledRoutes = ['otp/request'];
+      await expect(controller.requestOtp({})).rejects.toThrow(
+        ForbiddenException
+      );
+    });
+  });
+
+  describe('loginWithOtp', () => {
+    it('should call authService.loginWithOtp if not disabled', async () => {
+      const payload = { email: 'test@test.com', otpCode: '123456' };
+      authService.loginWithOtp.mockResolvedValue({ access_token: 'token' });
+
+      const result = await controller.loginWithOtp(payload);
+
+      expect(authService.loginWithOtp).toHaveBeenCalledWith(payload);
+      expect(result).toEqual({ access_token: 'token' });
+    });
+
+    it('should throw ForbiddenException if otp/login is disabled', async () => {
+      mockOptions.disabledRoutes = ['otp/login'];
+      await expect(controller.loginWithOtp({})).rejects.toThrow(
         ForbiddenException
       );
     });

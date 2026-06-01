@@ -2,6 +2,43 @@ import { Type } from '@nestjs/common';
 import { AuthRbacOptions } from './rbac-options.interface';
 import { PermissionRegistryConfig } from './permission-registry.interface';
 
+export interface OtpDeliveryPayload {
+  identifier: string;
+  code: string;
+  channel: string;
+  expiresAt: Date;
+  metadata?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+}
+
+export type OtpDeliveryCallback = (
+  payload: OtpDeliveryPayload
+) => Promise<void>;
+
+export interface AuthOtpOptions {
+  enabled?: boolean;
+  codeLength?: number;
+  ttlSeconds?: number;
+  cooldownSeconds?: number;
+  maxAttempts?: number;
+  lockSeconds?: number;
+  channel?: string;
+  codeField?: string;
+  expiresAtField?: string;
+  attemptsField?: string;
+  lastSentAtField?: string;
+  lockUntilField?: string;
+  inputCodeField?: string;
+  requestDto?: Type<unknown>;
+  loginDto?: Type<unknown>;
+  metadata?: Record<string, unknown>;
+  buildDeliveryContext?: (params: {
+    identifier: string;
+    user?: Record<string, unknown>;
+  }) => Record<string, unknown>;
+  deliverCode?: OtpDeliveryCallback;
+}
+
 export interface AuthModuleOptions {
   /**
    * The TypeORM entity for users.
@@ -85,4 +122,6 @@ export interface AuthModuleOptions {
   rbac?: AuthRbacOptions;
 
   permissionRegistry?: PermissionRegistryConfig;
+
+  otp?: AuthOtpOptions;
 }

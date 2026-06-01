@@ -5,6 +5,7 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
@@ -13,10 +14,26 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
+import type { AuthOtpOptions } from '../interfaces/auth-options';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 import { RoleEntity } from '../entities/role.entity';
 import { UserRoleEntity } from '../entities/user-role.entity';
 import { CreateRoleDto } from '../dtos/create-role.dto';
+
+interface ResolvedOtpOptions {
+  codeLength: number;
+  ttlSeconds: number;
+  cooldownSeconds: number;
+  maxAttempts: number;
+  lockSeconds: number;
+  channel: string;
+  codeField: string;
+  expiresAtField: string;
+  attemptsField: string;
+  lastSentAtField: string;
+  lockUntilField: string;
+  inputCodeField: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -48,7 +65,9 @@ export class AuthService {
       throw new ConflictException('User already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = password
+      ? await bcrypt.hash(password, 10)
+      : undefined;
     const newUser = this.userRepository.create({
       ...data,
       [this.options.passkeyField]: hashedPassword,
@@ -72,16 +91,216 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      user[this.options.passkeyField] as string
-    );
+    const isPasswordValid = user[this.options.passkeyField]
+      ? await bcrypt.compare(
+          password,
+          user[this.options.passkeyField] as string
+        )
+      : false;
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     return await this.generateTokens(user);
+  }
+
+  async requestOtp(
+    data: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string }> {
+    const otpOptions = this.getOtpOptions();
+    const otpConfig = this.resolveOtpOptions(otpOptions);
+    const identifier = data[this.options.identifierField];
+
+    if (typeof identifier !== 'string' || identifier.trim().length === 0) {
+      throw new BadRequestException(
+        `${this.options.identifierField} is required`
+      );
+    }
+
+    const normalizedIdentifier = identifier.trim();
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${otpConfig.codeField}`)
+      .addSelect(`user.${otpConfig.expiresAtField}`)
+      .addSelect(`user.${otpConfig.attemptsField}`)
+      .addSelect(`user.${otpConfig.lastSentAtField}`)
+      .addSelect(`user.${otpConfig.lockUntilField}`)
+      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .getOne();
+
+    // Avoid account enumeration by returning the same response for unknown users.
+    if (!user) {
+      return { success: true, message: 'OTP has been sent if the user exists' };
+    }
+
+    const now = new Date();
+    const lockUntil = this.toDate(user[otpConfig.lockUntilField]);
+    if (lockUntil && lockUntil > now) {
+      return {
+        success: false,
+        message:
+          'OTP requests are temporarily locked due to multiple failed attempts',
+      };
+    }
+
+    const lastSentAt = this.toDate(user[otpConfig.lastSentAtField]);
+    if (
+      lastSentAt &&
+      now.getTime() - lastSentAt.getTime() < otpConfig.cooldownSeconds * 1000
+    ) {
+      return { success: false, message: 'OTP request is on cooldown' };
+    }
+
+    const code = this.generateOtpCode(otpConfig.codeLength);
+    const hashedCode = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(now.getTime() + otpConfig.ttlSeconds * 1000);
+
+    await this.updateOtpState(user.id as string | number, {
+      [otpConfig.codeField]: hashedCode,
+      [otpConfig.expiresAtField]: expiresAt,
+      [otpConfig.attemptsField]: 0,
+      [otpConfig.lastSentAtField]: now,
+      [otpConfig.lockUntilField]: null,
+    });
+
+    try {
+      await otpOptions.deliverCode!({
+        identifier: normalizedIdentifier,
+        code,
+        channel: otpOptions.channel || otpConfig.channel,
+        expiresAt,
+        metadata: otpOptions.metadata,
+        context: otpOptions.buildDeliveryContext?.({
+          identifier: normalizedIdentifier,
+          user,
+        }),
+      });
+    } catch {
+      await this.clearOtpState(user.id as string | number, otpConfig);
+      throw new InternalServerErrorException('Failed to deliver OTP');
+    }
+
+    return { success: true };
+  }
+
+  async loginWithOtp(
+    credentials: Record<string, unknown>
+  ): Promise<AuthTokens> {
+    const otpConfig = this.resolveOtpOptions(this.getOtpOptions());
+
+    const identifier = credentials[this.options.identifierField];
+    const otpCode = credentials[otpConfig.inputCodeField];
+
+    if (typeof identifier !== 'string' || !identifier.trim()) {
+      throw new BadRequestException({
+        code: 'IDENTIFIER_REQUIRED',
+        message: `${this.options.identifierField} is required`,
+      });
+    }
+
+    if (typeof otpCode !== 'string' || !otpCode.trim()) {
+      throw new BadRequestException({
+        code: 'OTP_REQUIRED',
+        message: `${otpConfig.inputCodeField} is required`,
+      });
+    }
+
+    const normalizedIdentifier = identifier.trim();
+    const normalizedOtp = otpCode.trim();
+
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${otpConfig.codeField}`)
+      .addSelect(`user.${otpConfig.expiresAtField}`)
+      .addSelect(`user.${otpConfig.attemptsField}`)
+      .addSelect(`user.${otpConfig.lockUntilField}`)
+      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .getOne();
+
+    if (!user) {
+      throw new UnauthorizedException({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+
+    const now = new Date();
+
+    const lockUntil = this.toDate(user[otpConfig.lockUntilField]);
+
+    if (lockUntil && lockUntil > now) {
+      throw new BadRequestException({
+        code: 'OTP_LOCKED',
+        message: 'Too many OTP attempts',
+        lockUntil,
+      });
+    }
+
+    const storedOtpHash = user[otpConfig.codeField] as string | null;
+    const expiresAt = this.toDate(user[otpConfig.expiresAtField]);
+
+    if (!storedOtpHash) {
+      throw new UnauthorizedException({
+        code: 'OTP_NOT_REQUESTED',
+        message: 'No OTP has been generated',
+      });
+    }
+
+    if (!expiresAt) {
+      throw new UnauthorizedException({
+        code: 'OTP_INVALID_STATE',
+        message: 'OTP expiration is missing',
+      });
+    }
+
+    if (expiresAt <= now) {
+      await this.clearOtpState(user.id as string | number, otpConfig);
+
+      throw new UnauthorizedException({
+        code: 'OTP_EXPIRED',
+        message: 'OTP has expired',
+      });
+    }
+
+    const isOtpValid = await bcrypt.compare(normalizedOtp, storedOtpHash);
+
+    if (!isOtpValid) {
+      const currentAttempts = this.toNumber(user[otpConfig.attemptsField]);
+      const nextAttempts = currentAttempts + 1;
+
+      const updatePayload: Record<string, unknown> = {
+        [otpConfig.attemptsField]: nextAttempts,
+      };
+
+      if (nextAttempts >= otpConfig.maxAttempts) {
+        const nextLockUntil = new Date(
+          now.getTime() + otpConfig.lockSeconds * 1000
+        );
+
+        updatePayload[otpConfig.lockUntilField] = nextLockUntil;
+
+        await this.updateOtpState(user.id as string | number, updatePayload);
+
+        throw new BadRequestException({
+          code: 'OTP_MAX_ATTEMPTS_REACHED',
+          message: 'Maximum OTP attempts reached',
+          lockUntil: nextLockUntil,
+        });
+      }
+
+      await this.updateOtpState(user.id as string | number, updatePayload);
+
+      throw new UnauthorizedException({
+        code: 'OTP_INVALID',
+        message: 'Invalid OTP code',
+        attemptsRemaining: otpConfig.maxAttempts - nextAttempts,
+      });
+    }
+
+    await this.clearOtpState(user.id as string | number, otpConfig);
+
+    return this.generateTokens(user);
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
@@ -319,6 +538,102 @@ export class AuthService {
     };
   }
 
+  private getOtpOptions(): AuthOtpOptions {
+    if (!this.options.otp?.enabled) {
+      throw new BadRequestException('OTP login is not enabled');
+    }
+
+    if (!this.options.otp.deliverCode) {
+      throw new BadRequestException('OTP delivery callback is not configured');
+    }
+
+    return this.options.otp;
+  }
+
+  private resolveOtpOptions(otp: AuthOtpOptions): ResolvedOtpOptions {
+    const codeLength = otp.codeLength ?? 6;
+    if (codeLength < 4 || codeLength > 10) {
+      throw new BadRequestException('OTP code length must be between 4 and 10');
+    }
+
+    return {
+      codeLength,
+      ttlSeconds: otp.ttlSeconds ?? 300,
+      cooldownSeconds: otp.cooldownSeconds ?? 60,
+      maxAttempts: otp.maxAttempts ?? 5,
+      lockSeconds: otp.lockSeconds ?? 300,
+      channel: otp.channel ?? 'email',
+      codeField: otp.codeField ?? 'otpCodeHash',
+      expiresAtField: otp.expiresAtField ?? 'otpCodeExpiresAt',
+      attemptsField: otp.attemptsField ?? 'otpRequestAttempts',
+      lastSentAtField: otp.lastSentAtField ?? 'otpLastSentAt',
+      lockUntilField: otp.lockUntilField ?? 'otpLockedUntil',
+      inputCodeField: otp.inputCodeField ?? 'otpCode',
+    };
+  }
+
+  private generateOtpCode(length: number): string {
+    const max = 10 ** length;
+    return crypto.randomInt(0, max).toString().padStart(length, '0');
+  }
+
+  private toDate(value: unknown): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    const dateValue = value instanceof Date ? value : new Date(value as string);
+    if (Number.isNaN(dateValue.getTime())) {
+      return null;
+    }
+
+    return dateValue;
+  }
+
+  private toNumber(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return 0;
+  }
+
+  private async updateOtpState(
+    userId: string | number,
+    state: Record<string, unknown>
+  ): Promise<void> {
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set(state)
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new UnauthorizedException('Failed to update OTP session');
+    }
+  }
+
+  private async clearOtpState(
+    userId: string | number,
+    otpConfig: ResolvedOtpOptions
+  ): Promise<void> {
+    await this.updateOtpState(userId, {
+      [otpConfig.codeField]: null,
+      [otpConfig.expiresAtField]: null,
+      [otpConfig.attemptsField]: 0,
+      [otpConfig.lastSentAtField]: null,
+      [otpConfig.lockUntilField]: null,
+    });
+  }
+
   private removeSensitiveData(user: Record<string, unknown>): AuthUser {
     const { ...userData } = user;
     const passkeyField = this.options.passkeyField;
@@ -328,6 +643,15 @@ export class AuthService {
     delete userData[passkeyField];
     delete userData[refreshTokenField];
     delete userData[accessTokenField];
+
+    if (this.options.otp?.enabled) {
+      const otpConfig = this.resolveOtpOptions(this.options.otp);
+      delete userData[otpConfig.codeField];
+      delete userData[otpConfig.expiresAtField];
+      delete userData[otpConfig.attemptsField];
+      delete userData[otpConfig.lastSentAtField];
+      delete userData[otpConfig.lockUntilField];
+    }
 
     return userData as AuthUser;
   }
