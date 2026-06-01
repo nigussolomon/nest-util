@@ -27,6 +27,7 @@ import {
   NestUtilNestAuditModule,
   AuditInterceptor,
 } from '@nest-util/nest-audit';
+import { FileModule } from './file/file.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import {
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
     NestUtilNestAuditModule,
+    FileModule,
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',

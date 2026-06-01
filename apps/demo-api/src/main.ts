@@ -3,9 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { TypeOrmExceptionFilter } from '@nest-util/nest-crud';
+import { json } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(json());
   const globalPrefix = 'api';
   app.useGlobalPipes(
     new ValidationPipe({
