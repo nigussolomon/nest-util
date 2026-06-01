@@ -354,6 +354,53 @@ export class AuthService {
     return true;
   }
 
+  async changePassword(
+    userId: number | string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    const passkeyField = this.options.passkeyField;
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${passkeyField}`)
+      .where({ id: userId })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const storedPassword = user[passkeyField] as string | undefined;
+
+    if (storedPassword) {
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPassword,
+        storedPassword
+      );
+
+      if (!isCurrentPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+    } else {
+      throw new BadRequestException('User does not have a password set');
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set({ [passkeyField]: hashedNewPassword })
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new InternalServerErrorException('Failed to change password');
+    }
+
+    return { success: true, message: 'Password changed successfully' };
+  }
+
   async createRole(data: CreateRoleDto): Promise<RoleEntity> {
     const roleName = typeof data.name === 'string' ? data.name.trim() : '';
 

@@ -148,6 +148,37 @@ export function CreateAuthController(
     }
 
     @UseGuards(JwtAuthGuard)
+    @Post('update-password')
+    @ApiBearerAuth()
+    @ApiBody({
+      schema: {
+        type: 'object',
+        properties: {
+          currentPassword: { type: 'string' },
+          newPassword: { type: 'string' },
+        },
+        required: ['currentPassword', 'newPassword'],
+      },
+    })
+    @ApiResponse({ status: 200, description: 'Password updated successfully' })
+    @ApiResponse({ status: 400, description: 'Invalid password payload' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiOperation({ summary: 'Update current user password' })
+    @ApiResponse({ status: 200, description: 'Password updated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async updatePassword(
+      @CurrentUser() user: AuthUser,
+      @Body() data: { currentPassword: string; newPassword: string }
+    ): Promise<AuthUser> {
+      await this.authService.changePassword(
+        user.id,
+        data.currentPassword,
+        data.newPassword
+      );
+      return user;
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Get('me/permissions')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get current user effective permissions' })
