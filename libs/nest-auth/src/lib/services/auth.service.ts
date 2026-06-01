@@ -13,7 +13,10 @@ import type { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AUTH_OPTIONS } from '../constants';
-import type { AuthModuleOptions } from '../interfaces/auth-options';
+import type {
+  AuthModuleOptions,
+  AuthPasswordResetOptions,
+} from '../interfaces/auth-options';
 import type { AuthOtpOptions } from '../interfaces/auth-options';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 import { RoleEntity } from '../entities/role.entity';
@@ -33,6 +36,13 @@ interface ResolvedOtpOptions {
   lastSentAtField: string;
   lockUntilField: string;
   inputCodeField: string;
+}
+
+interface ResolvedPasswordResetOptions {
+  tokenLength: number;
+  tokenTtlSeconds: number;
+  tokenField: string;
+  expiresAtField: string;
 }
 
 @Injectable()
@@ -401,6 +411,171 @@ export class AuthService {
     return { success: true, message: 'Password changed successfully' };
   }
 
+  async requestPasswordReset(
+    data: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string }> {
+    const resetOptions = this.getPasswordResetOptions();
+    const resetConfig = this.resolvePasswordResetOptions(resetOptions);
+
+    const identifier = data[this.options.identifierField];
+
+    if (typeof identifier !== 'string' || !identifier.trim()) {
+      throw new BadRequestException(
+        `${this.options.identifierField} is required`
+      );
+    }
+
+    const normalizedIdentifier = identifier.trim();
+
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${resetConfig.tokenField}`)
+      .addSelect(`user.${resetConfig.expiresAtField}`)
+      .where({
+        [this.options.identifierField]: normalizedIdentifier,
+      })
+      .getOne();
+
+    // Prevent account enumeration
+    if (!user) {
+      return {
+        success: true,
+        message:
+          'Password reset instructions have been sent if the account exists',
+      };
+    }
+
+    const token = crypto
+      .randomBytes(Math.ceil(resetConfig.tokenLength / 2))
+      .toString('hex')
+      .slice(0, resetConfig.tokenLength);
+
+    const hashedToken = await bcrypt.hash(token, 10);
+
+    const expiresAt = new Date(Date.now() + resetConfig.tokenTtlSeconds * 1000);
+
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set({
+        [resetConfig.tokenField]: hashedToken,
+        [resetConfig.expiresAtField]: expiresAt,
+      })
+      .where('id = :id', {
+        id: user.id as string | number,
+      })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new InternalServerErrorException('Failed to create reset token');
+    }
+
+    try {
+      await resetOptions.deliverToken!({
+        identifier: normalizedIdentifier,
+        token,
+        expiresAt,
+        metadata: {},
+        context: resetOptions.buildResetContext?.({
+          identifier: normalizedIdentifier,
+          user,
+        }),
+      });
+    } catch {
+      await this.clearPasswordResetState(
+        user.id as string | number,
+        resetConfig
+      );
+
+      throw new InternalServerErrorException('Failed to deliver reset token');
+    }
+
+    return { success: true };
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    const resetConfig = this.resolvePasswordResetOptions(
+      this.getPasswordResetOptions()
+    );
+
+    if (!token?.trim()) {
+      throw new BadRequestException('Reset token is required');
+    }
+
+    if (!newPassword?.trim()) {
+      throw new BadRequestException('New password is required');
+    }
+
+    const users = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${resetConfig.tokenField}`)
+      .addSelect(`user.${resetConfig.expiresAtField}`)
+      .getMany();
+
+    const now = new Date();
+
+    let matchedUser: Record<string, unknown> | null = null;
+
+    for (const user of users) {
+      const storedHash = user[resetConfig.tokenField] as string | null;
+
+      if (!storedHash) {
+        continue;
+      }
+
+      const isMatch = await bcrypt.compare(token, storedHash);
+
+      if (isMatch) {
+        matchedUser = user;
+        break;
+      }
+    }
+
+    if (!matchedUser) {
+      throw new BadRequestException('Invalid reset token');
+    }
+
+    const expiresAt = this.toDate(matchedUser[resetConfig.expiresAtField]);
+
+    if (!expiresAt || expiresAt <= now) {
+      await this.clearPasswordResetState(
+        matchedUser.id as string | number,
+        resetConfig
+      );
+
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set({
+        [this.options.passkeyField]: hashedPassword,
+        [resetConfig.tokenField]: null,
+        [resetConfig.expiresAtField]: null,
+        [this.options.refreshTokenField ?? 'refreshToken']: null,
+        [this.options.accessTokenField ?? 'accessToken']: null,
+      })
+      .where('id = :id', {
+        id: matchedUser.id as string | number,
+      })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new InternalServerErrorException('Failed to reset password');
+    }
+
+    return {
+      success: true,
+      message: 'Password reset successfully',
+    };
+  }
+
   async createRole(data: CreateRoleDto): Promise<RoleEntity> {
     const roleName = typeof data.name === 'string' ? data.name.trim() : '';
 
@@ -617,6 +792,50 @@ export class AuthService {
       lockUntilField: otp.lockUntilField ?? 'otpLockedUntil',
       inputCodeField: otp.inputCodeField ?? 'otpCode',
     };
+  }
+
+  private getPasswordResetOptions(): AuthPasswordResetOptions {
+    if (!this.options.passwordReset?.enabled) {
+      throw new BadRequestException('Password reset is not enabled');
+    }
+
+    if (!this.options.passwordReset.deliverToken) {
+      throw new BadRequestException(
+        'Password reset delivery callback is not configured'
+      );
+    }
+
+    return this.options.passwordReset;
+  }
+
+  private resolvePasswordResetOptions(
+    config: AuthPasswordResetOptions
+  ): ResolvedPasswordResetOptions {
+    return {
+      tokenLength: config.tokenLength ?? 64,
+      tokenTtlSeconds: config.tokenTtlSeconds ?? 3600,
+      tokenField: config.tokenField ?? 'passwordResetTokenHash',
+      expiresAtField: config.expiresAtField ?? 'passwordResetTokenExpiresAt',
+    };
+  }
+
+  private async clearPasswordResetState(
+    userId: string | number,
+    config: ResolvedPasswordResetOptions
+  ): Promise<void> {
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set({
+        [config.tokenField]: null,
+        [config.expiresAtField]: null,
+      })
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new InternalServerErrorException('Failed to clear reset state');
+    }
   }
 
   private generateOtpCode(length: number): string {

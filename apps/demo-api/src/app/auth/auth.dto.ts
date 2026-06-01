@@ -36,3 +36,16 @@ export class OtpLoginDto {
   @ApiProperty({ example: '123456' })
   otpCode!: string;
 }
+
+export class PasswordResetRequestDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+}
+
+export class PasswordResetDto {
+  @ApiProperty({ example: 'reset-token' })
+  token!: string;
+
+  @ApiProperty({ example: 'new-password' })
+  newPassword!: string;
+}

@@ -19,6 +19,8 @@ import {
   RefreshDto,
   OtpRequestDto,
   OtpLoginDto,
+  PasswordResetDto,
+  PasswordResetRequestDto,
 } from './auth/auth.dto';
 import { permissionRegistry } from './auth/permission-registry';
 import {
@@ -72,6 +74,25 @@ import {
           // Demo transport hook. Production apps should send via SMTP/SMS provider.
           Logger.log(
             `[demo-api OTP] channel=${channel} identifier=${identifier} code=${code}`,
+            'DemoAuthModule'
+          );
+        },
+      },
+      passwordReset: {
+        enabled: true,
+
+        requestDto: PasswordResetRequestDto,
+        resetDto: PasswordResetDto,
+
+        tokenLength: 64,
+        tokenTtlSeconds: 3600,
+
+        tokenField: 'passwordResetTokenHash',
+        expiresAtField: 'passwordResetTokenExpiresAt',
+
+        deliverToken: async ({ identifier, token, expiresAt }) => {
+          Logger.log(
+            `[demo-api PASSWORD RESET] identifier=${identifier} token=${token} expiresAt=${expiresAt.toISOString()}`,
             'DemoAuthModule'
           );
         },

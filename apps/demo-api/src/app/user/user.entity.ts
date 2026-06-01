@@ -51,6 +51,16 @@ export class User {
   })
   userRoles!: UserRole[];
 
+  @Column({ select: false, nullable: true })
+  passwordResetTokenHash!: string;
+
+  @Column({
+    type: 'timestamptz',
+    select: false,
+    nullable: true,
+  })
+  passwordResetTokenExpiresAt!: Date;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

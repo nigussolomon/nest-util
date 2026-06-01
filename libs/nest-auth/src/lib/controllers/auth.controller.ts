@@ -62,6 +62,18 @@ export function CreateAuthController(
       [key: string]: unknown;
     };
 
+  const passwordResetRequestDto =
+    options.passwordReset?.requestDto ||
+    class PasswordResetRequestDto {
+      [key: string]: unknown;
+    };
+
+  const passwordResetDto =
+    options.passwordReset?.resetDto ||
+    class PasswordResetDto {
+      [key: string]: unknown;
+    };
+
   @ApiTags('Authentication')
   @Controller('auth')
   class AuthController {
@@ -176,6 +188,52 @@ export function CreateAuthController(
         data.newPassword
       );
       return user;
+    }
+
+    @Post('password-reset/request')
+    @ApiOperation({ summary: 'Request password reset token' })
+    @ApiBody({ type: passwordResetRequestDto })
+    @ApiResponse({
+      status: 200,
+      description: 'Password reset request accepted',
+    })
+    @ApiResponse({
+      status: 403,
+      description: 'Password reset request route is disabled',
+    })
+    async requestPasswordReset(
+      @Body() data: Record<string, unknown>
+    ): Promise<{ success: boolean; message?: string }> {
+      this.checkIfRouteDisabled('password-reset/request');
+
+      return await this.authService.requestPasswordReset(data);
+    }
+
+    @Post('password-reset/reset')
+    @ApiOperation({ summary: 'Reset password using reset token' })
+    @ApiBody({ type: passwordResetDto })
+    @ApiResponse({
+      status: 200,
+      description: 'Password successfully reset',
+    })
+    @ApiResponse({
+      status: 400,
+      description: 'Invalid or expired reset token',
+    })
+    @ApiResponse({
+      status: 403,
+      description: 'Password reset route is disabled',
+    })
+    async resetPassword(
+      @Body()
+      data: Record<string, unknown>
+    ): Promise<{ success: boolean; message: string }> {
+      this.checkIfRouteDisabled('password-reset/reset');
+
+      return await this.authService.resetPassword(
+        data.token as string,
+        data.newPassword as string
+      );
     }
 
     @UseGuards(JwtAuthGuard)

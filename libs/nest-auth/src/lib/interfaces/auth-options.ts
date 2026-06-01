@@ -39,6 +39,27 @@ export interface AuthOtpOptions {
   deliverCode?: OtpDeliveryCallback;
 }
 
+export interface AuthPasswordResetOptions {
+  enabled?: boolean;
+  tokenLength?: number;
+  tokenTtlSeconds?: number;
+  tokenField?: string;
+  expiresAtField?: string;
+  requestDto?: Type<unknown>;
+  resetDto?: Type<unknown>;
+  buildResetContext?: (params: {
+    identifier: string;
+    user?: Record<string, unknown>;
+  }) => Record<string, unknown>;
+  deliverToken?: (payload: {
+    identifier: string;
+    token: string;
+    expiresAt: Date;
+    metadata?: Record<string, unknown>;
+    context?: Record<string, unknown>;
+  }) => Promise<void>;
+}
+
 export interface AuthModuleOptions {
   /**
    * The TypeORM entity for users.
@@ -124,4 +145,6 @@ export interface AuthModuleOptions {
   permissionRegistry?: PermissionRegistryConfig;
 
   otp?: AuthOtpOptions;
+
+  passwordReset?: AuthPasswordResetOptions;
 }
