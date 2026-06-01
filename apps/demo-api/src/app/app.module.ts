@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Logger } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -13,7 +13,13 @@ import { Comment } from './comment/comment.entity';
 import { Post } from './post/post.entity';
 import { AuthModule } from '@nest-util/nest-auth';
 import { User } from './user/user.entity';
-import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
+import {
+  LoginDto,
+  RegisterDto,
+  RefreshDto,
+  OtpRequestDto,
+  OtpLoginDto,
+} from './auth/auth.dto';
 import { permissionRegistry } from './auth/permission-registry';
 import {
   NestUtilNestAuditModule,
@@ -48,6 +54,28 @@ import {
       loginDto: LoginDto,
       registerDto: RegisterDto,
       refreshDto: RefreshDto,
+      otp: {
+        enabled: true,
+        requestDto: OtpRequestDto,
+        loginDto: OtpLoginDto,
+        ttlSeconds: 300,
+        cooldownSeconds: 60,
+        maxAttempts: 5,
+        lockSeconds: 300,
+        channel: 'sms',
+        codeField: 'otpCodeHash',
+        expiresAtField: 'otpCodeExpiresAt',
+        attemptsField: 'otpRequestAttempts',
+        lastSentAtField: 'otpLastSentAt',
+        lockUntilField: 'otpLockedUntil',
+        deliverCode: async ({ identifier, code, channel }) => {
+          // Demo transport hook. Production apps should send via SMTP/SMS provider.
+          Logger.log(
+            `[demo-api OTP] channel=${channel} identifier=${identifier} code=${code}`,
+            'DemoAuthModule'
+          );
+        },
+      },
       relations: ['userRoles', 'userRoles.role'],
       rbac: {
         userRolesRelation: 'userRoles',

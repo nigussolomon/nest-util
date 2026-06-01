@@ -23,3 +23,16 @@ export class RefreshDto {
   @ApiProperty()
   refreshToken!: string;
 }
+
+export class OtpRequestDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+}
+
+export class OtpLoginDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: '123456' })
+  otpCode!: string;
+}

@@ -51,6 +51,16 @@ export function CreateAuthController(
     class RefreshDto {
       [key: string]: unknown;
     };
+  const otpRequestDto =
+    options.otp?.requestDto ||
+    class OtpRequestDto {
+      [key: string]: unknown;
+    };
+  const otpLoginDto =
+    options.otp?.loginDto ||
+    class OtpLoginDto {
+      [key: string]: unknown;
+    };
 
   @ApiTags('Authentication')
   @Controller('auth')
@@ -80,6 +90,29 @@ export function CreateAuthController(
     ): Promise<AuthTokens> {
       this.checkIfRouteDisabled('login');
       return await this.authService.login(credentials);
+    }
+
+    @Post('otp/request')
+    @ApiOperation({ summary: 'Request one-time code for OTP login' })
+    @ApiBody({ type: otpRequestDto })
+    @ApiResponse({ status: 200, description: 'OTP request accepted' })
+    @ApiResponse({ status: 403, description: 'OTP request route is disabled' })
+    async requestOtp(@Body() data: Record<string, unknown>) {
+      this.checkIfRouteDisabled('otp/request');
+      return await this.authService.requestOtp(data);
+    }
+
+    @Post('otp/login')
+    @ApiOperation({ summary: 'Login using one-time code' })
+    @ApiBody({ type: otpLoginDto })
+    @ApiResponse({ status: 200, description: 'User successfully logged in' })
+    @ApiResponse({ status: 401, description: 'Invalid credentials' })
+    @ApiResponse({ status: 403, description: 'OTP login route is disabled' })
+    async loginWithOtp(
+      @Body() credentials: Record<string, unknown>
+    ): Promise<AuthTokens> {
+      this.checkIfRouteDisabled('otp/login');
+      return await this.authService.loginWithOtp(credentials);
     }
 
     @Post('refresh')

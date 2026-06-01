@@ -28,6 +28,21 @@ export class User {
   @Column({ select: false, nullable: true })
   accessToken!: string;
 
+  @Column({ select: false, nullable: true })
+  otpCodeHash!: string;
+
+  @Column({ type: 'timestamptz', select: false, nullable: true })
+  otpCodeExpiresAt!: Date;
+
+  @Column({ type: 'int', select: false, default: 0 })
+  otpRequestAttempts!: number;
+
+  @Column({ type: 'timestamptz', select: false, nullable: true })
+  otpLastSentAt!: Date;
+
+  @Column({ type: 'timestamptz', select: false, nullable: true })
+  otpLockedUntil!: Date;
+
   @Column({ default: true })
   isActive!: boolean;
 
