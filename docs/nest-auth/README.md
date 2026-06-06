@@ -20,6 +20,8 @@ Inside this monorepo/demo app, the workspace package is already available.
    - password field (for example `password`)
    - refresh token hash field (default `refreshToken`)
    - access token hash field (default `accessToken`)
+   - *(Optional, for OTP)* `otpCodeHash`, `otpCodeExpiresAt`, `otpRequestAttempts`, `otpLastSentAt`, `otpLockedUntil`
+   - *(Optional, for Password Reset)* `passwordResetTokenHash`, `passwordResetTokenExpiresAt`
 3. Add DTOs for login/register/refresh payloads.
 
 ## 3) Register `AuthModule`
@@ -100,6 +102,11 @@ export class ProfileController {
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `GET /auth/me`
+- `POST /auth/update-password`
+- `POST /auth/password-reset/request`
+- `POST /auth/password-reset/reset`
+- `POST /auth/otp/request`
+- `POST /auth/otp/login`
 - `GET /auth/me/permissions`
 - `POST /auth/logout`
 - Admin-protected role/permission management endpoints under `/auth/roles`, `/auth/users/...`
@@ -123,9 +130,74 @@ export class RefreshDto {
 }
 ```
 
-## 7) Help Notes
+## 6) Update Password
+
+Users can update their own password by providing their current password and a new password.
+
+```ts
+// POST /auth/update-password
+// Requires: JwtAuthGuard
+{
+  "currentPassword": "old_password",
+  "newPassword": "new_password"
+}
+```
+
+## 7) Password Reset (Token-based)
+
+To enable password reset, configure the `passwordReset` option in `AuthModule.forRoot`. You must provide a `deliverToken` callback to send the reset link/token to the user.
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  passwordReset: {
+    enabled: true,
+    tokenLength: 64, // Length of the generated token
+    tokenTtlSeconds: 3600, // Token validity in seconds (1 hour)
+    tokenField: 'passwordResetTokenHash', // DB field to store hashed token
+    expiresAtField: 'passwordResetTokenExpiresAt', // DB field to store expiration
+    deliverToken: async ({ identifier, token, expiresAt }) => {
+      // TODO: Send email/SMS with the reset token or link
+      console.log(`Send reset token ${token} to ${identifier}`);
+    },
+  },
+})
+```
+
+**Endpoints:**
+- `POST /auth/password-reset/request`: Accepts `{ email: "user@example.com" }`. Returns success even if the user doesn't exist to prevent account enumeration.
+- `POST /auth/password-reset/reset`: Accepts `{ token: "reset_token", newPassword: "new_password" }`. Invalidates all existing sessions upon success.
+
+## 8) OTP Login
+
+To enable One-Time Password (OTP) login, configure the `otp` option in `AuthModule.forRoot`. You must provide a `deliverCode` callback.
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  otp: {
+    enabled: true,
+    codeLength: 6,
+    ttlSeconds: 300, // Code validity in seconds (5 minutes)
+    cooldownSeconds: 60, // Minimum time between requests
+    maxAttempts: 5, // Max failed attempts before lockout
+    lockSeconds: 300, // Lockout duration in seconds
+    channel: 'email',
+    deliverCode: async ({ identifier, code, expiresAt }) => {
+      // TODO: Send email/SMS with the OTP code
+      console.log(`Send OTP code ${code} to ${identifier}`);
+    },
+  },
+})
+```
+
+**Endpoints:**
+- `POST /auth/otp/request`: Accepts `{ email: "user@example.com" }`. Triggers the `deliverCode` callback.
+- `POST /auth/otp/login`: Accepts `{ email: "user@example.com", otpCode: "123456" }`. Validates the code and returns auth tokens.
+
+## 9) Help Notes
 
 - `refresh` currently expects `refreshToken` in request body.
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.
 - If you enable RBAC, ensure `relations` include role relations needed during JWT validation.
-- Use `disabledRoutes` to hard-disable selected auth endpoints (for example `['register']`).
+- Use `disabledRoutes` to hard-disable selected auth endpoints (for example `['register', 'otp/request']`).
