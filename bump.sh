@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   echo "Usage: ./bump.sh <pkg> [bump-type]"
   echo
-  echo "  pkg:        auth | crud | audit | file | ncnu"
+  echo "  pkg:        auth | crud | audit | file | ncnu | full (all packages)"
   echo "  bump-type:  major | minor | patch (default: patch)"
   exit 1
 }

@@ -15,6 +15,8 @@ jobs:
   nest-audit:
     name: Build & Verify nest-audit
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,13 +40,18 @@ jobs:
       - name: Build @nest-util/nest-audit
         run: pnpm nx build @nest-util/nest-audit
 
+      - id: extract-version
+        name: Extract package version
+        run: echo "version=$(jq -r .version libs/nest-audit/package.json)" >> $GITHUB_OUTPUT
+
       - name: Create Tarball
         run: |
           cp libs/nest-audit/package.json libs/nest-audit/dist/package.json
           cd libs/nest-audit/dist
-          # Fix paths in package.json to be relative to the current folder (dist)
           jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -57,6 +64,8 @@ jobs:
     name: Build & Verify nest-crud
     needs: nest-audit
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,7 +89,7 @@ jobs:
       - name: Build @nest-util/nest-crud
         run: pnpm nx build @nest-util/nest-crud
 
-      - name: Download nest-audit package
+      - name: Download nest-audit artifact
         uses: actions/download-artifact@v4
         with:
           name: nest-audit-tgz
@@ -89,13 +98,21 @@ jobs:
       - name: Validate nest-audit artifact exists
         run: ls -1 ./artifacts/nest-util-nest-audit-*.tgz
 
+      - id: extract-version
+        name: Extract package version
+        run: echo "version=$(jq -r .version libs/nest-crud/package.json)" >> $GITHUB_OUTPUT
+
       - name: Create Tarball
         run: |
+          AUDIT_VER="${{ needs.nest-audit.outputs.version }}"
+          AUDIT_URL="https://github.com/${{ github.repository }}/releases/download/nest-audit@${AUDIT_VER}/nest-util-nest-audit-${AUDIT_VER}.tgz"
+          echo "nest-audit peerDependency URL: ${AUDIT_URL}"
           cp libs/nest-crud/package.json libs/nest-crud/dist/package.json
           cd libs/nest-crud/dist
-          # Fix paths in package.json to be relative to the current folder (dist)
-          jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | .peerDependencies["@nest-util/nest-audit"] = "https://github.com/nigussolomon/nest-util/releases/download/latest/ncnu-0.0.1.tgz" | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
+          jq --arg url "${AUDIT_URL}" '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | .peerDependencies["@nest-util/nest-audit"] = $url | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -107,6 +124,8 @@ jobs:
   ncnu:
     name: Build & Verify ncnu
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,15 +146,20 @@ jobs:
       - name: Build ncnu
         run: pnpm nx build ncnu
 
+      - id: extract-version
+        name: Extract package version
+        run: echo "version=$(jq -r .version libs/ncnu/package.json)" >> $GITHUB_OUTPUT
+
       - name: Create Tarball
         run: |
           mkdir -p dist/libs/ncnu/bin
           cp libs/ncnu/package.json dist/libs/ncnu/package.json
           cp libs/ncnu/bin/ncnu.js dist/libs/ncnu/bin/ncnu.js
           cd dist/libs/ncnu
-          # Fix entry points and remove devDependencies
           jq '.main |= sub("\\.ts$"; ".js") | del(.devDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -147,6 +171,8 @@ jobs:
   nest-auth:
     name: Build & Verify nest-auth
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,13 +196,18 @@ jobs:
       - name: Build @nest-util/nest-auth
         run: pnpm nx build @nest-util/nest-auth
 
+      - id: extract-version
+        name: Extract package version
+        run: echo "version=$(jq -r .version libs/nest-auth/package.json)" >> $GITHUB_OUTPUT
+
       - name: Create Tarball
         run: |
           cp libs/nest-auth/package.json libs/nest-auth/dist/package.json
           cd libs/nest-auth/dist
-          # Fix paths in package.json to be relative to the current folder (dist)
           jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -188,6 +219,8 @@ jobs:
   nest-file:
     name: Build & Verify nest-file
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -211,13 +244,18 @@ jobs:
       - name: Build @nest-util/nest-file
         run: pnpm nx build @nest-util/nest-file
 
+      - id: extract-version
+        name: Extract package version
+        run: echo "version=$(jq -r .version libs/nest-file/package.json)" >> $GITHUB_OUTPUT
+
       - name: Create Tarball
         run: |
           cp libs/nest-file/package.json libs/nest-file/dist/package.json
           cd libs/nest-file/dist
-          # Fix paths in package.json to be relative to the current folder (dist)
           jq '(.main, .module, .types, .exports["."].types, .exports["."].import, .exports["."].default) |= sub("^\\./dist/"; "./") | del(.files) | del(.exports["."]["@nest-util/source"])' package.json > package.json.tmp && mv package.json.tmp package.json
           pnpm pack --pack-destination ../../../
+        env:
+          VERSION: ${{ steps.extract-version.outputs.version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -227,7 +265,7 @@ jobs:
           retention-days: 7
 
   release:
-    name: Publish release assets
+    name: Publish versioned releases
     runs-on: ubuntu-latest
     needs:
       - nest-audit
@@ -236,37 +274,59 @@ jobs:
       - nest-auth
       - nest-file
     steps:
-      - name: Download nest-audit artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: nest-audit-tgz
+          pattern: '*-tgz'
           path: ./release-artifacts
+          merge-multiple: true
 
-      - name: Download nest-crud artifact
-        uses: actions/download-artifact@v4
+      - name: Publish nest-audit release
+        uses: softprops/action-gh-release@v1
         with:
-          name: nest-crud-tgz
-          path: ./release-artifacts
+          tag_name: nest-audit@${{ needs.nest-audit.outputs.version }}
+          files: release-artifacts/nest-util-nest-audit-*.tgz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download ncnu artifact
-        uses: actions/download-artifact@v4
+      - name: Publish nest-crud release
+        uses: softprops/action-gh-release@v1
         with:
-          name: ncnu-tgz
-          path: ./release-artifacts
+          tag_name: nest-crud@${{ needs.nest-crud.outputs.version }}
+          files: release-artifacts/nest-util-nest-crud-*.tgz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download nest-auth artifact
-        uses: actions/download-artifact@v4
+      - name: Publish ncnu release
+        uses: softprops/action-gh-release@v1
         with:
-          name: nest-auth-tgz
-          path: ./release-artifacts
+          tag_name: ncnu@${{ needs.ncnu.outputs.version }}
+          files: release-artifacts/ncnu-*.tgz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download nest-file artifact
-        uses: actions/download-artifact@v4
+      - name: Publish nest-auth release
+        uses: softprops/action-gh-release@v1
         with:
-          name: nest-file-tgz
-          path: ./release-artifacts
+          tag_name: nest-auth@${{ needs.nest-auth.outputs.version }}
+          files: release-artifacts/nest-util-nest-auth-*.tgz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish combined release
+      - name: Publish nest-file release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: nest-file@${{ needs.nest-file.outputs.version }}
+          files: release-artifacts/nest-util-nest-file-*.tgz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish combined latest release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
