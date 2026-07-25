@@ -85,7 +85,7 @@ export class UsersService extends NestCrudService<
   async listRoles(userId: number): Promise<Role[]> {
     const assignments = await this.userRoleRepository.find({
       where: { userId },
-      relations: ['role'],
+      relations: { role: true },
     });
 
     return assignments.map((assignment) => assignment.role);
