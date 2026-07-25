@@ -16,5 +16,4 @@ export const AppDataSource = new DataSource({
   entities: [User, Role, UserRole],
   migrations: ['src/db/migrations/*.ts'],
   synchronize: false,
-  entitySkipConstructor: true,
 });
