@@ -689,7 +689,9 @@ export class AuthService {
 
     const assignments = await this.userRoleRepository.find({
       where: { userId },
-      relations: ['role'],
+      relations: {
+        role: true
+      },
     });
 
     return assignments
