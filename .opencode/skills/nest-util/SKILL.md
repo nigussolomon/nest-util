@@ -1,11 +1,11 @@
 ---
 name: nest-util
-description: Use ONLY when working with @nest-util/nest-crud, @nest-util/nest-auth, @nest-util/nest-audit, @nest-util/nest-file, or ncnu packages. Use for NestJS CRUD scaffolding, JWT auth with RBAC, audit logging, encrypted file storage with MinIO, or code generation with ncnu CLI. Covers the entire nest-util monorepo.
+description: Use ONLY when working with @nest-util/nest-crud, @nest-util/nest-auth, or @nest-util/nest-audit packages. Use for NestJS CRUD scaffolding, JWT auth with RBAC, or audit logging. Covers the entire nest-util monorepo.
 ---
 
 # Nest-Util Skill
 
-Complete reference for the `nest-util` Nx monorepo: a production-ready collection of NestJS libraries for CRUD operations, JWT authentication with RBAC, audit logging, encrypted file storage, and CLI code generation.
+Complete reference for the `nest-util` Nx monorepo: a production-ready collection of NestJS libraries for CRUD operations, JWT authentication with RBAC, and audit logging.
 
 ## Project Architecture
 
@@ -16,10 +16,8 @@ Nx monorepo (`pnpm workspaces`) with these packages:
 | `@nest-util/nest-crud` | 0.0.3 | Generic CRUD service + controller factory |
 | `@nest-util/nest-auth` | 0.0.3 | JWT auth with RBAC, OTP, password reset |
 | `@nest-util/nest-audit` | 0.0.3 | Entity-level audit logging interceptor |
-| `@nest-util/nest-file` | 0.0.2 | Encrypted file storage with MinIO + Postgres |
-| `ncnu` | 0.0.2 | CLI code generator for NestJS CRUD resources |
 
-**Key dependency**: `nest-crud` re-exports `Audit` and `AuditLogEntity` from `nest-audit`. CRUD controller factory uses `@Audit()` automatically on create/update/delete endpoints.
+**Key dependency**: `nest-crud` re-exports `Audit` and `AuditLogEntity` from `nest-audit`. CRUD controller factory uses `@Audit()` automatically on create/update/delete endpoints. `nest-crud` declares `@nest-util/nest-audit` as a peer dependency (rewritten from `workspace:*` to a real version at publish time — see Publishing).
 
 **Integration order**: TypeORM → `NestUtilNestAuditModule` → `AuthModule.forRoot(...)` → `NestCrudService` → `CreateNestedCrudController(...)` → global interceptors/filters.
 
@@ -506,163 +504,6 @@ CRUD controller factory decorates `create`, `update`, `remove` with:
 
 ---
 
-## Package 4: `@nest-util/nest-file`
-
-### Exports
-
-```typescript
-export class NestFileModule { static forRoot(options): DynamicModule; static forRootAsync(options): DynamicModule }
-export class StoredFileEntity
-export interface FileModuleOptions { minio, bucket, encryption }
-export interface FileModuleAsyncOptions { imports?, useExisting?, useClass?, useFactory?, inject? }
-export interface FileModuleOptionsFactory { createFileModuleOptions(): ... }
-export interface FileEncryptionOptions { algorithm?: 'aes-256-gcm'; key: string }
-export interface MinioOptions { endPoint, port?, useSSL?, accessKey, secretKey }
-export interface MinioBucketOptions { bucket, region?, makeBucketIfMissing? }
-export interface FileOwner { ownerType: string; ownerId: string }
-export interface StoreFileInput { fileName, contentType, buffer: Buffer, ownerType, ownerId, metadata? }
-export interface GetFileResult { fileName, contentType, buffer, ownerType, ownerId, metadata }
-export class FileEncryptionService {
-  encrypt(buffer: Buffer): EncryptionPayload
-  decrypt(encrypted: Buffer, iv: string, authTag: string): Buffer
-  getDigest(buffer: Buffer): string
-}
-export interface EncryptionPayload { encrypted, iv, authTag, digest, algorithm, keyId }
-export class StoredFileService implements OnModuleInit {
-  store(input: StoreFileInput): Promise<StoredFileEntity>
-  getById(fileId: string): Promise<GetFileResult>
-  listByOwner(ownerType: string, ownerId: string): Promise<StoredFileEntity[]>
-  remove(fileId: string): Promise<void>
-}
-export const FILE_MODULE_OPTIONS = Symbol('FILE_MODULE_OPTIONS')
-export const FileOwnerEntity = (ownerType: string) => ...
-export const FILE_OWNER_KEY = 'file_owner_type'
-export class UploadFileDto { fileName, contentType, ownerType, ownerId, metadata? }
-```
-
-### Configuration
-
-```typescript
-NestFileModule.forRoot({
-  minio: {
-    endPoint: 'localhost',
-    port: 9000,
-    useSSL: false,
-    accessKey: 'minioadmin',
-    secretKey: 'minioadmin',
-  },
-  bucket: {
-    bucket: 'uploads',
-    region: 'us-east-1',
-    makeBucketIfMissing: true,   // default: true
-  },
-  encryption: {
-    algorithm: 'aes-256-gcm',
-    key: '<base64-encoded 32-byte key>',  // MUST be base64-encoded 32-byte Buffer
-  },
-})
-```
-
-### File Encryption
-
-- AES-256-GCM encryption using Node.js `crypto.createCipheriv()`
-- 12-byte random IV per encryption
-- Auth tag for GCM authentication
-- SHA-256 digest of original plaintext for integrity verification on retrieval
-- Key ID = first 16 hex chars of SHA-256(key)
-- On `getById()`: decrypts → verifies SHA-256 digest → if mismatch, throws `Error('Integrity check failed')`
-
-### MinIO Integration
-
-- Uses dynamic `require('minio')` (not static import)
-- `onModuleInit()`: checks if bucket exists, creates if missing (when `makeBucketIfMissing` is true)
-- Object key format: `{ownerType}/{ownerId}/{randomUUID()}`
-- `remove()`: deletes object from MinIO + DB record
-
-### `StoredFileEntity` Structure
-
-```typescript
-@Entity('stored_files')
-class StoredFileEntity {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column() fileName: string;
-  @Column() contentType: string;
-  @Column() objectKey: string;       // MinIO object key
-  @Column({ type: 'bigint' }) size: number;
-  @Column() encryptionAlgorithm: string;
-  @Column() encryptionKeyId: string;
-  @Column() iv: string;             // base64
-  @Column() authTag: string;        // base64
-  @Column() digest: string;         // SHA-256 base64
-  @Column() ownerType: string;
-  @Column() ownerId: string;
-  @Column({ type: 'jsonb', nullable: true }) metadata?: Record<string, unknown>;
-  @CreateDateColumn() createdAt: Date;
-  @UpdateDateColumn() updatedAt: Date;
-}
-```
-
----
-
-## Package 5: `ncnu` CLI Code Generator
-
-### Usage
-
-```bash
-ncnu --gen <ModelName> --path <targetPath> <field:type> [field:type ...]
-```
-
-Example:
-```bash
-ncnu --gen Post --path apps/my-api/src/app \
-  title:string \
-  content:string \
-  published:boolean \
-  publishedAt:date \
-  authorId:number
-```
-
-### Supported Field Types
-
-| Type | TypeORM Column | TS Type | Notes |
-|---|---|---|---|
-| `string` | `varchar` | `string` | |
-| `number` | `int` | `number` | |
-| `boolean` | — (not mapped) | `boolean` | |
-| `date` | `timestamp` | `Date` | |
-| `hash` | `varchar` (nullable) | `string` | For password/OTP fields |
-| `relation:Target` | `ManyToOne` + `JoinColumn` | `Target` | Generates `{name}Id: number` in DTOs |
-| `relationMany:Target` | `ManyToMany` + `JoinTable` | `Target[]` | Generates `{name}Ids: number[]` in DTOs |
-
-### Generated Files
-
-For model `Post` at path `apps/my-api/src/app`:
-
-```
-apps/my-api/src/app/post/
-├── post.entity.ts              # TypeORM entity with @PrimaryGeneratedColumn, @CreateDateColumn, @UpdateDateColumn
-├── dtos/
-│   ├── create-post.dto.ts      # All fields required with @ApiProperty
-│   └── update-post.dto.ts      # All fields optional (?) with @ApiProperty
-├── post.service.ts             # Extends NestCrudService<Post, CreatePostDto, UpdatePostDto>
-└── post.controller.ts          # Extends CreateNestedCrudController(CreateDto, UpdateDto, Entity)
-                                  # Includes @EntityName, @UseGuards(JwtAuthGuard), @ApiBearerAuth
-```
-
-Generated controller includes:
-- `@EntityName({ singular: 'Post', plural: 'Posts' })`
-- `@UseGuards(JwtAuthGuard)` (auth-protected by default)
-- `@ApiBearerAuth()` + `@ApiExtraModels()` for Swagger
-- Implements `IBaseController<CreateDto, UpdateDto, Entity>` (avoids TS2742)
-
-### Export
-
-```typescript
-export async function generate(modelName: string, fields: string[], targetPath: string): Promise<void>
-```
-
----
-
 ## Common Usage Patterns
 
 ### Complete Module Setup (from demo-api)
@@ -705,7 +546,6 @@ async function bootstrap() {
       otp: { enabled: true, deliverCode: async ({ identifier, code }) => { /* send */ } },
       passwordReset: { enabled: true, deliverToken: async ({ identifier, token }) => { /* send */ } },
     }),
-    NestFileModule.forRoot({ minio: {...}, bucket: {...}, encryption: { key: '...' } }),
     PostModule, CommentModule, UserModule,
   ],
   providers: [
@@ -906,12 +746,6 @@ Use `TypeOrmExceptionFilter` as a global filter. It maps Postgres code 23505 to 
 3. Handlers must have `@Audit({ action: '...' })` decorator
 4. CRUD controller factory auto-decorates create/update/delete
 
-### File Encryption Key
-Must be a base64-encoded 32-byte key. Example generation:
-```typescript
-const key = require('crypto').randomBytes(32).toString('base64');
-```
-
 ---
 
 ## Development Commands (within monorepo)
@@ -941,8 +775,10 @@ npx nx affected -t test         # test affected projects
 7. **ALWAYS** register `ResponseInterceptor` and `AuditInterceptor` as global interceptors via `APP_INTERCEPTOR`
 8. **ALWAYS** import `NestUtilNestAuditModule` before `AuthModule` (audit logs are needed by CRUD controller factory)
 9. OTP and Password Reset `deliverCode`/`deliverToken` callbacks MUST be provided when those features are enabled
-10. File encryption key MUST be exactly 32 bytes base64-encoded
-11. The `ncnu` generator creates auth-protected controllers by default (`@UseGuards(JwtAuthGuard)`)
-12. Permission registry `strict` mode (default) throws at startup if a CRUD permission is missing from the registry — set `strict: false` in `buildCrudPermissionsFromRegistry` options to silently skip missing permissions
-13. `@Public()` decorator works at both handler and class level (checked via `getAllAndOverride`)
-14. `disabledRoutes` in AuthModule accepts route names like `'register'`, `'login'`, `'otp/request'`, `'otp/login'`, `'password-reset/request'`, `'password-reset/reset'`
+10. Permission registry `strict` mode (default) throws at startup if a CRUD permission is missing from the registry — set `strict: false` in `buildCrudPermissionsFromRegistry` options to silently skip missing permissions
+11. `@Public()` decorator works at both handler and class level (checked via `getAllAndOverride`)
+12. `disabledRoutes` in AuthModule accepts route names like `'register'`, `'login'`, `'otp/request'`, `'otp/login'`, `'password-reset/request'`, `'password-reset/reset'`
+
+## Publishing
+
+`publish.sh` uses `npm publish` (not pnpm). npm does not understand the pnpm `workspace:*` protocol, so before publishing `nest-crud` (or any package with a `workspace:*` peer), `publish.sh` temporarily rewrites `workspace:*` → the real `@nest-util/nest-audit` version (read from `libs/nest-audit/package.json`), publishes, then restores the source `package.json`. **Do NOT** hardcode the published version in `package.json`; keep `workspace:*` for pnpm dev and let `publish.sh` handle the rewrite. The GitHub `publish.yml` workflow does its own rewrite (to a GitHub release tarball URL) for the release-tarball install path.

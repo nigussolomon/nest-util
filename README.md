@@ -29,7 +29,6 @@ Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates
 | Problem                                       | Nest-Util Solution                                                   |
 | --------------------------------------------- | -------------------------------------------------------------------- |
 | Writing the same CRUD logic for every entity  | `@nest-util/nest-crud` - Generic CRUD service and controller factory |
-| Manually scaffolding entities, DTOs, services | `ncnu` - Code generator with smart type mapping                      |
 | Implementing secure JWT authentication        | `@nest-util/nest-auth` - Flexible auth module with token rotation    |
 | Tracking entity-level mutations               | `@nest-util/nest-audit` - Audit logs for create/update/delete flows  |
 | Inconsistent API responses                    | Built-in response interceptors and transformers                      |
@@ -43,7 +42,6 @@ Nest-Util is composed of focused modules that integrate into the same NestJS app
 
 **Architecture Components:**
 
-- `ncnu`: generates entities, DTOs, services, and controllers
 - `@nest-util/nest-crud`: provides reusable CRUD service/controller building blocks
 - `@nest-util/nest-auth`: handles JWT auth, refresh tokens, and permissions
 - `@nest-util/nest-audit`: records audit events for mutating operations
@@ -60,11 +58,10 @@ Nest-Util is composed of focused modules that integrate into the same NestJS app
 
 **Typical Workflow:**
 
-1. Use `ncnu` to generate entities, DTOs, services, and controllers
-2. Generated code automatically extends `NestCrudService` and `CreateNestedCrudController`
-3. Add `@nest-util/nest-auth` for authentication on protected routes
-4. Enable `@nest-util/nest-audit` interceptor for mutation logging
-5. Get automatic pagination, filtering, Swagger docs, and error handling
+1. Build services extending `NestCrudService` and controllers extending `CreateNestedCrudController`
+2. Add `@nest-util/nest-auth` for authentication on protected routes
+3. Enable `@nest-util/nest-audit` interceptor for mutation logging
+4. Get automatic pagination, filtering, Swagger docs, and error handling
 
 ---
 
@@ -90,25 +87,7 @@ A powerful and flexible CRUD library featuring:
 - ✅ Global exception handling for database errors
 - ✅ Extensible architecture for custom business logic
 
-### 2. 🛠️ ncnu (NestJS CRUD Generator)
-
-A professional code generation CLI tool to scaffold your NestJS resources:
-
-- **Rapid Prototyping**: Generate Entity, Service, Controller, and DTOs in seconds
-- **Smart Type Mapping**: Automatically handles TypeORM column types and Swagger decorators
-- **Definite Assignment**: Generates code compatible with strict TypeScript property initialization
-- **Organized Structure**: Creates dedicated folders with all necessary files
-- **Production Ready**: Generated code includes proper imports, decorators, and type annotations
-
-**What Gets Generated:**
-
-- `{model}.entity.ts` - TypeORM entity with proper column decorators
-- `create-{model}.dto.ts` - DTO for creation with validation decorators
-- `update-{model}.dto.ts` - DTO for updates with optional fields
-- `{model}.service.ts` - Service extending `NestCrudService`
-- `{model}.controller.ts` - Controller extending `CreateNestedCrudController`
-
-### 3. 🔐 @nest-util/nest-auth
+### 2. 🔐 @nest-util/nest-auth
 
 A dynamic and flexible authentication library:
 
@@ -154,53 +133,11 @@ pnpm add @nestjs/typeorm typeorm @nestjs/passport passport passport-jwt @nestjs/
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
-### Installing the Code Generator
-
-Install `ncnu` globally for easy access:
-
-```bash
-# Global installation
-pnpm add -g https://github.com/nigussolomon/nest-util/releases/download/latest/ncnu-0.0.1.tgz
-
-# Verify installation
-ncnu --help
-```
-
-Alternatively, use with `npx`:
-
-```bash
-npx https://github.com/nigussolomon/nest-util/releases/download/latest/ncnu-0.0.1.tgz --gen User --path ./src/app email:string
-```
-
 ---
 
 ## ⚡ Quick Start
 
-### Step 1: Generate Your First Resource
-
-Use the `ncnu` CLI to scaffold a complete CRUD resource:
-
-```bash
-ncnu --gen Post --path apps/my-api/src/app \
-  title:string \
-  content:string \
-  published:boolean \
-  publishedAt:date \
-  authorId:number
-```
-
-This generates:
-
-```
-apps/my-api/src/app/post/
-├── post.entity.ts
-├── create-post.dto.ts
-├── update-post.dto.ts
-├── post.service.ts
-└── post.controller.ts
-```
-
-### Step 2: Register the Module
+### Step 1: Register the Module
 
 Create a module for your resource:
 
@@ -313,17 +250,7 @@ Visit `http://localhost:3000/api/docs` for interactive Swagger documentation!
 
 ## 🔐 Adding Authentication
 
-### Step 1: Generate User Entity
-
-```bash
-ncnu --gen User --path apps/my-api/src/app \
-  email:string \
-  password:hash \
-  accessToken:hash \
-  refreshToken:hash
-```
-
-### Step 2: Configure AuthModule
+### Step 1: Configure AuthModule
 
 ```typescript
 import { AuthModule } from '@nest-util/nest-auth';
@@ -569,7 +496,7 @@ export class MyController
 }
 ```
 
-> **Note:** The `ncnu` generator automatically includes this fix in generated code.
+> **Note:** The generated controller pattern above is the recommended approach for strict TypeScript.
 
 ### Database Connection Issues
 

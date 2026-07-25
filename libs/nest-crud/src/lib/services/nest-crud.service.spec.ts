@@ -1,11 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import {
-  Repository,
-  SelectQueryBuilder,
-  DeleteResult,
-  UpdateResult,
-} from 'typeorm';
+import { Repository, SelectQueryBuilder, DeleteResult } from 'typeorm';
 import { NestCrudService } from './nest-crud.service';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
@@ -84,6 +79,9 @@ describe('NestCrudService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       findOne: jest.fn(),
       findOneBy: jest.fn(),
+      merge: jest.fn((entity, partialEntity) =>
+        Object.assign(entity, partialEntity)
+      ),
       save: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -468,12 +466,13 @@ describe('NestCrudService', () => {
       const payload: Partial<MockEntity> = { name: 'updated' };
 
       repository.findOneBy.mockResolvedValue(existing);
-      repository.update.mockResolvedValue({ affected: 1 } as UpdateResult);
+      repository.save.mockResolvedValue(updated);
       repository.findOne.mockResolvedValue(updated);
 
       const result = await service.update(1, payload);
 
-      expect(repository.update).toHaveBeenCalledWith(1, payload);
+      expect(repository.merge).toHaveBeenCalledWith(existing, payload);
+      expect(repository.save).toHaveBeenCalledWith(existing);
       expect(result).toEqual({ id: 1, name: 'updated' });
     });
 

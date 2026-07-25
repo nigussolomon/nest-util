@@ -5,7 +5,6 @@ This app demonstrates all published Nest Util libraries in one runnable API:
 - `@nest-util/nest-crud` for generated CRUD controllers/services (`users`, `posts`, `comments`)
 - `@nest-util/nest-auth` for login + JWT guard on protected endpoints
 - `@nest-util/nest-audit` for action audit logging via `@Audit(...)` decorator
-- `@nest-util/nest-file` for encrypted file storage with MinIO + Postgres metadata
 
 ## Quick start with Docker Compose
 
@@ -41,13 +40,7 @@ Once started:
 
 - `NestUtilNestAuditModule` imported in `AppModule`
 - `AuditInterceptor` enabled globally
-- `@Audit(...)` used in file endpoints to create audit records in `audit_logs`
-
-### 4) `@nest-util/nest-file`
-
-- `NestFileModule.forRoot(...)` configured with MinIO + encryption
-- `StoredFileService` used by `/api/files` endpoints
-- `UploadFileDto` + `FileOwnerEntity(...)` demonstrated in the file controller
+- `@Audit(...)` used across endpoints to create audit records in `audit_logs`
 
 ## End-to-end example
 
@@ -74,19 +67,6 @@ curl -X POST http://localhost:3000/api/posts \
   -d '{"title":"Hello","content":"Demo post","authorId":1}'
 ```
 
-### 3) Upload a file (encrypted storage)
+### 3) Audit logging
 
-```bash
-curl -X POST http://localhost:3000/api/files \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "fileName":"hello.txt",
-    "contentType":"text/plain",
-    "ownerType":"user",
-    "ownerId":"1",
-    "contentBase64":"SGVsbG8gZnJvbSBuZXN0LXV0aWw="
-  }'
-```
-
-This also produces audit entries in `audit_logs` because the route is decorated with `@Audit(...)`.
+Endpoints decorated with `@Audit(...)` automatically produce audit entries in `audit_logs`.

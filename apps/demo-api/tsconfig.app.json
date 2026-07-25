@@ -29,9 +29,6 @@
     },
     {
       "path": "../../libs/nest-audit/tsconfig.lib.json"
-    },
-    {
-      "path": "../../libs/nest-file/tsconfig.lib.json"
     }
   ]
 }

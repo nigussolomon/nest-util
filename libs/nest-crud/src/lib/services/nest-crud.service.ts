@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, Type } from '@nestjs/common';
-import { ObjectLiteral, Repository } from 'typeorm';
+import { DeepPartial, ObjectLiteral, Repository } from 'typeorm';
 import { AuditLogEntity } from '@nest-util/nest-audit';
 import { applyFilters } from '../helpers/filter.helper';
 import { PaginationDto } from '../dtos/pagination.dto';
@@ -172,7 +172,8 @@ export class NestCrudService<
       payload as unknown as ObjectLiteral
     );
 
-    await this.repo.update(id, resolved as unknown as Partial<Entity>);
+    this.repo.merge(existing, resolved as DeepPartial<Entity>);
+    await this.repo.save(existing);
 
     return this.findOne(id);
   }
