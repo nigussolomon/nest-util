@@ -7,7 +7,7 @@ This guide reflects the implementation in `libs/nest-crud`.
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.0 @nest-util/nest-auth@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.1 @nest-util/nest-auth@^1.0.1 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 ```
 
 `@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.

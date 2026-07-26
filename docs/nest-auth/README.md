@@ -7,7 +7,7 @@ This guide is based on the current implementation in `libs/nest-auth`.
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-auth@^1.0.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
+pnpm add @nest-util/nest-auth@^1.0.1 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
 ```
 
 ## 2) Prepare Requirements
