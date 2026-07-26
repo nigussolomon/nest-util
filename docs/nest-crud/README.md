@@ -4,11 +4,13 @@ This guide reflects the implementation in `libs/nest-crud`.
 
 ## 1) Install
 
+We recommend using **pnpm** as your package manager.
+
 ```bash
-pnpm add @nest-util/nest-crud
+pnpm add @nest-util/nest-crud@^1.0.0 @nest-util/nest-auth@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 ```
 
-`nest-crud` includes audit logging, lifecycle hooks, cursor pagination, and findMine — all built-in.
+`@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.
 
 ## 2) Build a Service with `NestCrudService`
 

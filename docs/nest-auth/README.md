@@ -4,13 +4,11 @@ This guide is based on the current implementation in `libs/nest-auth`.
 
 ## 1) Install
 
-If you consume published artifacts:
+We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-auth
+pnpm add @nest-util/nest-auth@^1.0.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
 ```
-
-Inside this monorepo/demo app, the workspace package is already available.
 
 ## 2) Prepare Requirements
 

@@ -76,11 +76,12 @@
          INSTALL
          ═══════════════════════════════════════════════════ -->
     <h2 id="install">Install</h2>
+    <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
     <div class="install-box">
-      <code>pnpm add @nest-util/nest-crud</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud').then(()=>this.textContent='Copied!')">Copy</button>
+      <code>pnpm add @nest-util/nest-crud@^1.0.0 @nest-util/nest-auth@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.0 @nest-util/nest-auth@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
-    <p><code>nest-crud</code> includes audit logging, lifecycle hooks, cursor pagination, and findMine — all built-in.</p>
+    <p><code>@nest-util/nest-crud</code> includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.</p>
 
     <!-- ═══════════════════════════════════════════════════
          SERVICE

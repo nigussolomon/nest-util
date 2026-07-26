@@ -117,15 +117,10 @@ A dynamic and flexible authentication library:
 
 ### Installing Libraries
 
+We recommend using **pnpm** as your package manager.
+
 ```bash
-# Install nest-crud library
-pnpm add @nest-util/nest-crud
-
-# Install nest-auth library (if using authentication)
-pnpm add @nest-util/nest-auth
-
-# Required peer/runtime dependencies
-pnpm add @nestjs/typeorm typeorm@^1.1.0 @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt
+pnpm add @nest-util/nest-crud@^1.0.0 @nest-util/nest-auth@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 

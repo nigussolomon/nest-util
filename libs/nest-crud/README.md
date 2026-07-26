@@ -4,13 +4,11 @@ This library was generated with [Nx](https://nx.dev).
 
 ## Installation
 
-To install this library in your project, use the permanent URL from the latest GitHub Release:
+We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-crud-0.1.1.tgz
+pnpm add @nest-util/nest-crud@^1.0.0 @nest-util/nest-auth@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 ```
-
-> **Tip:** This tarball contains only the compiled code and its specific dependencies, making it as clean as a standard npm package.
 
 ## Features
 
