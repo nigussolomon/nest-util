@@ -24,18 +24,18 @@ The app bootstraps with the following runtime behavior:
 
 ## 2) Module Wiring (`src/app/app.module.ts`)
 
-`AppModule` composes all three util modules together:
+`AppModule` composes all util modules together:
 
 1. Configures TypeORM Postgres connection from env vars:
    - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
    - `autoLoadEntities: true`
    - `synchronize: true`
 2. Registers feature entities for demo resources (`Post`, `Comment`).
-3. Imports `NestUtilNestAuditModule`.
-4. Imports `AuthModule.forRoot(...)` with DTOs, user entity, RBAC settings, and permission registry.
+3. Imports `AuthModule.forRoot(...)` with DTOs, user entity, RBAC settings, and permission registry.
+4. Imports `NestCrudModule` (provides AuditService + registers AuditLogEntity).
 5. Applies global interceptors:
    - `ResponseInterceptor` (from `@nest-util/nest-crud`)
-   - `AuditInterceptor` (from `@nest-util/nest-audit`)
+   - `AuditInterceptor` (from `@nest-util/nest-crud`)
 
 ## 3) Auth Configuration in Demo API
 
@@ -66,9 +66,34 @@ For each resource (example: `Post`, `Comment`):
 3. Controller extends `CreateNestedCrudController(...)` output class.
 4. Optional auth/permissions are attached using `JwtAuthGuard` + `PermissionsGuard`.
 
-## 5) Help Notes
+## 5) Post Entity with findMine
+
+The Post entity includes `authorId` with an index for efficient user-scoped queries:
+
+```ts
+@Entity()
+export class Post {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  title!: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  content!: string;
+
+  @Index()
+  @Column({ nullable: true })
+  authorId?: number;
+}
+```
+
+The PostService configures `userOwnershipField: 'authorId'` and the PostController passes `enableFindMine: true`.
+
+## 6) Help Notes
 
 - If query-based filtering does not parse correctly, keep `query parser` set to `extended`.
 - Keep `TypeOrmExceptionFilter` global to normalize duplicate key errors.
 - `AuditInterceptor` only writes logs for handlers decorated with `@Audit(...)`.
 - `ResponseInterceptor` wraps output in a standard `{ message, data, meta, status }` shape.
+- `autoLoadEntities: true` is required since `NestCrudModule` internally registers `AuditLogEntity`.

@@ -7,11 +7,21 @@ This library was generated with [Nx](https://nx.dev).
 To install this library in your project, use the permanent URL from the latest GitHub Release:
 
 ```bash
-pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-crud-0.0.1.tgz
+pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-crud-0.1.1.tgz
 ```
 
-> [!TIP]
-> This tarball contains only the compiled code and its specific dependencies, making it as clean as a standard npm package.
+> **Tip:** This tarball contains only the compiled code and its specific dependencies, making it as clean as a standard npm package.
+
+## Features
+
+- Generic CRUD service with filtering, pagination, and sorting
+- Controller factory that generates 7 REST endpoints
+- Built-in audit logging with `@Audit()` decorator
+- Lifecycle hooks (before/after) with transaction support
+- Cursor-based pagination for efficient large-dataset traversal
+- User-scoped record retrieval via `GET /resource/mine`
+- Automatic Swagger documentation
+- TypeORM exception filter for duplicate key errors
 
 ## Building
 

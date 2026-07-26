@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nest-Util — Production-Ready NestJS Toolkit</title>
+  <meta name="description" content="A modern, production-ready collection of NestJS utilities for CRUD operations, authentication, and rapid code generation.">
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       DESIGN TOKENS
+       ═══════════════════════════════════════════════════════ */
+    :root {
+      --bg:          #0a0a0f;
+      --bg-raised:   #12121a;
+      --bg-card:     #16161f;
+      --bg-code:     #1a1a26;
+      --border:      #232333;
+      --border-hover:#3a3a55;
+      --text:        #e4e4ef;
+      --text-muted:  #8888a0;
+      --accent:      #e0234e;
+      --accent-glow: rgba(224, 35, 78, 0.15);
+      --accent-2:    #7c5cfc;
+      --accent-2-glow: rgba(124, 92, 252, 0.12);
+      --accent-3:    #10b981;
+      --accent-3-glow: rgba(16, 185, 129, 0.12);
+      --accent-4:    #f59e0b;
+      --accent-4-glow: rgba(245, 158, 11, 0.12);
+      --radius:      12px;
+      --radius-sm:   8px;
+      --font:        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono:        'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --max-w:       1120px;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESET & BASE
+       ═══════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #ff4a72; }
+
+    code, pre { font-family: var(--mono); }
+
+    /* ═══════════════════════════════════════════════════════
+       LAYOUT
+       ═══════════════════════════════════════════════════════ */
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    /* ═══════════════════════════════════════════════════════
+       NAVIGATION
+       ═══════════════════════════════════════════════════════ */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav .container {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-brand {
+      font-size: 1.15rem; font-weight: 700; color: var(--text);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-brand svg { width: 28px; height: 28px; }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a {
+      color: var(--text-muted); font-size: 0.9rem; font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--accent); color: #fff !important;
+      padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: 0.85rem;
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+    .nav-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px var(--accent-glow);
+      color: #fff !important;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════════ */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 16px 6px 8px;
+      font-size: 0.8rem; color: var(--text-muted); margin-bottom: 32px;
+    }
+    .hero-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent-3); animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      font-weight: 800; line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.15rem; color: var(--text-muted);
+      max-width: 580px; margin: 0 auto 40px;
+    }
+    .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; border-radius: var(--radius-sm);
+      font-weight: 600; font-size: 0.95rem; border: none; cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--accent-glow);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: var(--bg-card); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      color: var(--text);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       STATS BAR
+       ═══════════════════════════════════════════════════════ */
+    .stats {
+      display: flex; justify-content: center; gap: 64px;
+      padding: 48px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat { text-align: center; }
+    .stat-value {
+      font-size: 2rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+
+    /* ═══════════════════════════════════════════════════════
+       SECTION HEADERS
+       ═══════════════════════════════════════════════════════ */
+    .section-header { text-align: center; margin-bottom: 56px; }
+    .section-header h2 {
+      font-size: 2rem; font-weight: 700; margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .section-header p { color: var(--text-muted); font-size: 1.05rem; max-width: 500px; margin: 0 auto; }
+
+    /* ═══════════════════════════════════════════════════════
+       FEATURE CARDS
+       ═══════════════════════════════════════════════════════ */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+    }
+    .feature-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; margin-bottom: 20px;
+    }
+    .feature-icon.red    { background: var(--accent-glow); }
+    .feature-icon.purple { background: var(--accent-2-glow); }
+    .feature-icon.green  { background: var(--accent-3-glow); }
+    .feature-icon.amber  { background: var(--accent-4-glow); }
+    .feature-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p  { color: var(--text-muted); font-size: 0.92rem; line-height: 1.6; }
+
+    /* ═══════════════════════════════════════════════════════
+       PACKAGES
+       ═══════════════════════════════════════════════════════ */
+    .packages { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    .package-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .package-card:hover { border-color: var(--border-hover); }
+    .package-header {
+      padding: 28px 32px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .package-name {
+      font-family: var(--mono); font-size: 1.1rem; font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .package-desc { color: var(--text-muted); font-size: 0.9rem; }
+    .package-body { padding: 24px 32px 28px; }
+    .package-body ul { list-style: none; }
+    .package-body li {
+      padding: 8px 0; font-size: 0.9rem; color: var(--text-muted);
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .package-body li::before {
+      content: '';
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); flex-shrink: 0; margin-top: 8px;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       CODE BLOCKS
+       ═══════════════════════════════════════════════════════ */
+    .code-section { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+    .code-section.reverse { direction: rtl; }
+    .code-section.reverse > * { direction: ltr; }
+    .code-text h3 { font-size: 1.5rem; font-weight: 700; margin-bottom: 16px; }
+    .code-text p  { color: var(--text-muted); margin-bottom: 24px; line-height: 1.7; }
+    .code-text ul { list-style: none; margin-bottom: 24px; }
+    .code-text li {
+      padding: 6px 0; font-size: 0.92rem; color: var(--text-muted);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .code-text li::before {
+      content: '';
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent-3); flex-shrink: 0;
+    }
+    .code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .code-block-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-block-dots { display: flex; gap: 6px; }
+    .code-block-dots span {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border);
+    }
+    .code-block-dots span:nth-child(1) { background: #ff5f57; }
+    .code-block-dots span:nth-child(2) { background: #ffbd2e; }
+    .code-block-dots span:nth-child(3) { background: #28c840; }
+    .code-block-title {
+      font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted);
+    }
+    .code-block pre {
+      padding: 20px; overflow-x: auto;
+      font-size: 0.82rem; line-height: 1.7;
+      color: var(--text);
+    }
+    .code-block .kw  { color: var(--accent-2); }
+    .code-block .fn  { color: #60a5fa; }
+    .code-block .str { color: var(--accent-3); }
+    .code-block .cm  { color: #555570; }
+    .code-block .dec { color: var(--accent-4); }
+    .code-block .typ { color: #f472b6; }
+    .code-block .num { color: #f59e0b; }
+
+    /* ═══════════════════════════════════════════════════════
+       ENDPOINTS TABLE
+       ═══════════════════════════════════════════════════════ */
+    .endpoints-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .endpoints-table th {
+      text-align: left; padding: 12px 16px;
+      font-weight: 600; color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .endpoints-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .endpoints-table tr:last-child td { border-bottom: none; }
+    .endpoints-table .method {
+      display: inline-block;
+      padding: 2px 8px; border-radius: 4px;
+      font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase;
+    }
+    .method.get    { background: rgba(16, 185, 129, 0.15); color: var(--accent-3); }
+    .method.post   { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+    .method.patch  { background: rgba(245, 158, 11, 0.15); color: var(--accent-4); }
+    .method.delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+    /* ═══════════════════════════════════════════════════════
+       QUICK START STEPS
+       ═══════════════════════════════════════════════════════ */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .step {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      position: relative;
+    }
+    .step-number {
+      position: absolute; top: 24px; right: 24px;
+      font-size: 3rem; font-weight: 800;
+      color: rgba(255,255,255,0.04);
+      line-height: 1;
+    }
+    .step h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 12px; }
+    .step p  { color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; }
+
+    /* ═══════════════════════════════════════════════════════
+       INSTALL BOX
+       ═══════════════════════════════════════════════════════ */
+    .install-box {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .install-box code {
+      font-size: 0.9rem; color: var(--text);
+    }
+    .install-box .copy-btn {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); padding: 6px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 0.8rem; font-family: var(--mono);
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .install-box .copy-btn:hover {
+      border-color: var(--accent); color: var(--accent);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════════ */
+    footer {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--text-muted); }
+    footer a:hover { color: var(--text); }
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .packages { grid-template-columns: 1fr; }
+      .code-section { grid-template-columns: 1fr; }
+      .code-section.reverse { direction: ltr; }
+      .steps { grid-template-columns: 1fr; }
+      .stats { flex-direction: column; gap: 24px; }
+      .features-grid { grid-template-columns: 1fr; }
+      section { padding: 56px 0; }
+      .hero { padding: 120px 0 60px; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SCROLLBAR
+       ═══════════════════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════════════════════ -->
+<nav>
+  <div class="container">
+    <div class="nav-brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E0234E"/>
+        <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      Nest-Util
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#packages">Packages</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
+    </ul>
+    <a href="#quickstart" class="nav-cta">Get Started</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      v0.1.1 — TypeORM 1.1.0, Hooks, findMine, Cursor Pagination
+    </div>
+    <h1>
+      Production-Ready<br>
+      <span class="gradient">NestJS Toolkit</span>
+    </h1>
+    <p>
+      Eliminate boilerplate. Get type-safe CRUD, JWT auth with RBAC, audit logging, lifecycle hooks, and cursor pagination — all in one package.
+    </p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0L6.5 1.5L12.5 7.5H0V9H12.5L6.5 15L8 16L16 8L8 0Z"/></svg>
+        Quick Start
+      </a>
+      <a href="https://github.com/nigussolomon/nest-util" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     STATS
+     ═══════════════════════════════════════════════════════ -->
+<div class="stats container">
+  <div class="stat">
+    <div class="stat-value">2</div>
+    <div class="stat-label">Packages</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">7</div>
+    <div class="stat-label">Generated Endpoints</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">8</div>
+    <div class="stat-label">Lifecycle Hooks</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">12</div>
+    <div class="stat-label">Filter Operators</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FEATURES
+     ═══════════════════════════════════════════════════════ -->
+<section id="features">
+  <div class="container">
+    <div class="section-header">
+      <h2>Everything You Need</h2>
+      <p>One package replaces hours of boilerplate. Type-safe, extensible, production-ready.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon red">&#9881;</div>
+        <h3>CRUD Scaffolding</h3>
+        <p>Generate complete REST endpoints from a single service class. Filtering, pagination, Swagger docs, and error handling included.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">&#128274;</div>
+        <h3>JWT Auth + RBAC</h3>
+        <p>Dynamic auth module with refresh token rotation, nonce validation, OTP, password reset, and role-based access control.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">&#9878;</div>
+        <h3>Audit Logging</h3>
+        <p>Built-in <code>@Audit()</code> decorator tracks entity-level mutations with user, IP, and metadata — no separate package needed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon amber">&#9201;</div>
+        <h3>Lifecycle Hooks</h3>
+        <p>Before/after hooks for create, update, remove, and findOne — with optional transaction wrapping and configurable isolation levels.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">&#8635;</div>
+        <h3>Cursor Pagination</h3>
+        <p>Efficient keyset pagination for large datasets. Auto-detects integer vs UUID primary keys. Opaque base64url cursors.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">&#128100;</div>
+        <h3>findMine</h3>
+        <p>User-scoped record retrieval via <code>GET /resource/mine</code>. Simple column match or custom query builder callbacks.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PACKAGES
+     ═══════════════════════════════════════════════════════ -->
+<section id="packages">
+  <div class="container">
+    <div class="section-header">
+      <h2>Two Packages, Zero Compromise</h2>
+      <p>Focused modules that integrate seamlessly into any NestJS app.</p>
+    </div>
+    <div class="packages">
+      <div class="package-card">
+        <div class="package-header">
+          <div class="package-name">@nest-util/nest-crud</div>
+          <div class="package-desc">CRUD, audit, hooks, cursors, findMine</div>
+        </div>
+        <div class="package-body">
+          <ul>
+            <li>Generic service + controller factory</li>
+            <li>12 filter operators with grouping</li>
+            <li>Offset &amp; cursor pagination</li>
+            <li>8 lifecycle hooks with transactions</li>
+            <li>Built-in audit logging interceptor</li>
+            <li>findMine with custom query support</li>
+            <li>Automatic Swagger documentation</li>
+            <li>TypeORM exception filter</li>
+          </ul>
+        </div>
+      </div>
+      <div class="package-card">
+        <div class="package-header">
+          <div class="package-name">@nest-util/nest-auth</div>
+          <div class="package-desc">JWT, RBAC, OTP, password reset</div>
+        </div>
+        <div class="package-body">
+          <ul>
+            <li>Dynamic auth module configuration</li>
+            <li>Refresh token rotation with nonce</li>
+            <li>Role-based access control (RBAC)</li>
+            <li>OTP login with delivery callbacks</li>
+            <li>Password reset with token expiry</li>
+            <li>Permission registry for CRUD</li>
+            <li><code>@Public()</code>, <code>@CurrentUser()</code>, <code>@Permissions()</code></li>
+            <li>Auto-stripped sensitive fields</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CODE: SERVICE
+     ═══════════════════════════════════════════════════════ -->
+<section id="code-service">
+  <div class="container">
+    <div class="code-section">
+      <div class="code-text">
+        <h3>Define Once, Get Everything</h3>
+        <p>Extend <code>NestCrudService</code> with your entity and DTOs. Filtering, pagination, hooks, and audit logging are automatic.</p>
+        <ul>
+          <li>Whitelist filterable &amp; sortable fields</li>
+          <li>Auto-join relations with <code>include</code></li>
+          <li>Resolve foreign keys with <code>relations</code></li>
+          <li>Add lifecycle hooks with transaction support</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">post.service.ts</div>
+        </div>
+        <pre><span class="dec">@Injectable</span>()
+<span class="kw">export class</span> <span class="typ">PostService</span> <span class="kw">extends</span> <span class="typ">NestCrudService</span>&lt;<span class="typ">Post</span>, <span class="typ">CreatePostDto</span>, <span class="typ">UpdatePostDto</span>&gt; {
+  <span class="fn">constructor</span>(<span class="dec">@InjectRepository</span>(<span class="typ">Post</span>) repo: <span class="typ">Repository</span>&lt;<span class="typ">Post</span>&gt;) {
+    <span class="kw">super</span>({
+      repository: repo,
+      allowedFilters: [<span class="str">'title'</span>, <span class="str">'authorId'</span>],
+      allowedSortFields: [<span class="str">'createdAt'</span>, <span class="str">'title'</span>],
+      include: [<span class="str">'author'</span>],
+      userOwnershipField: <span class="str">'authorId'</span>,
+      hooks: {
+        afterCreate: {
+          handler: <span class="kw">async</span> (ctx) =&gt; {
+            <span class="cm">// Send notifications, emit events</span>
+          },
+        },
+      },
+    });
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CODE: CONTROLLER
+     ═══════════════════════════════════════════════════════ -->
+<section id="code-controller">
+  <div class="container">
+    <div class="code-section reverse">
+      <div class="code-text">
+        <h3>Full REST API in Seconds</h3>
+        <p><code>CreateNestedCrudController</code> generates all standard endpoints with Swagger docs, audit decorators, and permission metadata.</p>
+        <ul>
+          <li>7 endpoints generated automatically</li>
+          <li>Built-in <code>@Audit()</code> on mutations</li>
+          <li>Permission registry integration</li>
+          <li>Optional <code>findMine</code> with auth</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">post.controller.ts</div>
+        </div>
+        <pre><span class="kw">const</span> PostBase = <span class="fn">CreateNestedCrudController</span>(
+  <span class="typ">CreatePostDto</span>, <span class="typ">UpdatePostDto</span>, <span class="typ">Post</span>,
+  {
+    permissions: <span class="fn">buildCrudPermissionsFromRegistry</span>(
+      permissionRegistry, { resource: <span class="str">'posts'</span> }
+    ),
+    enableFindMine: <span class="num">true</span>,
+  }
+);
+
+<span class="dec">@ApiTags</span>(<span class="str">'post'</span>)
+<span class="dec">@Controller</span>(<span class="str">'post'</span>)
+<span class="dec">@ApiBearerAuth</span>()
+<span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
+<span class="kw">export class</span> <span class="typ">PostController</span> <span class="kw">extends</span> PostBase {
+  <span class="fn">constructor</span>(<span class="kw">override readonly</span> service: <span class="typ">PostService</span>) {
+    <span class="kw">super</span>(service);
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     ENDPOINTS TABLE
+     ═══════════════════════════════════════════════════════ -->
+<section id="endpoints">
+  <div class="container">
+    <div class="section-header">
+      <h2>Generated Endpoints</h2>
+      <p>One controller factory produces a complete REST API.</p>
+    </div>
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Description</th>
+            <th>Auth</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource</code></td>
+            <td>List with filtering, pagination, cursor support</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource/mine</code></td>
+            <td>User-scoped records (requires <code>enableFindMine</code>)</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource/:id</code></td>
+            <td>Get single record</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/resource</code></td>
+            <td>Create record (auto-audited)</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method patch">PATCH</span></td>
+            <td><code>/resource/:id</code></td>
+            <td>Update record (auto-audited)</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method delete">DELETE</span></td>
+            <td><code>/resource/:id</code></td>
+            <td>Delete record (auto-audited)</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource/auditlogs</code></td>
+            <td>Query audit trail</td>
+            <td>Optional</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     HOOKS VISUAL
+     ═══════════════════════════════════════════════════════ -->
+<section id="hooks">
+  <div class="container">
+    <div class="section-header">
+      <h2>Lifecycle Hooks</h2>
+      <p>Intercept any CRUD operation with before/after hooks — with optional transaction wrapping.</p>
+    </div>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">hooks.interface.ts</div>
+      </div>
+      <pre><span class="kw">interface</span> <span class="typ">CrudHooks</span>&lt;<span class="typ">TEntity</span>, <span class="typ">TCreateDto</span>, <span class="typ">TUpdateDto</span>&gt; {
+  beforeCreate?: <span class="typ">CrudHookConfig</span>&lt;{ payload: <span class="typ">TCreateDto</span> }&gt;;
+  afterCreate?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; payload: <span class="typ">TCreateDto</span> }&gt;;
+  beforeUpdate?: <span class="typ">CrudHookConfig</span>&lt;{ payload: <span class="typ">TUpdateDto</span>; entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
+  afterUpdate?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; payload: <span class="typ">TUpdateDto</span>; id: <span class="typ">number</span> }&gt;;
+  beforeRemove?: <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
+  afterRemove?:  <span class="typ">CrudHookConfig</span>&lt;{ id: <span class="typ">number</span>; deleted: <span class="typ">boolean</span> }&gt;;
+  beforeFindOne?: <span class="typ">CrudHookConfig</span>&lt;{ id: <span class="typ">number</span> }&gt;;
+  afterFindOne?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
+}
+
+<span class="kw">interface</span> <span class="typ">CrudHookConfig</span>&lt;<span class="typ">TContext</span>&gt; {
+  handler: (context: <span class="typ">TContext</span>) =&gt; <span class="typ">Promise</span>&lt;<span class="typ">any</span>&gt; | <span class="typ">any</span>;
+  transaction?: <span class="typ">boolean</span>;  <span class="cm">// wraps in DB transaction</span>
+}
+
+<span class="kw">interface</span> <span class="typ">TransactionConfig</span> {
+  isolationLevel?: <span class="str">'READ UNCOMMITTED'</span> | <span class="str">'READ COMMITTED'</span>
+    | <span class="str">'REPEATABLE READ'</span> | <span class="str">'SERIALIZABLE'</span>;
+  timeout?: <span class="typ">number</span>;
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     QUICK START
+     ═══════════════════════════════════════════════════════ -->
+<section id="quickstart">
+  <div class="container">
+    <div class="section-header">
+      <h2>Get Started in 3 Steps</h2>
+      <p>From zero to production-ready CRUD API in minutes.</p>
+    </div>
+
+    <div class="install-box">
+      <code>pnpm add @nest-util/nest-crud @nest-util/nest-auth typeorm@^1.1.0 @nestjs/typeorm</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud @nest-util/nest-auth typeorm@^1.1.0 @nestjs/typeorm').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Create Entity &amp; Service</h3>
+        <p>Define your TypeORM entity, then extend <code>NestCrudService</code> with filters, hooks, and ownership.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Generate Controller</h3>
+        <p>Use <code>CreateNestedCrudController</code> to generate 7 REST endpoints with Swagger docs and audit logging.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>Wire Up AppModule</h3>
+        <p>Import <code>NestCrudModule</code>, register global interceptors, and you're ready for production.</p>
+      </div>
+    </div>
+
+    <div style="margin-top:48px">
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts</div>
+        </div>
+        <pre><span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">TypeOrmModule</span>.<span class="fn">forRoot</span>({
+      type: <span class="str">'postgres'</span>,
+      autoLoadEntities: <span class="num">true</span>,
+      <span class="cm">// ... connection options</span>
+    }),
+    <span class="typ">NestCrudModule</span>,
+    <span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+      userEntity: <span class="typ">User</span>,
+      identifierField: <span class="str">'email'</span>,
+      passkeyField: <span class="str">'password'</span>,
+      jwtSecret: process.env.<span class="typ">JWT_SECRET</span>,
+    }),
+  ],
+  providers: [
+    { provide: <span class="typ">APP_INTERCEPTOR</span>, useClass: <span class="typ">ResponseInterceptor</span> },
+    { provide: <span class="typ">APP_INTERCEPTOR</span>, useClass: <span class="typ">AuditInterceptor</span> },
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <p style="margin-bottom:12px">
+      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/.opencode/skills/nest-util/SKILL.md">Full Reference</a>
+    </p>
+    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+  </div>
+</footer>
+
+</body>
+</html>
