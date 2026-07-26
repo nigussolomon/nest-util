@@ -12,6 +12,7 @@ export * from './lib/interceptors/audit-log.interceptor';
 export * from './lib/interfaces/crud.interface';
 export * from './lib/interfaces/cursor-strategy.interface';
 export * from './lib/interfaces/hooks.interface';
+export * from './lib/interfaces/find-mine.interface';
 export * from './lib/interfaces/audit-log.interface';
 export * from './lib/helpers/exception-filter.helper';
 export * from './lib/helpers/cursor-pagination.helper';

@@ -18,7 +18,8 @@ export class PostService extends NestCrudService<
   ) {
     super({
       repository,
-      allowedFilters: [], // Add keys from Post to allow filtering
+      allowedFilters: [],
+      userOwnershipField: 'authorId',
     });
   }
 }

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
 
 @Entity()
 export class Post {
@@ -10,4 +10,8 @@ export class Post {
 
   @Column({ type: 'varchar', nullable: true })
   content!: string;
+
+  @Index()
+  @Column({ nullable: true })
+  authorId?: number;
 }

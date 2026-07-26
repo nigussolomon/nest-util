@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, Type } from '@nestjs/common';
-import { DeepPartial, ObjectLiteral, Repository } from 'typeorm';
+import { Injectable, NotFoundException, BadRequestException, Type } from '@nestjs/common';
+import { DeepPartial, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 import { AuditLogEntity } from '../entities/audit-log.entity';
 import { applyFilters } from '../helpers/filter.helper';
 import { PaginationDto } from '../dtos/pagination.dto';
@@ -9,6 +9,7 @@ import { applyPagination } from '../helpers/pagination.helper';
 import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
 import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
 import { CrudHookConfig, CrudHooks, TransactionConfig } from '../interfaces/hooks.interface';
+import { FindMineConfig } from '../interfaces/find-mine.interface';
 import {
   applyCursorFilter,
   buildNextCursor,
@@ -16,7 +17,8 @@ import {
   detectCursorStrategy,
 } from '../helpers/cursor-pagination.helper';
 
-export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
+export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto>
+  extends FindMineConfig<Entity> {
   repository: Repository<Entity>;
   allowedFilters?: readonly (keyof Entity)[];
   allowedSortFields?: readonly (keyof Entity)[];
@@ -61,6 +63,8 @@ export class NestCrudService<
   protected readonly cursorStrategy: CursorStrategy;
   protected readonly hooks: CrudHooks<Entity, any, any>;
   protected readonly transactionConfig: TransactionConfig;
+  protected readonly userOwnershipField?: keyof Entity;
+  protected readonly findMineQuery?: (qb: SelectQueryBuilder<Entity>, userId: string | number) => void;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -76,6 +80,8 @@ export class NestCrudService<
       options.cursorStrategy ?? detectCursorStrategy(this.repo);
     this.hooks = options.hooks ?? {};
     this.transactionConfig = options.transactionConfig ?? {};
+    this.userOwnershipField = options.userOwnershipField;
+    this.findMineQuery = options.findMineQuery;
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
@@ -146,6 +152,61 @@ export class NestCrudService<
 
   async findAll(query: PaginationDto & FilterDto) {
     const qb = this.repo.createQueryBuilder('e');
+
+    if (this.include.length > 0) {
+      this.include.forEach((relation) => {
+        const parts = relation.split('.');
+        if (parts.length === 1) {
+          qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
+        } else {
+          const parentAlias = parts.slice(0, -1).join('_');
+          const field = parts[parts.length - 1];
+          const alias = parts.join('_');
+          qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
+        }
+      });
+    }
+
+    applyFilters(qb, query.filter, this.allowedFilters);
+
+    const paginationMeta = applyPagination(qb, query);
+
+    if (query.orderBy) {
+      const orderDirection = query.orderDirection === 'ASC' ? 'ASC' : 'DESC';
+      if (
+        this.allowedSortFields.length === 0 ||
+        this.allowedSortFields.includes(query.orderBy as keyof Entity)
+      ) {
+        qb.orderBy(`e.${query.orderBy}`, orderDirection);
+      }
+    }
+
+    const [entities, total] = await qb.getManyAndCount();
+
+    const data = this.toResponseDto
+      ? (this.toResponseDto(entities) as ResponseDto[])
+      : (entities as unknown as ResponseDto[]);
+
+    return paginationMeta
+      ? { data, meta: { ...paginationMeta, total } }
+      : { data };
+  }
+
+  async findMine(
+    userId: string | number,
+    query: PaginationDto & FilterDto
+  ): Promise<{ data: ResponseDto[]; meta?: unknown }> {
+    if (!this.userOwnershipField && !this.findMineQuery) {
+      throw new BadRequestException('findMine not configured');
+    }
+
+    const qb = this.repo.createQueryBuilder('e');
+
+    if (this.findMineQuery) {
+      this.findMineQuery(qb, userId);
+    } else if (this.userOwnershipField) {
+      qb.where(`e.${String(this.userOwnershipField)} = :userId`, { userId });
+    }
 
     if (this.include.length > 0) {
       this.include.forEach((relation) => {

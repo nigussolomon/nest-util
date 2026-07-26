@@ -22,5 +22,10 @@
     "jest.config.cts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../nest-auth/tsconfig.lib.json"
+    }
   ]
 }

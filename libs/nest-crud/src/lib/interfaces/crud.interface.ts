@@ -8,7 +8,8 @@ export type CrudEndpoint =
   | 'create'
   | 'update'
   | 'remove'
-  | 'findAuditLogs';
+  | 'findAuditLogs'
+  | 'findMine';
 
 export interface AuditLogQuery {
   user_id?: string;
@@ -49,4 +50,9 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   remove(id: number): Promise<boolean>;
 
   findAuditLogs?(query: AuditLogQuery): Promise<unknown>;
+
+  findMine?(
+    userId: string | number,
+    query: PaginationDto & FilterDto
+  ): Promise<{ data: ResponseDto[]; meta?: unknown }>;
 }
