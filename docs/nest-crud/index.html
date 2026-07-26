@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nest-crud — @nest-util/nest-crud Documentation</title>
+  <meta name="description" content="CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory for NestJS.">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════════════════════ -->
+<nav>
+  <div class="container">
+    <div class="nav-brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E0234E"/>
+        <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      Nest-Util
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#hooks">Hooks</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util/blob/main/skill/SKILL.md">Skill</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="#quickstart" class="nav-cta">Get Started</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     DOC LAYOUT: SIDEBAR + CONTENT
+     ═══════════════════════════════════════════════════════ -->
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <ul>
+      <li class="sidebar-section">Getting Started</li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li class="sidebar-section">Core</li>
+      <li><a href="#service">Service</a></li>
+      <li><a href="#controller">Controller</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li class="sidebar-section">Features</li>
+      <li><a href="#hooks">Lifecycle Hooks</a></li>
+      <li><a href="#cursor">Cursor Pagination</a></li>
+      <li><a href="#findmine">findMine</a></li>
+      <li><a href="#filtering">Filtering</a></li>
+      <li class="sidebar-section">Testing</li>
+      <li><a href="#testing">Testing Factory</a></li>
+      <li class="sidebar-section">Reference</li>
+      <li><a href="#help">Help Notes</a></li>
+    </ul>
+  </aside>
+
+  <main class="doc-content">
+
+    <!-- ═══════════════════════════════════════════════════
+         HERO
+         ═══════════════════════════════════════════════════ -->
+    <h1 id="features">nest-crud</h1>
+    <p class="subtitle">CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all in one package.</p>
+
+    <!-- ═══════════════════════════════════════════════════
+         INSTALL
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="install">Install</h2>
+    <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
+    <div class="install-box">
+      <code>pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+    <p><code>@nest-util/nest-crud</code> includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.</p>
+
+    <!-- ═══════════════════════════════════════════════════
+         SERVICE
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="service">Service</h2>
+    <p>Create your resource service by extending <code>NestCrudService</code>:</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.service.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">Injectable</span> } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { <span class="typ">InjectRepository</span> } <span class="kw">from</span> <span class="str">'@nestjs/typeorm'</span>;
+<span class="kw">import</span> { <span class="typ">Repository</span> } <span class="kw">from</span> <span class="str">'typeorm'</span>;
+<span class="kw">import</span> { <span class="typ">NestCrudService</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+<span class="kw">import</span> { <span class="typ">Post</span> } <span class="kw">from</span> <span class="str">'./post.entity'</span>;
+<span class="kw">import</span> { <span class="typ">CreatePostDto</span> } <span class="kw">from</span> <span class="str">'./create-post.dto'</span>;
+<span class="kw">import</span> { <span class="typ">UpdatePostDto</span> } <span class="kw">from</span> <span class="str">'./update-post.dto'</span>;
+
+<span class="dec">@Injectable</span>()
+<span class="kw">export class</span> <span class="typ">PostService</span> <span class="kw">extends</span> <span class="typ">NestCrudService</span>&lt;
+  <span class="typ">Post</span>,
+  <span class="typ">CreatePostDto</span>,
+  <span class="typ">UpdatePostDto</span>
+&gt; {
+  <span class="fn">constructor</span>(<span class="dec">@InjectRepository</span>(<span class="typ">Post</span>) repository: <span class="typ">Repository</span>&lt;<span class="typ">Post</span>&gt;) {
+    <span class="kw">super</span>({
+      repository,
+      allowedFilters: [<span class="str">'title'</span>],
+      allowedSortFields: [<span class="str">'createdAt'</span>, <span class="str">'title'</span>],
+      include: [<span class="str">'author'</span>],
+      userOwnershipField: <span class="str">'authorId'</span>,
+      hooks: {
+        afterCreate: {
+          handler: <span class="kw">async</span> (ctx) =&gt; {
+            <span class="cm">// Send notifications, emit events</span>
+          },
+        },
+      },
+    });
+  }
+}</pre>
+    </div>
+
+    <h3>Service Options</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">crud-service-options.interface.ts</div>
+      </div>
+      <pre><span class="kw">interface</span> <span class="typ">CrudServiceOptions</span>&lt;<span class="typ">Entity</span>, <span class="typ">ResponseDto</span>&gt; {
+  repository: <span class="typ">Repository</span>&lt;<span class="typ">Entity</span>&gt;;
+  allowedFilters?: <span class="kw">readonly</span> (<span class="kw">keyof</span> <span class="typ">Entity</span>)[];
+  allowedSortFields?: <span class="kw">readonly</span> (<span class="kw">keyof</span> <span class="typ">Entity</span>)[];
+  include?: <span class="kw">readonly</span> <span class="typ">string</span>[];
+  relations?: {
+    property: <span class="kw">keyof</span> <span class="typ">Entity</span>;
+    repo: <span class="typ">Repository</span>&lt;<span class="typ">ObjectLiteral</span>&gt;;
+    idField?: <span class="typ">string</span>;
+  }[];
+  toResponseDto?: (entity: <span class="typ">Entity</span> | <span class="typ">Entity</span>[]) =&gt; <span class="typ">ResponseDto</span> | <span class="typ">ResponseDto</span>[];
+  createDtoClass?: <span class="typ">Type</span>&lt;<span class="typ">unknown</span>&gt;;
+  updateDtoClass?: <span class="typ">Type</span>&lt;<span class="typ">unknown</span>&gt;;
+  disabledEndpoints?: <span class="kw">readonly</span> <span class="typ">CrudEndpoint</span>[];
+  cursorStrategy?: <span class="typ">CursorStrategy</span>;          <span class="cm">// override auto-detection</span>
+  hooks?: <span class="typ">CrudHooks</span>&lt;<span class="typ">Entity</span>, <span class="typ">any</span>, <span class="typ">any</span>&gt;;      <span class="cm">// lifecycle hooks</span>
+  transactionConfig?: <span class="typ">TransactionConfig</span>;    <span class="cm">// isolation level for hooks</span>
+  userOwnershipField?: <span class="kw">keyof</span> <span class="typ">Entity</span>;        <span class="cm">// enables findMine</span>
+  findMineQuery?: (<span class="fn">qb</span>, <span class="fn">userId</span>) =&gt; <span class="kw">void</span>;     <span class="cm">// custom findMine query</span>
+}</pre>
+    </div>
+
+    <table class="endpoints-table" style="margin-top:16px">
+      <thead>
+        <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>repository</code></td>
+          <td><code>Repository&lt;Entity&gt;</code></td>
+          <td>TypeORM repository for the entity</td>
+        </tr>
+        <tr>
+          <td><code>allowedFilters</code></td>
+          <td><code>readonly (keyof Entity)[]</code></td>
+          <td>Whitelist of fields that can be filtered</td>
+        </tr>
+        <tr>
+          <td><code>allowedSortFields</code></td>
+          <td><code>readonly (keyof Entity)[]</code></td>
+          <td>Whitelist of fields that can be sorted</td>
+        </tr>
+        <tr>
+          <td><code>include</code></td>
+          <td><code>readonly string[]</code></td>
+          <td>Relations to auto-join (eager load)</td>
+        </tr>
+        <tr>
+          <td><code>relations</code></td>
+          <td><code>{ property, repo, idField? }[]</code></td>
+          <td>Resolve payload foreign keys into related entities</td>
+        </tr>
+        <tr>
+          <td><code>toResponseDto</code></td>
+          <td><code>(entity) =&gt; ResponseDto</code></td>
+          <td>Transform entity to response DTO</td>
+        </tr>
+        <tr>
+          <td><code>createDtoClass</code></td>
+          <td><code>Type&lt;unknown&gt;</code></td>
+          <td>DTO class for create validation</td>
+        </tr>
+        <tr>
+          <td><code>updateDtoClass</code></td>
+          <td><code>Type&lt;unknown&gt;</code></td>
+          <td>DTO class for update validation</td>
+        </tr>
+        <tr>
+          <td><code>disabledEndpoints</code></td>
+          <td><code>readonly CrudEndpoint[]</code></td>
+          <td>Hide generated routes without rewriting controllers</td>
+        </tr>
+        <tr>
+          <td><code>cursorStrategy</code></td>
+          <td><code>CursorStrategy</code></td>
+          <td>Override auto-detection of integer vs UUID cursors</td>
+        </tr>
+        <tr>
+          <td><code>hooks</code></td>
+          <td><code>CrudHooks&lt;Entity&gt;</code></td>
+          <td>Lifecycle hooks for before/after CRUD actions</td>
+        </tr>
+        <tr>
+          <td><code>transactionConfig</code></td>
+          <td><code>TransactionConfig</code></td>
+          <td>Transaction isolation level and timeout for hooks</td>
+        </tr>
+        <tr>
+          <td><code>userOwnershipField</code></td>
+          <td><code>keyof Entity</code></td>
+          <td>Column that links entity to user (enables findMine)</td>
+        </tr>
+        <tr>
+          <td><code>findMineQuery</code></td>
+          <td><code>(qb, userId) =&gt; void</code></td>
+          <td>Custom query builder callback for complex ownership</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════
+         CONTROLLER
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="controller">Controller</h2>
+    <p><code>CreateNestedCrudController</code> generates all standard endpoints with Swagger docs, audit decorators, and permission metadata.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.controller.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">Controller</span>, <span class="typ">UseGuards</span> } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> {
+  <span class="typ">CreateNestedCrudController</span>,
+  <span class="typ">IBaseController</span>,
+} <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+<span class="kw">import</span> { <span class="typ">ApiBearerAuth</span>, <span class="typ">ApiTags</span> } <span class="kw">from</span> <span class="str">'@nestjs/swagger'</span>;
+<span class="kw">import</span> {
+  <span class="typ">JwtAuthGuard</span>,
+  <span class="typ">PermissionsGuard</span>,
+  <span class="fn">buildCrudPermissionsFromRegistry</span>,
+} <span class="kw">from</span> <span class="str">'@nest-util/nest-auth'</span>;
+
+<span class="kw">const</span> PostCrudControllerBase = <span class="fn">CreateNestedCrudController</span>(
+  <span class="typ">CreatePostDto</span>,
+  <span class="typ">UpdatePostDto</span>,
+  <span class="typ">Post</span>,
+  {
+    permissions: <span class="fn">buildCrudPermissionsFromRegistry</span>(permissionRegistry, {
+      resource: <span class="str">'posts'</span>,
+    }),
+    enableFindMine: <span class="num">true</span>,  <span class="cm">// enables GET /post/mine</span>
+  }
+) <span class="kw">as abstract new</span> (service: <span class="typ">PostService</span>) =&gt; <span class="typ">IBaseController</span>&lt;
+  <span class="typ">CreatePostDto</span>, <span class="typ">UpdatePostDto</span>, <span class="typ">Post</span>
+&gt;;
+
+<span class="dec">@ApiTags</span>(<span class="str">'post'</span>)
+<span class="dec">@Controller</span>(<span class="str">'post'</span>)
+<span class="dec">@ApiBearerAuth</span>()
+<span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
+<span class="kw">export class</span> <span class="typ">PostController</span> <span class="kw">extends</span> PostCrudControllerBase {
+  <span class="fn">constructor</span>(<span class="kw">override readonly</span> service: <span class="typ">PostService</span>) {
+    <span class="kw">super</span>(service);
+  }
+}</pre>
+    </div>
+
+    <h3>Controller Options</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>permissions</code></td>
+          <td><code>CrudPermissions</code></td>
+          <td>Permission strings for each endpoint, integrated with <code>PermissionsGuard</code></td>
+        </tr>
+        <tr>
+          <td><code>enableFindMine</code></td>
+          <td><code>boolean</code></td>
+          <td>Enables the <code>GET /resource/mine</code> endpoint (requires auth)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════
+         ENDPOINTS
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="endpoints">Endpoints</h2>
+    <p>One controller factory produces a complete REST API with 7 endpoints.</p>
+
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Description</th>
+            <th>Auth</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource</code></td>
+            <td>List with filtering, pagination, cursor support</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource/mine</code></td>
+            <td>User-scoped records (requires <code>enableFindMine</code>)</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource/:id</code></td>
+            <td>Get single record</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/resource</code></td>
+            <td>Create record (auto-audited)</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method patch">PATCH</span></td>
+            <td><code>/resource/:id</code></td>
+            <td>Update record (auto-audited)</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method delete">DELETE</span></td>
+            <td><code>/resource/:id</code></td>
+            <td>Delete record (auto-audited)</td>
+            <td>Optional</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/resource/auditlogs</code></td>
+            <td>Query audit trail</td>
+            <td>Optional</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         LIFECYCLE HOOKS
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="hooks">Lifecycle Hooks</h2>
+    <p>Intercept any CRUD operation with before/after hooks — with optional transaction wrapping.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">hooks.interface.ts</div>
+      </div>
+      <pre><span class="kw">interface</span> <span class="typ">CrudHooks</span>&lt;<span class="typ">TEntity</span>, <span class="typ">TCreateDto</span>, <span class="typ">TUpdateDto</span>&gt; {
+  beforeCreate?: <span class="typ">CrudHookConfig</span>&lt;{ payload: <span class="typ">TCreateDto</span> }&gt;;
+  afterCreate?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; payload: <span class="typ">TCreateDto</span> }&gt;;
+  beforeUpdate?: <span class="typ">CrudHookConfig</span>&lt;{ payload: <span class="typ">TUpdateDto</span>; entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
+  afterUpdate?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; payload: <span class="typ">TUpdateDto</span>; id: <span class="typ">number</span> }&gt;;
+  beforeRemove?: <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
+  afterRemove?:  <span class="typ">CrudHookConfig</span>&lt;{ id: <span class="typ">number</span>; deleted: <span class="typ">boolean</span> }&gt;;
+  beforeFindOne?: <span class="typ">CrudHookConfig</span>&lt;{ id: <span class="typ">number</span> }&gt;;
+  afterFindOne?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
+}
+
+<span class="kw">interface</span> <span class="typ">CrudHookConfig</span>&lt;<span class="typ">TContext</span>&gt; {
+  handler: (context: <span class="typ">TContext</span>) =&gt; <span class="typ">Promise</span>&lt;<span class="typ">any</span>&gt; | <span class="typ">any</span>;
+  transaction?: <span class="typ">boolean</span>;  <span class="cm">// wraps in DB transaction</span>
+}
+
+<span class="kw">interface</span> <span class="typ">TransactionConfig</span> {
+  isolationLevel?: <span class="str">'READ UNCOMMITTED'</span> | <span class="str">'READ COMMITTED'</span>
+    | <span class="str">'REPEATABLE READ'</span> | <span class="str">'SERIALIZABLE'</span>;
+  timeout?: <span class="typ">number</span>;
+}</pre>
+    </div>
+
+    <h3>Available Hooks</h3>
+    <ul>
+      <li><code>beforeCreate</code> / <code>afterCreate</code></li>
+      <li><code>beforeUpdate</code> / <code>afterUpdate</code></li>
+      <li><code>beforeRemove</code> / <code>afterRemove</code></li>
+      <li><code>beforeFindOne</code> / <code>afterFindOne</code></li>
+    </ul>
+
+    <h3>Transaction Config</h3>
+    <p>Set <code>transaction: true</code> on any hook to wrap it inside a database transaction. Configure isolation level and timeout via <code>transactionConfig</code> in your service options.</p>
+
+    <h3>Configuring Hooks</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.service.ts (hooks)</div>
+      </div>
+      <pre><span class="kw">super</span>({
+  repository,
+  hooks: {
+    beforeCreate: {
+      handler: <span class="kw">async</span> (ctx) =&gt; {
+        <span class="cm">// validate, transform</span>
+      },
+      transaction: <span class="num">true</span>,  <span class="cm">// runs inside a DB transaction</span>
+    },
+    afterCreate: {
+      handler: <span class="kw">async</span> (ctx) =&gt; {
+        <span class="cm">// send events, notify</span>
+      },
+    },
+  },
+  transactionConfig: {
+    isolationLevel: <span class="str">'READ COMMITTED'</span>,
+  },
+});</pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         CURSOR PAGINATION
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="cursor">Cursor Pagination</h2>
+    <p>Pass <code>?cursor=&lt;opaque&gt;</code> to <code>GET /</code> for efficient keyset pagination on large datasets.</p>
+
+    <h3>How It Works</h3>
+    <ul>
+      <li><strong>Integer PKs:</strong> Uses <code>id &gt; cursor</code> — fast index scan</li>
+      <li><strong>UUID PKs:</strong> Uses composite <code>(createdAt, id)</code> cursors for stable ordering</li>
+      <li>Cursors are opaque base64url-encoded values — clients should not parse them</li>
+    </ul>
+
+    <h3>Usage Examples</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">cursor-pagination.sh</div>
+      </div>
+      <pre><span class="cm"># First page</span>
+<span class="kw">GET</span> /posts?limit=<span class="num">10</span>
+
+<span class="cm"># Next page — use the cursor from the previous response</span>
+<span class="kw">GET</span> /posts?cursor=<span class="str">eyJpZCI6MTB9</span>&amp;limit=<span class="num">10</span>
+
+<span class="cm"># With total count (adds a DB COUNT query)</span>
+<span class="kw">GET</span> /posts?cursor=<span class="str">eyJpZCI6MTB9</span>&amp;limit=<span class="num">10</span>&amp;includeTotal=<span class="num">true</span></pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         FINDMINE
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="findmine">findMine</h2>
+    <p>Retrieve user-scoped records via <code>GET /resource/mine</code>. Requires <code>enableFindMine: true</code> on the controller and <code>userOwnershipField</code> or <code>findMineQuery</code> on the service.</p>
+
+    <h3>Simple Column Match</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.service.ts (findMine)</div>
+      </div>
+      <pre><span class="kw">super</span>({
+  repository,
+  userOwnershipField: <span class="str">'authorId'</span>,
+});</pre>
+    </div>
+
+    <h3>Custom Query Builder</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.service.ts (findMineQuery)</div>
+      </div>
+      <pre><span class="kw">super</span>({
+  repository,
+  findMineQuery: (qb, userId) =&gt; {
+    qb.<span class="fn">where</span>(<span class="str">'e.authorId = :userId'</span>, { userId })
+      .<span class="fn">orWhere</span>(<span class="str">'e.id IN (SELECT postId FROM post_collaborators WHERE userId = :userId)'</span>, { userId });
+  },
+});</pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         TESTING FACTORY
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="testing">Testing Factory</h2>
+    <p>Generate complete test suites for your CRUD service and controller with zero boilerplate.</p>
+
+    <h3>Service Tests</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.service.spec.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="fn">crudServiceTests</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud/testing'</span>;
+<span class="kw">import</span> { <span class="typ">PostService</span> } <span class="kw">from</span> <span class="str">'./post.service'</span>;
+<span class="kw">import</span> { <span class="typ">Post</span> } <span class="kw">from</span> <span class="str">'./post.entity'</span>;
+<span class="kw">import</span> { <span class="typ">CreatePostDto</span> } <span class="kw">from</span> <span class="str">'./create-post.dto'</span>;
+<span class="kw">import</span> { <span class="typ">UpdatePostDto</span> } <span class="kw">from</span> <span class="str">'./update-post.dto'</span>;
+
+<span class="fn">describe</span>(<span class="str">'PostService'</span>, () =&gt; {
+  <span class="fn">crudServiceTests</span>({
+    serviceClass: <span class="typ">PostService</span>,
+    entity: <span class="typ">Post</span>,
+    createDto: <span class="typ">CreatePostDto</span>,
+    updateDto: <span class="typ">UpdatePostDto</span>,
+    allowedFilters: [<span class="str">'title'</span>],
+    userOwnershipField: <span class="str">'authorId'</span>,
+    test: {
+      createPayload: { title: <span class="str">'Hello'</span>, content: <span class="str">'World'</span> },
+      updatePayload: { title: <span class="str">'Updated'</span> },
+    },
+  });
+});</pre>
+    </div>
+    <p>Generates ~20 tests covering <code>findAll</code>, <code>findOne</code>, <code>create</code>, <code>update</code>, <code>remove</code>, <code>findMine</code>, <code>findAllWithCursor</code>, <code>findAuditLogs</code>, and disabled endpoints.</p>
+
+    <h3>Controller Tests</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.controller.spec.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="fn">crudControllerTests</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud/testing'</span>;
+<span class="kw">import</span> { <span class="typ">CreateNestedCrudController</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+<span class="kw">import</span> { <span class="typ">PostService</span> } <span class="kw">from</span> <span class="str">'./post.service'</span>;
+<span class="kw">import</span> { <span class="typ">Post</span> } <span class="kw">from</span> <span class="str">'./post.entity'</span>;
+<span class="kw">import</span> { <span class="typ">CreatePostDto</span> } <span class="kw">from</span> <span class="str">'./create-post.dto'</span>;
+<span class="kw">import</span> { <span class="typ">UpdatePostDto</span> } <span class="kw">from</span> <span class="str">'./update-post.dto'</span>;
+
+<span class="kw">const</span> PostControllerBase = <span class="fn">CreateNestedCrudController</span>(
+  <span class="typ">CreatePostDto</span>, <span class="typ">UpdatePostDto</span>, <span class="typ">Post</span>,
+  { enableFindMine: <span class="num">true</span> }
+);
+
+<span class="fn">describe</span>(<span class="str">'PostController'</span>, () =&gt; {
+  <span class="fn">crudControllerTests</span>({
+    controllerFactory: () =&gt; PostControllerBase,
+    serviceClass: <span class="typ">PostService</span>,
+    entity: <span class="typ">Post</span>,
+    createDto: <span class="typ">CreatePostDto</span>,
+    updateDto: <span class="typ">UpdatePostDto</span>,
+    permissions: {
+      findAll: <span class="str">'posts.read'</span>,
+      findOne: <span class="str">'posts.read'</span>,
+      create: <span class="str">'posts.create'</span>,
+      update: <span class="str">'posts.update'</span>,
+      remove: <span class="str">'posts.delete'</span>,
+      findAuditLogs: <span class="str">'posts.audit'</span>,
+      findMine: <span class="str">'posts.read'</span>,
+    },
+    test: {
+      createPayload: { title: <span class="str">'Hello'</span>, content: <span class="str">'World'</span> },
+      updatePayload: { title: <span class="str">'Updated'</span> },
+    },
+  });
+});</pre>
+    </div>
+    <p>Generates ~15 tests covering all endpoints, disabled endpoint guards, and permission metadata.</p>
+
+    <h3>Config Options</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>entity</code></td>
+          <td>TypeORM entity class</td>
+        </tr>
+        <tr>
+          <td><code>serviceClass</code></td>
+          <td>Your service class</td>
+        </tr>
+        <tr>
+          <td><code>createDto</code> / <code>updateDto</code></td>
+          <td>DTO classes</td>
+        </tr>
+        <tr>
+          <td><code>allowedFilters</code></td>
+          <td>Fields available for filtering</td>
+        </tr>
+        <tr>
+          <td><code>userOwnershipField</code></td>
+          <td>Column for findMine ownership</td>
+        </tr>
+        <tr>
+          <td><code>findMineQuery</code></td>
+          <td>Custom query builder for complex ownership</td>
+        </tr>
+        <tr>
+          <td><code>disabledEndpoints</code></td>
+          <td>Endpoints to test as disabled</td>
+        </tr>
+        <tr>
+          <td><code>hooks</code></td>
+          <td>Hook configs to test</td>
+        </tr>
+        <tr>
+          <td><code>toResponseDto</code></td>
+          <td>Response transformer</td>
+        </tr>
+        <tr>
+          <td><code>test.createPayload</code></td>
+          <td>Sample create DTO</td>
+        </tr>
+        <tr>
+          <td><code>test.updatePayload</code></td>
+          <td>Sample update DTO</td>
+        </tr>
+        <tr>
+          <td><code>test.mockEntity</code></td>
+          <td>Custom mock entity data</td>
+        </tr>
+        <tr>
+          <td><code>test.mockRepoOverrides</code></td>
+          <td>Override mock repository methods</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Mock Utilities</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">mock-utils.ts</div>
+      </div>
+      <pre><span class="kw">import</span> {
+  <span class="fn">createMockRepository</span>,
+  <span class="fn">createMockQb</span>,
+  <span class="fn">createDefaultMockEntity</span>,
+} <span class="kw">from</span> <span class="str">'@nest-util/nest-crud/testing'</span>;
+
+<span class="cm">// Create a mock TypeORM repository</span>
+<span class="kw">const</span> repo = <span class="fn">createMockRepository</span>(<span class="typ">Post</span>);
+
+<span class="cm">// Create a mock query builder</span>
+<span class="kw">const</span> qb = <span class="fn">createMockQb</span>();
+
+<span class="cm">// Auto-generate mock entity from TypeORM metadata</span>
+<span class="kw">const</span> mock = <span class="fn">createDefaultMockEntity</span>(<span class="typ">Post</span>);</pre>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         FILTERING
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="filtering">Filtering</h2>
+    <p>Filtering uses the <code>filter[field_operator]=value</code> query parameter format.</p>
+
+    <h3>Example</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">filtering.sh</div>
+      </div>
+      <pre><span class="cm"># Exact match</span>
+<span class="kw">GET</span> /posts?filter[title_eq]=<span class="str">Hello</span>
+
+<span class="cm"># Contains</span>
+<span class="kw">GET</span> /posts?filter[title_cont]=<span class="str">lo</span>
+
+<span class="cm"># Greater than or equal</span>
+<span class="kw">GET</span> /posts?filter[createdAt_gte]=<span class="str">2024-01-01</span>
+
+<span class="cm"># Multiple filters</span>
+<span class="kw">GET</span> /posts?filter[title_cont]=<span class="str">test</span>&amp;filter[authorId_eq]=<span class="num">1</span></pre>
+    </div>
+
+    <h3>Supported Operators</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Operator</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>eq</code></td><td>Equal to</td></tr>
+        <tr><td><code>ne</code></td><td>Not equal to</td></tr>
+        <tr><td><code>cont</code></td><td>Contains (LIKE %value%)</td></tr>
+        <tr><td><code>notcont</code></td><td>Does not contain</td></tr>
+        <tr><td><code>starts</code></td><td>Starts with (LIKE value%)</td></tr>
+        <tr><td><code>ends</code></td><td>Ends with (LIKE %value)</td></tr>
+        <tr><td><code>gte</code></td><td>Greater than or equal</td></tr>
+        <tr><td><code>lte</code></td><td>Less than or equal</td></tr>
+        <tr><td><code>gt</code></td><td>Greater than</td></tr>
+        <tr><td><code>lt</code></td><td>Less than</td></tr>
+        <tr><td><code>in</code></td><td>In list (comma-separated)</td></tr>
+        <tr><td><code>nin</code></td><td>Not in list</td></tr>
+        <tr><td><code>isnull</code></td><td>Is null</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ═══════════════════════════════════════════════════
+         HELP NOTES
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="help">Help Notes</h2>
+
+    <ul>
+      <li><strong>disabledEndpoints:</strong> Use <code>disabledEndpoints</code> in service options to hide generated routes without rewriting controllers.</li>
+      <li><strong>relations:</strong> The <code>relations</code> option lets you resolve <code>propertyId</code> payload fields into related entities automatically.</li>
+      <li><strong>findAuditLogs:</strong> If <code>findAuditLogs</code> is not implemented in your service, <code>/auditlogs</code> returns not found by design.</li>
+      <li><strong>findMine requirements:</strong> <code>findMine</code> returns 404 unless <code>enableFindMine: true</code> is set on the controller <em>and</em> <code>userOwnershipField</code> or <code>findMineQuery</code> is configured on the service.</li>
+      <li><strong>Express query parser:</strong> Set <code>app.set('query parser', 'extended')</code> in bootstrap for deep object query parsing (required for filter syntax).</li>
+    </ul>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <p style="margin-bottom:12px">
+      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a> &middot;
+      <a href="../index.html">Back to Nest-Util</a>
+    </p>
+    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+  </div>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateToggleIcon(next);
+}
+function updateToggleIcon(theme) {
+  document.querySelector('.icon-sun').style.display = theme === 'light' ? 'none' : 'block';
+  document.querySelector('.icon-moon').style.display = theme === 'light' ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateToggleIcon(saved);
+  }
+})();
+</script>
+
+</body>
+</html>

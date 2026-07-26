@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
-import { NestCrudService } from './services/nest-crud.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogEntity } from './entities/audit-log.entity';
+import { AuditService } from './services/audit-log.service';
 
 @Module({
-  providers: [NestCrudService],
-  exports: [NestCrudService],
+  imports: [TypeOrmModule.forFeature([AuditLogEntity])],
+  providers: [AuditService],
+  exports: [AuditService],
 })
 export class NestCrudModule {}

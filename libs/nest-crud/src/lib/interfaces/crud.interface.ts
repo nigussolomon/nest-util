@@ -1,5 +1,6 @@
 import { FilterDto } from '../dtos/filter.dto';
 import { PaginationDto } from '../dtos/pagination.dto';
+import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 
 export type CrudEndpoint =
   | 'findAll'
@@ -7,7 +8,8 @@ export type CrudEndpoint =
   | 'create'
   | 'update'
   | 'remove'
-  | 'findAuditLogs';
+  | 'findAuditLogs'
+  | 'findMine';
 
 export interface AuditLogQuery {
   user_id?: string;
@@ -15,6 +17,16 @@ export interface AuditLogQuery {
   end_date?: string;
   page?: number;
   limit?: number;
+}
+
+export interface CursorPaginationResult<T> {
+  data: T[];
+  meta: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    total?: number;
+  };
 }
 
 export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
@@ -25,6 +37,10 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
     meta?: unknown;
   }>;
 
+  findAllWithCursor?(
+    query: CursorPaginationDto & FilterDto
+  ): Promise<CursorPaginationResult<ResponseDto>>;
+
   findOne(id: number): Promise<ResponseDto>;
 
   create(dto: CreateDto): Promise<ResponseDto>;
@@ -34,4 +50,9 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   remove(id: number): Promise<boolean>;
 
   findAuditLogs?(query: AuditLogQuery): Promise<unknown>;
+
+  findMine?(
+    userId: string | number,
+    query: PaginationDto & FilterDto
+  ): Promise<{ data: ResponseDto[]; meta?: unknown }>;
 }

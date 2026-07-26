@@ -1,1 +1,0 @@
-export const FILE_MODULE_OPTIONS = Symbol('FILE_MODULE_OPTIONS');

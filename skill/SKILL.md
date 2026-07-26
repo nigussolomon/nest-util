@@ -1,0 +1,1257 @@
+---
+name: nest-util
+description: Complete guide for using @nest-util/nest-crud and @nest-util/nest-auth in any NestJS project. Covers CRUD scaffolding, JWT auth with RBAC, audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory. Use when working with these packages.
+---
+
+# Nest-Util Consumer Guide
+
+Complete reference for consuming `@nest-util/nest-crud` v1.0.2 and `@nest-util/nest-auth` v1.0.2 in any NestJS project.
+
+## Overview
+
+Two packages that eliminate NestJS boilerplate:
+
+| Package | Version | Purpose |
+|---|---|---|
+| `@nest-util/nest-crud` | 1.0.2 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
+| `@nest-util/nest-auth` | 1.0.2 | JWT auth with RBAC, OTP login, password reset |
+
+**Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. No separate packages needed.
+
+**Integration order**: TypeORM → `AuthModule.forRoot(...)` → `NestCrudService` → `CreateNestedCrudController(...)` → global interceptors/filters.
+
+---
+
+## Installation
+
+We recommend using **pnpm** as your package manager.
+
+```bash
+pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add -D @types/passport-jwt @types/bcrypt
+```
+
+### Peer Dependencies
+
+These packages expect the following to be installed in your project:
+
+| Package | Version | Notes |
+|---|---|---|
+| `@nestjs/common` | ^11.0.0 | NestJS core |
+| `@nestjs/core` | ^11.0.0 | NestJS core |
+| `@nestjs/typeorm` | ^11.0.2 | TypeORM integration |
+| `@nestjs/swagger` | ^11.2.6 | Swagger decorators |
+| `@nestjs/jwt` | ^11.0.2 | JWT module (auth) |
+| `@nestjs/passport` | ^11.0.5 | Passport integration (auth) |
+| `typeorm` | ^1.1.0 | TypeORM v1.1.0+ required |
+| `class-validator` | ^0.14.3 | DTO validation |
+| `class-transformer` | ^0.5.1 | DTO transformation |
+| `bcrypt` | ^6.0.0 | Password hashing (auth) |
+| `passport-jwt` | ^4.0.1 | JWT strategy (auth) |
+
+---
+
+## User Entity
+
+Your User entity must have these fields for `AuthModule` to work. Field names are configurable via `AuthModule.forRoot()` options.
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ unique: true })
+  email!: string;
+
+  // REQUIRED: bcrypt-hashed password — select: false prevents leaking in queries
+  @Column({ select: false })
+  password!: string;
+
+  // REQUIRED: stores bcrypt hash of refresh nonce — rotated on every refresh
+  @Column({ select: false, nullable: true })
+  refreshToken?: string;
+
+  // REQUIRED: stores bcrypt hash of access nonce — rotated on every refresh
+  @Column({ select: false, nullable: true })
+  accessToken?: string;
+
+  // OPTIONAL: OTP fields (only if otp.enabled: true)
+  @Column({ select: false, nullable: true })
+  otpCodeHash?: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  otpCodeExpiresAt?: Date;
+
+  @Column({ default: 0 })
+  otpRequestAttempts!: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  otpLastSentAt?: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  otpLockedUntil?: Date;
+
+  // OPTIONAL: Password reset fields (only if passwordReset.enabled: true)
+  @Column({ select: false, nullable: true })
+  passwordResetTokenHash?: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  passwordResetTokenExpiresAt?: Date;
+
+  // RBAC: relation to user-role join table
+  @OneToMany(() => UserRole, (ur) => ur.user)
+  userRoles?: UserRole[];
+}
+```
+
+### Guardrail: Password Fields
+
+**NEVER** remove `select: false` from `password`, `refreshToken`, and `accessToken` columns. Without it, every `findOne()` call will return these fields in the response, leaking sensitive data. The auth module uses `addSelect()` internally to fetch them only when needed.
+
+---
+
+## AuthModule Setup
+
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule, NestCrudModule } from '@nest-util/nest-crud';
+// Or: import { AuthModule } from '@nest-util/nest-auth';
+// nest-crud re-exports everything from nest-auth
+
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT ?? '5432'),
+      username: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      autoLoadEntities: true,    // REQUIRED for AuditLogEntity registration
+      synchronize: true,         // SET FALSE IN PRODUCTION — use migrations
+    }),
+    TypeOrmModule.forFeature([User]),
+    AuthModule.forRoot({
+      userEntity: User,
+      identifierField: 'email',
+      passkeyField: 'password',
+      jwtSecret: process.env.JWT_SECRET,
+      refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET,
+      expiresIn: '1h',
+      refreshTokenExpiresIn: '7d',
+      refreshTokenField: 'refreshToken',
+      accessTokenField: 'accessToken',
+      loginDto: LoginDto,
+      registerDto: RegisterDto,
+      refreshDto: RefreshDto,
+      relations: ['userRoles', 'userRoles.role'],
+      rbac: {
+        userRolesRelation: 'userRoles',
+        rolesKey: 'userRoles',
+        nestedRoleKey: 'role',
+      },
+      permissionRegistry,
+      disabledRoutes: [],
+      otp: {
+        enabled: true,
+        deliverCode: async ({ identifier, code, expiresAt }) => {
+          // TODO: Send OTP code via email/SMS
+          console.log(`OTP ${code} for ${identifier}, expires ${expiresAt}`);
+        },
+      },
+      passwordReset: {
+        enabled: true,
+        deliverToken: async ({ identifier, token, expiresAt }) => {
+          // TODO: Send reset link via email
+          console.log(`Reset token for ${identifier}: ${token}`);
+        },
+      },
+    }),
+    NestCrudModule,
+  ],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
+})
+export class AppModule {}
+```
+
+### AuthModule Options Reference
+
+| Option | Type | Default | Required | Description |
+|---|---|---|---|---|
+| `userEntity` | `Type<unknown>` | — | Yes | Your User entity class |
+| `identifierField` | `string` | — | Yes | Login field name (e.g. `'email'`) |
+| `passkeyField` | `string` | — | Yes | Password field name (e.g. `'password'`) |
+| `jwtSecret` | `string` | — | Yes | JWT signing secret |
+| `expiresIn` | `string` | `'1h'` | No | Access token expiry |
+| `refreshTokenSecret` | `string` | same as jwtSecret | No | Refresh token signing secret |
+| `refreshTokenExpiresIn` | `string` | `'7d'` | No | Refresh token expiry |
+| `refreshTokenField` | `string` | `'refreshToken'` | No | DB field for hashed refresh nonce |
+| `accessTokenField` | `string` | `'accessToken'` | No | DB field for hashed access nonce |
+| `refreshTokenHeaderName` | `string` | `'x-refresh-token'` | No | Header name for refresh token |
+| `disabledRoutes` | `string[]` | `[]` | No | Routes to disable (e.g. `['register']`) |
+| `loginDto` | `Type<unknown>` | — | No | Custom login DTO class |
+| `registerDto` | `Type<unknown>` | — | No | Custom register DTO class |
+| `refreshDto` | `Type<unknown>` | — | No | Custom refresh DTO class |
+| `relations` | `string[]` | — | No | Relations to load during JWT validation |
+| `rbac` | `AuthRbacOptions` | — | No | RBAC configuration |
+| `permissionRegistry` | `PermissionRegistryConfig` | — | No | Permission registry for CRUD |
+| `otp` | `AuthOtpOptions` | — | No | OTP login configuration |
+| `passwordReset` | `AuthPasswordResetOptions` | — | No | Password reset configuration |
+
+### OTP Configuration
+
+```typescript
+otp: {
+  enabled: true,
+  codeLength: 6,           // 4-10, default: 6
+  ttlSeconds: 300,         // Code validity, default: 300 (5 min)
+  cooldownSeconds: 60,     // Min time between requests, default: 60
+  maxAttempts: 5,          // Max failed attempts before lock, default: 5
+  lockSeconds: 300,        // Lockout duration, default: 300
+  channel: 'email',        // Delivery channel, default: 'email'
+  deliverCode: async ({ identifier, code, expiresAt }) => {
+    // REQUIRED callback — send the code to the user
+  },
+}
+```
+
+### Password Reset Configuration
+
+```typescript
+passwordReset: {
+  enabled: true,
+  tokenLength: 64,         // Token length, default: 64
+  tokenTtlSeconds: 3600,   // Token validity, default: 3600 (1 hour)
+  deliverToken: async ({ identifier, token, expiresAt }) => {
+    // REQUIRED callback — send the reset link to the user
+  },
+}
+```
+
+### Guardrail: OTP/Password Reset Callbacks
+
+**MUST** provide `deliverCode` when `otp.enabled: true` and `deliverToken` when `passwordReset.enabled: true`. The module throws at startup if these are missing.
+
+---
+
+## NestCrudService Setup
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { NestCrudService } from '@nest-util/nest-crud';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+
+@Injectable()
+export class PostService extends NestCrudService<
+  Post,
+  CreatePostDto,
+  UpdatePostDto
+> {
+  constructor(@InjectRepository(Post) repository: Repository<Post>) {
+    super({
+      repository,
+      allowedFilters: ['title', 'authorId'],
+      allowedSortFields: ['createdAt', 'title'],
+      include: ['author'],
+      userOwnershipField: 'authorId',
+      hooks: {
+        afterCreate: {
+          handler: async (ctx) => {
+            // Send notification, emit event
+          },
+        },
+      },
+    });
+  }
+}
+```
+
+### Service Options Reference
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `repository` | `Repository<Entity>` | — | TypeORM repository (required) |
+| `allowedFilters` | `readonly (keyof Entity)[]` | `[]` | Whitelist of filterable fields |
+| `allowedSortFields` | `readonly (keyof Entity)[]` | `[]` | Whitelist of sortable fields (empty = all) |
+| `include` | `readonly string[]` | `[]` | Relations to join (e.g. `['author', 'author.profile']`) |
+| `relations` | `RelationConfig[]` | `[]` | Resolve foreign key IDs → entities |
+| `toResponseDto` | `(entity) => ResponseDto` | — | Transform entity to response DTO |
+| `createDtoClass` | `Type<unknown>` | — | Create DTO class for validation |
+| `updateDtoClass` | `Type<unknown>` | — | Update DTO class for validation |
+| `disabledEndpoints` | `readonly CrudEndpoint[]` | `[]` | Endpoints to disable |
+| `cursorStrategy` | `CursorStrategy` | auto | Override cursor strategy detection |
+| `hooks` | `CrudHooks<Entity>` | — | Lifecycle hooks configuration |
+| `transactionConfig` | `TransactionConfig` | — | Transaction isolation level |
+| `userOwnershipField` | `keyof Entity` | — | Enable findMine with column match |
+| `findMineQuery` | `(qb, userId) => void` | — | Enable findMine with custom query |
+
+### Service Methods
+
+| Method | Signature | Returns |
+|---|---|---|
+| `findAll` | `(query: PaginationDto & FilterDto)` | `{ data: ResponseDto[], meta?: { page, limit, total } }` |
+| `findAllWithCursor` | `(query: CursorPaginationDto & FilterDto)` | `CursorPaginationResult<ResponseDto>` |
+| `findOne` | `(id: number)` | `ResponseDto` |
+| `create` | `(payload: CreateDto)` | `ResponseDto` |
+| `update` | `(id: number, payload: UpdateDto)` | `ResponseDto` |
+| `remove` | `(id: number)` | `boolean` |
+| `findMine` | `(userId, query)` | `{ data: ResponseDto[], meta?: ... }` |
+| `findAuditLogs` | `(query: AuditLogQuery)` | `{ data: AuditLogEntity[], meta: { total, page, limit, totalPages } }` |
+
+### Relations Option — Foreign Key Resolution
+
+When `relations` is configured, `create` and `update` automatically:
+1. Look for a payload field named `${property}Id` (or custom `idField`)
+2. Fetch the related entity from the given repository
+3. Assign it to `payload[property]`
+4. Delete the `${property}Id` field from the payload
+
+```typescript
+super({
+  repository: postRepo,
+  relations: [
+    { property: 'author', repo: userRepo, idField: 'authorId' },
+    { property: 'category', repo: categoryRepo },  // idField defaults to 'categoryId'
+  ],
+});
+// Now creating with { title: '...', authorId: 5 } will:
+// 1. Fetch User with id=5
+// 2. Set post.author = fetchedUser
+// 3. Remove authorId from payload before save
+```
+
+---
+
+## Controller Factory
+
+```typescript
+import { Controller, UseGuards } from '@nestjs/common';
+import {
+  CreateNestedCrudController,
+  IBaseController,
+} from '@nest-util/nest-crud';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  JwtAuthGuard,
+  PermissionsGuard,
+  buildCrudPermissionsFromRegistry,
+} from '@nest-util/nest-auth';
+import { PostService } from './post.service';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+import { permissionRegistry } from '../auth/permission-registry';
+
+const PostCrudControllerBase = CreateNestedCrudController(
+  CreatePostDto,
+  UpdatePostDto,
+  Post,
+  {
+    permissions: buildCrudPermissionsFromRegistry(permissionRegistry, {
+      resource: 'posts',
+    }),
+    enableFindMine: true,
+  }
+) as abstract new (service: PostService) => IBaseController<
+  CreatePostDto,
+  UpdatePostDto,
+  Post
+>;
+
+@ApiTags('post')
+@Controller('post')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+export class PostController extends PostCrudControllerBase {
+  constructor(override readonly service: PostService) {
+    super(service);
+  }
+}
+```
+
+### Controller Options
+
+| Option | Type | Description |
+|---|---|---|
+| `permissions` | `CrudPermissionsMap` | Permission map for endpoints (auto-applied via `@Permissions()`) |
+| `enableFindMine` | `boolean` | Enable `GET /mine` endpoint |
+
+### Guardrail: `implements IBaseController`
+
+**ALWAYS** add `implements IBaseController<CreateDto, UpdateDto, Entity>` to your controller class OR cast the factory output to `abstract new (service: Service) => IBaseController<...>`. Without this, TypeScript throws `TS2742: Inferred type is not portable`.
+
+---
+
+## Generated Endpoints
+
+### CRUD Endpoints
+
+| Endpoint | Method | Description | Auth | Auto-Audited |
+|---|---|---|---|---|
+| `GET /resource` | GET | List with filtering, pagination, cursor support | Optional | No |
+| `GET /resource/mine` | GET | User-scoped records (requires `enableFindMine`) | Required | No |
+| `GET /resource/:id` | GET | Get single record | Optional | No |
+| `POST /resource` | POST | Create record | Optional | Yes |
+| `PATCH /resource/:id` | PATCH | Update record | Optional | Yes |
+| `DELETE /resource/:id` | DELETE | Delete record | Optional | Yes |
+| `GET /resource/auditlogs` | GET | Query audit trail | Optional | No |
+
+### Auth Endpoints
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `POST /auth/register` | POST | No | Register new user |
+| `POST /auth/login` | POST | No | Login with credentials |
+| `POST /auth/refresh` | POST | No | Refresh access token |
+| `POST /auth/logout` | POST | JwtAuthGuard | Invalidate tokens |
+| `GET /auth/me` | GET | JwtAuthGuard | Current user profile |
+| `GET /auth/me/permissions` | GET | JwtAuthGuard | Get effective permissions |
+| `POST /auth/update-password` | POST | JwtAuthGuard | Change own password |
+| `POST /auth/password-reset/request` | POST | No | Request reset token |
+| `POST /auth/password-reset/reset` | POST | No | Reset password with token |
+| `POST /auth/otp/request` | POST | No | Request OTP code |
+| `POST /auth/otp/login` | POST | No | Login with OTP |
+| `POST /auth/roles` | POST | admin.access | Create role |
+| `GET /auth/roles` | GET | admin.access | List all roles |
+| `POST /auth/users/:userId/roles/:roleId` | POST | admin.access | Assign role |
+| `DELETE /auth/users/:userId/roles/:roleId` | DELETE | admin.access | Remove role |
+| `POST /auth/roles/:roleId/permissions` | POST | admin.access | Add permissions |
+| `DELETE /auth/roles/:roleId/permissions` | DELETE | admin.access | Remove permissions |
+| `GET /auth/users/:userId/roles` | GET | admin.access | Get user's roles |
+
+---
+
+## Lifecycle Hooks
+
+Configure hooks in `CrudServiceOptions` for before/after interception:
+
+```typescript
+super({
+  repository,
+  hooks: {
+    beforeCreate: {
+      handler: async (ctx) => {
+        // ctx.payload — the create DTO
+        ctx.payload.title = ctx.payload.title.trim();
+      },
+      transaction: true,  // runs inside a DB transaction
+    },
+    afterCreate: {
+      handler: async (ctx) => {
+        // ctx.entity — the saved entity
+        // ctx.payload — the original DTO
+        await this.notificationService.notify('post.created', ctx.entity);
+      },
+    },
+    beforeRemove: {
+      handler: async (ctx) => {
+        // ctx.entity — the entity being deleted
+        // ctx.id — the entity ID
+        if (ctx.entity.published) {
+          throw new BadRequestException('Cannot delete published post');
+        }
+      },
+      transaction: true,
+    },
+  },
+  transactionConfig: {
+    isolationLevel: 'READ COMMITTED',
+  },
+});
+```
+
+### Available Hooks
+
+| Hook | Context | Timing |
+|---|---|---|
+| `beforeCreate` | `{ payload }` | Before `repo.save()` |
+| `afterCreate` | `{ entity, payload }` | After `repo.save()` |
+| `beforeUpdate` | `{ payload, entity, id }` | Before `repo.merge()` + `repo.save()` |
+| `afterUpdate` | `{ entity, payload, id }` | After `findOne()` re-fetch |
+| `beforeRemove` | `{ entity, id }` | Before `repo.delete()` |
+| `afterRemove` | `{ id, deleted }` | After `repo.delete()` |
+| `beforeFindOne` | `{ id }` | Before `repo.findOne()` |
+| `afterFindOne` | `{ entity, id }` | After `repo.findOne()` |
+
+### Transaction Config
+
+```typescript
+interface TransactionConfig {
+  isolationLevel?:
+    | 'READ UNCOMMITTED'
+    | 'READ COMMITTED'
+    | 'REPEATABLE READ'
+    | 'SERIALIZABLE';
+  timeout?: number;  // milliseconds
+}
+```
+
+When `transaction: true` on a hook, the handler runs inside a `QueryRunner` transaction. If the hook throws, the entire transaction rolls back — including the CRUD operation itself.
+
+---
+
+## Cursor Pagination
+
+Pass `?cursor=<opaque>` to any `GET /` endpoint to switch from offset to cursor pagination automatically.
+
+### Integer Primary Keys
+
+```bash
+# First page
+GET /posts?limit=10
+
+# Next page (cursor is the ID of the last item)
+GET /posts?cursor=eyJpZCI6MTB9&limit=10
+
+# With total count
+GET /posts?cursor=eyJpZCI6MTB9&limit=10&includeTotal=true
+```
+
+Integer PKs use simple `id > cursor` — fast and efficient.
+
+### UUID Primary Keys
+
+For entities with UUID primary keys (like `AuditLogEntity`), the system uses composite `(createdAt, id)` cursors. This is auto-detected from repository metadata.
+
+### Response Shape
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "limit": 10,
+    "hasMore": true,
+    "nextCursor": "eyJpZCI6MTB9",
+    "total": 42
+  }
+}
+```
+
+`total` is only present when `?includeTotal=true` is passed (disabled by default for performance).
+
+### Cursor Encoding
+
+Cursors are base64url-encoded JSON — opaque to clients. Never parse or construct cursors manually. The system handles encoding/decoding internally.
+
+---
+
+## findMine (User-Scoped Records)
+
+### Simple Column Match
+
+When all user-owned records have a direct foreign key:
+
+```typescript
+// Service
+super({
+  repository,
+  userOwnershipField: 'authorId',  // WHERE e.authorId = :userId
+});
+
+// Controller
+const PostControllerBase = CreateNestedCrudController(
+  CreatePostDto, UpdatePostDto, Post,
+  { enableFindMine: true }
+);
+```
+
+### Custom Query
+
+For complex ownership (e.g., author OR collaborator):
+
+```typescript
+super({
+  repository,
+  findMineQuery: (qb, userId) => {
+    qb.where('e.authorId = :userId', { userId })
+      .orWhere(
+        'e.id IN (SELECT postId FROM post_collaborators WHERE userId = :userId)',
+        { userId }
+      );
+  },
+});
+```
+
+**Endpoint**: `GET /resource/mine` — requires authentication, returns user-scoped records with standard pagination.
+
+### Guardrail: findMine Requirements
+
+`findMine` returns 404 unless ALL of these are true:
+1. `enableFindMine: true` is passed to `CreateNestedCrudController`
+2. Service configures `userOwnershipField` or `findMineQuery`
+3. `@nest-util/nest-auth` is installed (for `@CurrentUser()` decorator)
+
+---
+
+## Audit Logging
+
+### Setup
+
+```typescript
+// app.module.ts
+@Module({
+  imports: [NestCrudModule],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
+})
+export class AppModule {}
+```
+
+### Manual Decoration
+
+```typescript
+@Post()
+@Audit({ action: 'CREATE', entity: 'Post' })
+create(@Body() dto: CreatePostDto) { ... }
+```
+
+### Automatic Decoration
+
+CRUD controller factory auto-decorates `create`, `update`, `remove` with `@Audit()`. No manual work needed.
+
+### Using AuditService Directly
+
+```typescript
+import { AuditService } from '@nest-util/nest-crud';
+
+@Injectable()
+export class BillingService {
+  constructor(private readonly auditService: AuditService) {}
+
+  async issueRefund(orderId: string, userId: string) {
+    await this.auditService.logEntityAction('REFUND', 'Order', orderId, {
+      userId,
+      metadata: { source: 'billing-service' },
+    });
+  }
+}
+```
+
+### AuditLogEntity Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID | Primary key |
+| `action` | string | Action performed (e.g. `'CREATE'`, `'UPDATE'`) |
+| `entity` | string | Entity name (e.g. `'Post'`) |
+| `entityId` | string | Entity ID |
+| `userId` | string | User who performed the action |
+| `tenantId` | string | Tenant ID (optional) |
+| `metadata` | JSONB | Request body, params, query, response |
+| `ip` | string | Client IP address |
+| `userAgent` | string | Client user agent |
+| `createdAt` | Date | Timestamp |
+
+---
+
+## Filtering
+
+### Query Format
+
+```
+?filter[field_operator]=value
+```
+
+**Requires** Express query parser set to `'extended'`:
+
+```typescript
+// main.ts
+app.getHttpAdapter().getInstance().set('query parser', 'extended');
+```
+
+### Supported Operators
+
+| Operator | SQL | Example |
+|---|---|---|
+| `eq` | `= :val` | `?filter[name_eq]=John` |
+| `ne` | `!= :val` | `?filter[name_ne]=John` |
+| `cont` | `ILIKE '%val%'` | `?filter[name_cont]=oh` |
+| `notcont` | `NOT ILIKE '%val%'` | `?filter[name_notcont]=oh` |
+| `starts` | `ILIKE 'val%'` | `?filter[name_starts]=Jo` |
+| `ends` | `ILIKE '%val'` | `?filter[name_ends]=hn` |
+| `gte` | `>= :val` | `?filter[age_gte]=18` |
+| `lte` | `<= :val` | `?filter[age_lte]=65` |
+| `gt` | `> :val` | `?filter[age_gt]=18` |
+| `lt` | `< :val` | `?filter[age_lt]=65` |
+| `in` | `IN (:...val)` | `?filter[id_in]=1,2,3` |
+| `nin` | `NOT IN (:...val)` | `?filter[id_nin]=1,2,3` |
+| `isnull` | `IS NULL` / `IS NOT NULL` | `?filter[deletedAt_isnull]=true` |
+
+### Grouping
+
+```
+?filter[and][0][name_cont]=oh&filter[and][1][age_gte]=18
+?filter[or][0][name_eq]=John&filter[or][1][name_eq]=Jane
+```
+
+Groups can be nested arbitrarily.
+
+### Safety
+
+Field names are validated against `/^[A-Za-z][A-Za-z0-9_]*$/`. Only fields in `allowedFilters` are processed — unknown fields are silently ignored.
+
+### Pagination
+
+| Parameter | Default | Description |
+|---|---|---|
+| `page` | 1 | Page number (min 1) |
+| `limit` | 10 | Items per page (min 1) |
+| `orderBy` | — | Sort field (must be in `allowedSortFields`) |
+| `orderDirection` | `'DESC'` | `'ASC'` or `'DESC'` |
+
+---
+
+## Testing Factory
+
+Generate complete test suites for your CRUD service and controller with zero boilerplate.
+
+### Service Tests
+
+```typescript
+import { crudServiceTests } from '@nest-util/nest-crud/testing';
+import { PostService } from './post.service';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+
+describe('PostService', () => {
+  crudServiceTests({
+    serviceClass: PostService,
+    entity: Post,
+    createDto: CreatePostDto,
+    updateDto: UpdatePostDto,
+    allowedFilters: ['title'],
+    userOwnershipField: 'authorId',
+    test: {
+      createPayload: { title: 'Hello', content: 'World' },
+      updatePayload: { title: 'Updated' },
+    },
+  });
+});
+```
+
+This generates ~20 tests covering `findAll`, `findOne`, `create`, `update`, `remove`, `findMine`, `findAllWithCursor`, `findAuditLogs`, and disabled endpoints.
+
+### Controller Tests
+
+```typescript
+import { crudControllerTests } from '@nest-util/nest-crud/testing';
+import { CreateNestedCrudController } from '@nest-util/nest-crud';
+import { PostService } from './post.service';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+
+const PostControllerBase = CreateNestedCrudController(
+  CreatePostDto, UpdatePostDto, Post,
+  { enableFindMine: true }
+);
+
+describe('PostController', () => {
+  crudControllerTests({
+    controllerFactory: () => PostControllerBase,
+    serviceClass: PostService,
+    entity: Post,
+    createDto: CreatePostDto,
+    updateDto: UpdatePostDto,
+    permissions: {
+      findAll: 'posts.read',
+      findOne: 'posts.read',
+      create: 'posts.create',
+      update: 'posts.update',
+      remove: 'posts.delete',
+      findAuditLogs: 'posts.audit',
+      findMine: 'posts.read',
+    },
+    test: {
+      createPayload: { title: 'Hello', content: 'World' },
+      updatePayload: { title: 'Updated' },
+    },
+  });
+});
+```
+
+This generates ~15 tests covering all endpoints, disabled endpoint guards, and permission metadata.
+
+### Config Options
+
+| Option | Description |
+|---|---|
+| `entity` | TypeORM entity class |
+| `serviceClass` | Your service class |
+| `createDto` / `updateDto` | DTO classes |
+| `allowedFilters` | Fields available for filtering |
+| `userOwnershipField` | Column for `findMine` ownership |
+| `findMineQuery` | Custom query builder for complex ownership |
+| `disabledEndpoints` | Endpoints to test as disabled |
+| `hooks` | Hook configs to test |
+| `toResponseDto` | Response transformer |
+| `test.createPayload` | Sample create DTO |
+| `test.updatePayload` | Sample update DTO |
+| `test.mockEntity` | Custom mock entity data |
+| `test.mockRepoOverrides` | Override mock repository methods |
+
+### Mock Utilities
+
+```typescript
+import {
+  createMockRepository,
+  createMockQb,
+  createDefaultMockEntity,
+} from '@nest-util/nest-crud/testing';
+
+// Auto-generate mock entity from TypeORM metadata
+const mock = createDefaultMockEntity(Post);
+// Returns: { id: 1, title: 'mock_title', content: 'mock_content', authorId: 1 }
+
+// Create a mock TypeORM repository
+const repo = createMockRepository(Post);
+
+// Create a mock query builder
+const qb = createMockQb();
+```
+
+---
+
+## Guards & Decorators
+
+### From `@nest-util/nest-auth`
+
+| Decorator/Guard | Description |
+|---|---|
+| `JwtAuthGuard` | Validates JWT token, skips `@Public()` routes |
+| `PermissionsGuard` | Checks `@Permissions()` against user's resolved permissions |
+| `@Public()` | Marks route as public (skips JWT validation) |
+| `@CurrentUser()` | Param decorator — extracts `request.user` |
+| `@Permissions(...permissions)` | Sets required permissions for the route |
+
+### From `@nest-util/nest-crud`
+
+| Decorator | Description |
+|---|---|
+| `@Audit({ action, entity })` | Marks handler for audit logging |
+| `@Message('verb')` | Sets action word in response (e.g. `'created'`, `'fetched'`) |
+| `@EntityName({ singular, plural })` | Sets entity name in response |
+
+### Usage Example
+
+```typescript
+@Controller('profile')
+export class ProfileController {
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@CurrentUser() user: AuthUser) {
+    return user;
+  }
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Permissions('admin.access')
+  adminOnly() {
+    return { ok: true };
+  }
+
+  @Get('public')
+  @Public()
+  publicRoute() {
+    return { ok: true };
+  }
+}
+```
+
+---
+
+## Response Wrapping
+
+`ResponseInterceptor` transforms all responses into:
+
+```json
+{
+  "message": "Posts fetched successfully",
+  "data": [...],
+  "meta": { "page": 1, "limit": 10, "total": 42 },
+  "status": "success"
+}
+```
+
+- `@Message('fetched')` → action word
+- `@EntityName({ singular: 'Post', plural: 'Posts' })` → entity name
+- If data is an array, plural is used; otherwise singular
+- Fallback: `Action: 'Request successful'`, `Name: 'Resource'/'Resources'`
+
+---
+
+## Error Handling
+
+`TypeOrmExceptionFilter` catches `QueryFailedError`:
+
+| Database | Error Code | HTTP Status | Message |
+|---|---|---|---|
+| Postgres | `23505` | 422 | `"Duplicate entry: ..."` |
+| MySQL | `1062` | 422 | `"Duplicate entry: ..."` |
+| Any | Other | 500 | `"Internal server error"` |
+
+**ALWAYS** register as a global filter:
+
+```typescript
+app.useGlobalFilters(new TypeOrmExceptionFilter());
+```
+
+---
+
+## Permission Registry
+
+Define available permissions for your resources:
+
+```typescript
+// permission-registry.ts
+import { PermissionRegistryConfig } from '@nest-util/nest-auth';
+
+export const permissionRegistry: PermissionRegistryConfig = {
+  resources: [
+    {
+      resource: 'posts',
+      permissions: ['read', 'create', 'update', 'delete'],
+    },
+    {
+      resource: 'users',
+      permissions: ['read', 'update', 'delete'],
+    },
+  ],
+};
+```
+
+Use with controller:
+
+```typescript
+permissions: buildCrudPermissionsFromRegistry(permissionRegistry, {
+  resource: 'posts',
+})
+```
+
+This generates permission keys like `posts.read`, `posts.create`, etc.
+
+### Guardrail: Permission Registry Strict Mode
+
+By default, `buildCrudPermissionsFromRegistry` throws at startup if a CRUD permission is missing from the registry. Set `strict: false` to silently skip:
+
+```typescript
+buildCrudPermissionsFromRegistry(registry, {
+  resource: 'posts',
+  strict: false,  // don't throw on missing permissions
+})
+```
+
+---
+
+## Auth DTOs with Swagger
+
+```typescript
+import { ApiProperty } from '@nestjs/swagger';
+
+export class LoginDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: 'password123' })
+  password!: string;
+}
+
+export class RegisterDto {
+  @ApiProperty({ example: 'user@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: 'password123' })
+  password!: string;
+}
+
+export class RefreshDto {
+  @ApiProperty()
+  refreshToken!: string;
+}
+```
+
+---
+
+## Complete Example
+
+### main.ts
+
+```typescript
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+import { TypeOrmExceptionFilter } from '@nest-util/nest-crud';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  app.setGlobalPrefix('api');
+
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    transformOptions: { enableImplicitConversion: true },
+  }));
+
+  app.useGlobalFilters(new TypeOrmExceptionFilter());
+
+  // REQUIRED for filter query parameters to parse nested objects
+  app.getHttpAdapter().getInstance().set('query parser', 'extended');
+
+  const config = new DocumentBuilder()
+    .setTitle('My API')
+    .setDescription('API with Nest-Util')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
+  await app.listen(process.env.PORT || 3000);
+}
+bootstrap();
+```
+
+### app.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule, NestCrudModule, ResponseInterceptor, AuditInterceptor } from '@nest-util/nest-crud';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { User } from './user/user.entity';
+import { Post } from './post/post.entity';
+import { PostModule } from './post/post.module';
+import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
+import { permissionRegistry } from './auth/permission-registry';
+
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT ?? '5432'),
+      username: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      autoLoadEntities: true,
+      synchronize: true,
+    }),
+    TypeOrmModule.forFeature([User, Post]),
+    AuthModule.forRoot({
+      userEntity: User,
+      identifierField: 'email',
+      passkeyField: 'password',
+      jwtSecret: process.env.JWT_SECRET,
+      refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET,
+      loginDto: LoginDto,
+      registerDto: RegisterDto,
+      refreshDto: RefreshDto,
+      relations: ['userRoles', 'userRoles.role'],
+      rbac: {
+        userRolesRelation: 'userRoles',
+        rolesKey: 'userRoles',
+        nestedRoleKey: 'role',
+      },
+      permissionRegistry,
+    }),
+    NestCrudModule,
+    PostModule,
+  ],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
+})
+export class AppModule {}
+```
+
+### post.entity.ts
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
+
+@Entity()
+export class Post {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  title!: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  content!: string;
+
+  @Index()
+  @Column({ nullable: true })
+  authorId?: number;
+}
+```
+
+### post.service.ts
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { NestCrudService } from '@nest-util/nest-crud';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+
+@Injectable()
+export class PostService extends NestCrudService<
+  Post,
+  CreatePostDto,
+  UpdatePostDto
+> {
+  constructor(@InjectRepository(Post) repository: Repository<Post>) {
+    super({
+      repository,
+      allowedFilters: ['title', 'authorId'],
+      allowedSortFields: ['createdAt', 'title'],
+      include: ['author'],
+      userOwnershipField: 'authorId',
+    });
+  }
+}
+```
+
+### post.controller.ts
+
+```typescript
+import { Controller, UseGuards } from '@nestjs/common';
+import {
+  CreateNestedCrudController,
+  IBaseController,
+} from '@nest-util/nest-crud';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  JwtAuthGuard,
+  PermissionsGuard,
+  buildCrudPermissionsFromRegistry,
+} from '@nest-util/nest-auth';
+import { PostService } from './post.service';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+import { permissionRegistry } from '../auth/permission-registry';
+
+const PostCrudControllerBase = CreateNestedCrudController(
+  CreatePostDto,
+  UpdatePostDto,
+  Post,
+  {
+    permissions: buildCrudPermissionsFromRegistry(permissionRegistry, {
+      resource: 'posts',
+    }),
+    enableFindMine: true,
+  }
+) as abstract new (service: PostService) => IBaseController<
+  CreatePostDto,
+  UpdatePostDto,
+  Post
+>;
+
+@ApiTags('post')
+@Controller('post')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+export class PostController extends PostCrudControllerBase {
+  constructor(override readonly service: PostService) {
+    super(service);
+  }
+}
+```
+
+---
+
+## Security Rules
+
+These rules are **mandatory** — violating any of them will cause data leaks, runtime errors, or security vulnerabilities.
+
+1. **ALWAYS** use `select: false` on `password`, `refreshToken`, and `accessToken` columns in your User entity
+2. **ALWAYS** set Express query parser to `'extended'` for filter query parameters to parse nested objects
+3. **ALWAYS** register `TypeOrmExceptionFilter` as a global filter
+4. **ALWAYS** register `ResponseInterceptor` and `AuditInterceptor` as global interceptors via `APP_INTERCEPTOR`
+5. **ALWAYS** set `autoLoadEntities: true` on `TypeOrmModule.forRoot()` — required for `AuditLogEntity` registration
+6. **ALWAYS** add `implements IBaseController<CD, UD, RD>` to controllers extending `CreateNestedCrudController(...)`
+7. **NEVER** expose password/token fields in API responses — use `toResponseDto` to strip sensitive fields
+8. **NEVER** hardcode JWT secrets in source code — use environment variables
+9. **NEVER** set `synchronize: true` in production — use TypeORM migrations
+10. OTP `deliverCode` callback **MUST** be provided when `otp.enabled: true`
+11. Password Reset `deliverToken` callback **MUST** be provided when `passwordReset.enabled: true`
+12. `@Public()` decorator works at both handler and class level
+13. `disabledRoutes` in AuthModule accepts: `'register'`, `'login'`, `'otp/request'`, `'otp/login'`, `'password-reset/request'`, `'password-reset/reset'`
+14. **ALWAYS** ensure `@nest-util/nest-auth` is installed if using `enableFindMine` — the controller factory imports `@CurrentUser()` from it
+15. Permission registry strict mode (default) throws at startup if a CRUD permission is missing — set `strict: false` to skip
+
+---
+
+## Troubleshooting
+
+### TS2742: Inferred type is not portable
+
+Add `implements IBaseController<CD, UD, RD>` to your controller class:
+
+```typescript
+export class PostController extends PostCrudControllerBase
+  implements IBaseController<CreatePostDto, UpdatePostDto, Post>
+```
+
+### Filtering not working
+
+1. Set `app.getHttpAdapter().getInstance().set('query parser', 'extended')` in `main.ts`
+2. Whitelist filterable fields via `allowedFilters` in service options
+3. Field names must match `/^[A-Za-z][A-Za-z0-9_]*$/`
+
+### Auth token issues
+
+1. User entity must have `accessToken` and `refreshToken` fields (even if nullable)
+2. JWT secret must be consistent across all services
+3. Token fields must use `select: false` on `@Column()`
+4. Refresh token expects `refreshToken` in request body
+
+### TypeORM Duplicate Key Errors
+
+Register `TypeOrmExceptionFilter` as a global filter. It maps Postgres code `23505` to HTTP 422.
+
+### Audit Logs Not Appearing
+
+1. `NestCrudModule` must be imported in the root module
+2. `AuditInterceptor` must be registered as a global interceptor via `APP_INTERCEPTOR`
+3. Handlers must have `@Audit({ action: '...' })` decorator (CRUD factory auto-applies this)
+
+### findMine returns 404
+
+1. Ensure `enableFindMine: true` is passed to `CreateNestedCrudController`
+2. Ensure service configures `userOwnershipField` or `findMineQuery`
+3. Ensure `@nest-util/nest-auth` is installed (for `@CurrentUser()` decorator)
+
+### Hooks not firing
+
+1. Ensure hooks are passed as `CrudHookConfig` objects with a `handler` property
+2. Check that hook names match exactly: `beforeCreate`, `afterCreate`, etc.
+3. Hook context objects are different for each hook — check the hooks table above
+
+### Testing factory errors
+
+1. Ensure `@nest-util/nest-crud/testing` is imported (not the main index)
+2. The factory creates `NestCrudService` directly — your service constructor must accept `@InjectRepository`
+3. Mock repositories are provided via NestJS DI using `getRepositoryToken(entity)`

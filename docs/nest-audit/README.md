@@ -1,77 +1,67 @@
 # nest-audit Setup Guide
 
-This guide is based on `libs/nest-audit`.
+> **Note:** `@nest-util/nest-audit` has been merged into `@nest-util/nest-crud`. The separate package no longer exists.
 
-## 1) Install
+All audit functionality is now part of `@nest-util/nest-crud`:
 
-```bash
-pnpm add @nest-util/nest-audit
+- `Audit` decorator
+- `AuditInterceptor`
+- `AuditService`
+- `AuditLogEntity`
+- `ListAuditLogsDto`
+- `CreateAuditLogInput`
+
+## Migration
+
+Replace all imports from `@nest-util/nest-audit` with `@nest-util/nest-crud`:
+
+```diff
+- import { Audit } from '@nest-util/nest-audit';
++ import { Audit } from '@nest-util/nest-crud';
+
+- import { AuditInterceptor } from '@nest-util/nest-audit';
++ import { AuditInterceptor } from '@nest-util/nest-crud';
+
+- import { NestUtilNestAuditModule } from '@nest-util/nest-audit';
++ // DELETE: NestCrudModule now provides AuditService and registers AuditLogEntity
 ```
 
-## 2) Register Module
+Remove `NestUtilNestAuditModule` from your module imports. `NestCrudModule` alone is sufficient.
 
-Import `NestUtilNestAuditModule` in your root module:
+See [MIGRATION-GUIDE.md](../../MIGRATION-GUIDE.md) for the full migration guide.
 
-```ts
-import { Module } from '@nestjs/common';
-import { NestUtilNestAuditModule } from '@nest-util/nest-audit';
-
-@Module({
-  imports: [NestUtilNestAuditModule],
-})
-export class AppModule {}
-```
-
-This registers TypeORM support for `AuditLogEntity` and exports `AuditService`.
-
-## 3) Enable Audit Interceptor Globally
+## Usage
 
 ```ts
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AuditInterceptor } from '@nest-util/nest-audit';
+import { Audit, AuditInterceptor, NestCrudModule } from '@nest-util/nest-crud';
 
 @Module({
+  imports: [NestCrudModule],
   providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: AuditInterceptor,
-    },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}
 ```
 
-## 4) Add `@Audit` to Mutating Endpoints
+### Manual `@Audit` Decoration
 
 ```ts
-import { Controller, Post, Body } from '@nestjs/common';
-import { Audit } from '@nest-util/nest-audit';
-
-@Controller('posts')
-export class PostController {
-  @Post()
-  @Audit({ action: 'CREATE', entity: 'Post' })
-  create(@Body() dto: unknown) {
-    return { ok: true, dto };
-  }
-}
+@Post()
+@Audit({ action: 'CREATE', entity: 'Post' })
+create(@Body() dto: CreatePostDto) { ... }
 ```
 
-`AuditInterceptor` logs only handlers that have `@Audit(...)` metadata.
-
-## 5) Use `AuditService` Directly (Optional)
+### Using `AuditService` Directly
 
 ```ts
-import { Injectable } from '@nestjs/common';
-import { AuditService } from '@nest-util/nest-audit';
+import { AuditService } from '@nest-util/nest-crud';
 
 @Injectable()
 export class BillingService {
   constructor(private readonly auditService: AuditService) {}
 
   async issueRefund(orderId: string, userId: string) {
-    // business logic...
-
     await this.auditService.logEntityAction('REFUND', 'Order', orderId, {
       userId,
       metadata: { source: 'billing-service' },
@@ -80,19 +70,10 @@ export class BillingService {
 }
 ```
 
-## 6) Stored Audit Fields
+### Stored Fields
 
-`AuditLogEntity` stores:
+`AuditLogEntity` stores: `action`, `entity`, `entityId`, `userId`, `tenantId`, `metadata` (JSONB), `ip`, `userAgent`, `createdAt`.
 
-- `action`
-- `entity`, `entityId`
-- `userId`, `tenantId`
-- `metadata` (JSONB)
-- `ip`, `userAgent`
-- `createdAt`
+### CRUD Integration
 
-## 7) Help Notes
-
-- If `entity` is omitted in `@Audit`, interceptor tries to resolve it from controller metadata; fallback is `Resource`.
-- In the demo app, CRUD generated handlers (`create`, `update`, `delete`) are already decorated with `@Audit(...)` inside `CreateNestedCrudController`.
-- Verify your DB user has permission to create and write the `audit_logs` table.
+CRUD controller factory auto-decorates `create`, `update`, `remove` with `@Audit()`. `NestCrudService.findAuditLogs()` queries audit logs filtered by entity name.

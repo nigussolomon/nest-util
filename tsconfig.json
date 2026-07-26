@@ -11,15 +11,6 @@
     },
     {
       "path": "./apps/demo-api"
-    },
-    {
-      "path": "./libs/ncnu"
-    },
-    {
-      "path": "./libs/nest-audit"
-    },
-    {
-      "path": "./libs/nest-file"
     }
   ]
 }

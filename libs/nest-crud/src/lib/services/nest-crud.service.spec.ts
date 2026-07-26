@@ -1,15 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import {
-  Repository,
-  SelectQueryBuilder,
-  DeleteResult,
-  UpdateResult,
-} from 'typeorm';
+import { Repository, SelectQueryBuilder, DeleteResult } from 'typeorm';
 import { NestCrudService } from './nest-crud.service';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
-import { AuditLogEntity } from '@nest-util/nest-audit';
+import { AuditLogEntity } from '../entities/audit-log.entity';
 
 class MockEntity {
   id!: number;
@@ -84,10 +79,16 @@ describe('NestCrudService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       findOne: jest.fn(),
       findOneBy: jest.fn(),
+      merge: jest.fn((entity, partialEntity) =>
+        Object.assign(entity, partialEntity)
+      ),
       save: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
-      metadata: { name: 'MockEntity' },
+      metadata: {
+        name: 'MockEntity',
+        primaryColumns: [{ type: () => Number }],
+      },
       manager: {
         getRepository: jest.fn().mockReturnValue(auditRepo),
       },
@@ -468,12 +469,13 @@ describe('NestCrudService', () => {
       const payload: Partial<MockEntity> = { name: 'updated' };
 
       repository.findOneBy.mockResolvedValue(existing);
-      repository.update.mockResolvedValue({ affected: 1 } as UpdateResult);
+      repository.save.mockResolvedValue(updated);
       repository.findOne.mockResolvedValue(updated);
 
       const result = await service.update(1, payload);
 
-      expect(repository.update).toHaveBeenCalledWith(1, payload);
+      expect(repository.merge).toHaveBeenCalledWith(existing, payload);
+      expect(repository.save).toHaveBeenCalledWith(existing);
       expect(result).toEqual({ id: 1, name: 'updated' });
     });
 
@@ -488,16 +490,18 @@ describe('NestCrudService', () => {
 
   describe('remove', () => {
     it('should delete entity and return true', async () => {
+      repository.findOneBy.mockResolvedValue({ id: 1 } as any);
       repository.delete.mockResolvedValue({ affected: 1 } as DeleteResult);
 
       const result = await service.remove(1);
 
+      expect(repository.findOneBy).toHaveBeenCalledWith({ id: 1 });
       expect(repository.delete).toHaveBeenCalledWith(1);
       expect(result).toBe(true);
     });
 
-    it('should throw NotFoundException if no rows affected', async () => {
-      repository.delete.mockResolvedValue({ affected: 0 } as DeleteResult);
+    it('should throw NotFoundException if entity not found', async () => {
+      repository.findOneBy.mockResolvedValue(null);
 
       await expect(service.remove(1)).rejects.toThrow(NotFoundException);
     });

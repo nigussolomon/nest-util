@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   echo "Usage: ./bump.sh <pkg> [bump-type]"
   echo
-  echo "  pkg:        auth | crud | audit | file | ncnu"
+  echo "  pkg:        auth | crud | full (all packages)"
   echo "  bump-type:  major | minor | patch (default: patch)"
   exit 1
 }
@@ -17,19 +17,16 @@ if [ "$PKG" = "full" ]; then
     major|minor|patch) ;;
     *) usage ;;
   esac
-  for p in auth crud audit file ncnu; do
+  for p in auth crud; do
     "$0" "$p" "$BUMP"
   done
   exit 0
 fi
 
 case "$PKG" in
-  auth)  FILE="libs/nest-auth/package.json" ;;
-  crud)  FILE="libs/nest-crud/package.json" ;;
-  audit) FILE="libs/nest-audit/package.json" ;;
-  file)  FILE="libs/nest-file/package.json" ;;
-  ncnu)  FILE="libs/ncnu/package.json" ;;
-  *)     usage ;;
+  auth) FILE="libs/nest-auth/package.json" ;;
+  crud) FILE="libs/nest-crud/package.json" ;;
+  *)    usage ;;
 esac
 
 case "$BUMP" in
