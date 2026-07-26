@@ -9,7 +9,7 @@
 [![Deploy Documentation](https://github.com/nigussolomon/nest-util/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/deploy-docs.yml)
 [![Publish Libs](https://github.com/nigussolomon/nest-util/actions/workflows/publish.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/publish.yml)
 
-**A modern, production-ready collection of NestJS utilities designed to accelerate development by providing reusable, battle-tested patterns for CRUD operations, authentication, and rapid code generation.**
+**A modern, production-ready collection of NestJS utilities designed to accelerate development by providing reusable, battle-tested patterns for CRUD operations and authentication.**
 
 [Docs Index](./docs/README.md) | [Quick Start](#-quick-start) | [demo-api config](./docs/demo-api/README.md) | [Migration Guide](./MIGRATION-GUIDE.md)
 
@@ -20,9 +20,8 @@
 Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates NestJS development. Instead of writing repetitive CRUD logic, authentication flows, and entity scaffolding for every project, Nest-Util provides:
 
 - **Production-Ready Components**: Battle-tested services, controllers, and modules that handle common patterns
-- **Type-Safe Code Generation**: CLI tool that generates fully-typed entities, DTOs, services, and controllers
 - **Flexible Authentication**: Dynamic auth system that adapts to your schema without forcing a specific user model
-- **Built-in Best Practices**: Automatic pagination, filtering, Swagger documentation, and error handling
+- **Built-in Best Practices**: Automatic pagination, filtering, hooks, Swagger documentation, and error handling
 
 ### Why Nest-Util?
 
@@ -118,14 +117,12 @@ A dynamic and flexible authentication library:
 
 ### Installing Libraries
 
-Install the packages directly from GitHub releases:
-
 ```bash
 # Install nest-crud library
-pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-crud-0.1.1.tgz
+pnpm add @nest-util/nest-crud
 
-# Install nest-auth library
-pnpm add https://github.com/nigussolomon/nest-util/releases/download/latest/nest-util-nest-auth-0.0.3.tgz
+# Install nest-auth library (if using authentication)
+pnpm add @nest-util/nest-auth
 
 # Required peer/runtime dependencies
 pnpm add @nestjs/typeorm typeorm@^1.1.0 @nestjs/passport passport passport-jwt @nestjs/jwt bcrypt
@@ -431,53 +428,6 @@ super({
 CreateNestedCrudController(CreatePostDto, UpdatePostDto, Post, {
   enableFindMine: true,
 });
-```
-
-### Extending CRUD Services
-
-Add custom business logic while keeping CRUD functionality:
-
-```typescript
-@Injectable()
-export class PostService extends NestCrudService<Post, CreatePostDto, UpdatePostDto> {
-  constructor(@InjectRepository(Post) repository: Repository<Post>) {
-    super({
-      repository,
-      allowedFilters: ['title', 'published', 'authorId'],
-    });
-  }
-
-  async findPublished(): Promise<Post[]> {
-    return this.repository.find({ where: { published: true } });
-  }
-
-  async publishPost(id: number): Promise<Post> {
-    const post = await this.findOne(id);
-    return this.update(id, { published: true, publishedAt: new Date() } as any);
-  }
-}
-```
-
-### Custom Controller Endpoints
-
-Mix generated CRUD endpoints with custom routes:
-
-```typescript
-@Controller('post')
-export class PostController
-  extends CreateNestedCrudController(CreatePostDto, UpdatePostDto, Post)
-  implements IBaseController<CreatePostDto, UpdatePostDto, Post>
-{
-  constructor(override readonly service: PostService) {
-    super(service);
-  }
-
-  @Get('published')
-  @Message('fetched published posts')
-  async getPublished() {
-    return this.service.findPublished();
-  }
-}
 ```
 
 ---

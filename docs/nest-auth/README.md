@@ -130,7 +130,7 @@ export class RefreshDto {
 }
 ```
 
-## 6) Update Password
+## 7) Update Password
 
 Users can update their own password by providing their current password and a new password.
 
@@ -143,7 +143,7 @@ Users can update their own password by providing their current password and a ne
 }
 ```
 
-## 7) Password Reset (Token-based)
+## 8) Password Reset (Token-based)
 
 To enable password reset, configure the `passwordReset` option in `AuthModule.forRoot`. You must provide a `deliverToken` callback to send the reset link/token to the user.
 
@@ -168,7 +168,7 @@ AuthModule.forRoot({
 - `POST /auth/password-reset/request`: Accepts `{ email: "user@example.com" }`. Returns success even if the user doesn't exist to prevent account enumeration.
 - `POST /auth/password-reset/reset`: Accepts `{ token: "reset_token", newPassword: "new_password" }`. Invalidates all existing sessions upon success.
 
-## 8) OTP Login
+## 9) OTP Login
 
 To enable One-Time Password (OTP) login, configure the `otp` option in `AuthModule.forRoot`. You must provide a `deliverCode` callback.
 
@@ -195,7 +195,7 @@ AuthModule.forRoot({
 - `POST /auth/otp/request`: Accepts `{ email: "user@example.com" }`. Triggers the `deliverCode` callback.
 - `POST /auth/otp/login`: Accepts `{ email: "user@example.com", otpCode: "123456" }`. Validates the code and returns auth tokens.
 
-## 9) Help Notes
+## 10) Help Notes
 
 - `refresh` currently expects `refreshToken` in request body.
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.

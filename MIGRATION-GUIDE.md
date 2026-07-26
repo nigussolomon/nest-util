@@ -25,7 +25,7 @@ This guide covers upgrading from the pre-upgrade nest-util packages (TypeORM 0.3
 pnpm add typeorm@^1.1.0
 ```
 
-Run the official codemod to自动-update syntax:
+Run the official codemod to auto-update syntax:
 
 ```bash
 npx @typeorm/codemod v1
@@ -254,7 +254,7 @@ The `GET /mine` endpoint requires either `userOwnershipField` or `findMineQuery`
 
 ### TypeORM 1.x query builder changes
 
-TypeORM 1.x has minor API changes. Run `npx @typeorm/codemod v1` to自动-fix most issues. Common manual fixes:
+TypeORM 1.x has minor API changes. Run `npx @typeorm/codemod v1` to auto-fix most issues. Common manual fixes:
 
 - `entitySkipConstructor` removed
 - `Repository.findOne()` options may differ slightly

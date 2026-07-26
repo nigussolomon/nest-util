@@ -1,0 +1,30 @@
+{
+  "name": "@nest-util/nest-crud",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/nest-crud/src",
+  "projectType": "library",
+  "tags": ["npm:public"],
+  "targets": {
+    "build": {
+      "dependsOn": ["^build"],
+      "options": {
+        "cwd": "libs/nest-crud",
+        "command": "tsc --build tsconfig.lib.json tsconfig.testing.json"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/tsconfig.base.json",
+        "{projectRoot}/tsconfig.lib.json",
+        "{projectRoot}/tsconfig.testing.json",
+        "{projectRoot}/src/**/*.ts",
+        "!{projectRoot}/jest.config.ts",
+        "!{projectRoot}/jest.config.cts",
+        "!{projectRoot}/src/**/*.spec.ts",
+        "!{projectRoot}/src/**/*.test.ts",
+        { "dependentTasksOutputFiles": "**/*.d.ts" }
+      ],
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}
