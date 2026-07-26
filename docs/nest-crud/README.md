@@ -179,20 +179,125 @@ super({
 });
 ```
 
-## 8) Global Response and DB Error Handling
+## 8) Testing Factory
+
+Generate complete test suites for your CRUD service and controller with zero boilerplate.
+
+### Service Tests
+
+```ts
+import { crudServiceTests } from '@nest-util/nest-crud/testing';
+import { PostService } from './post.service';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+
+describe('PostService', () => {
+  crudServiceTests({
+    serviceClass: PostService,
+    entity: Post,
+    createDto: CreatePostDto,
+    updateDto: UpdatePostDto,
+    allowedFilters: ['title'],
+    userOwnershipField: 'authorId',
+    test: {
+      createPayload: { title: 'Hello', content: 'World' },
+      updatePayload: { title: 'Updated' },
+    },
+  });
+});
+```
+
+This generates ~20 tests covering `findAll`, `findOne`, `create`, `update`, `remove`, `findMine`, `findAllWithCursor`, `findAuditLogs`, and disabled endpoints.
+
+### Controller Tests
+
+```ts
+import { crudControllerTests } from '@nest-util/nest-crud/testing';
+import { CreateNestedCrudController } from '@nest-util/nest-crud';
+import { PostService } from './post.service';
+import { Post } from './post.entity';
+import { CreatePostDto } from './create-post.dto';
+import { UpdatePostDto } from './update-post.dto';
+
+const PostControllerBase = CreateNestedCrudController(
+  CreatePostDto, UpdatePostDto, Post,
+  { enableFindMine: true }
+);
+
+describe('PostController', () => {
+  crudControllerTests({
+    controllerFactory: () => PostControllerBase,
+    serviceClass: PostService,
+    entity: Post,
+    createDto: CreatePostDto,
+    updateDto: UpdatePostDto,
+    permissions: {
+      findAll: 'posts.read',
+      findOne: 'posts.read',
+      create: 'posts.create',
+      update: 'posts.update',
+      remove: 'posts.delete',
+      findAuditLogs: 'posts.audit',
+      findMine: 'posts.read',
+    },
+    test: {
+      createPayload: { title: 'Hello', content: 'World' },
+      updatePayload: { title: 'Updated' },
+    },
+  });
+});
+```
+
+This generates ~15 tests covering all endpoints, disabled endpoint guards, and permission metadata.
+
+### Available Config Options
+
+| Option | Description |
+|--------|-------------|
+| `entity` | TypeORM entity class |
+| `serviceClass` | Your service class |
+| `createDto` / `updateDto` | DTO classes |
+| `allowedFilters` | Fields available for filtering |
+| `userOwnershipField` | Column for `findMine` ownership |
+| `findMineQuery` | Custom query builder for complex ownership |
+| `disabledEndpoints` | Endpoints to test as disabled |
+| `hooks` | Hook configs to test |
+| `toResponseDto` | Response transformer |
+| `test.createPayload` | Sample create DTO |
+| `test.updatePayload` | Sample update DTO |
+| `test.mockEntity` | Custom mock entity data |
+| `test.mockRepoOverrides` | Override mock repository methods |
+
+### Mock Utilities
+
+```ts
+import { createMockRepository, createMockQb, createDefaultMockEntity } from '@nest-util/nest-crud/testing';
+
+// Create a mock TypeORM repository
+const repo = createMockRepository(Post);
+
+// Create a mock query builder
+const qb = createMockQb();
+
+// Auto-generate mock entity from TypeORM metadata
+const mock = createDefaultMockEntity(Post);
+```
+
+## 9) Global Response and DB Error Handling
 
 Add these in bootstrap:
 
 - `ResponseInterceptor` as global interceptor for consistent response shape.
 - `TypeOrmExceptionFilter` as global filter for DB errors (including duplicate keys).
 
-## 9) Filtering and Pagination Notes
+## 10) Filtering and Pagination Notes
 
 - Filtering uses `filter[field_operator]=value` format.
 - Supported operators: `eq`, `ne`, `cont`, `notcont`, `starts`, `ends`, `gte`, `lte`, `gt`, `lt`, `in`, `nin`, `isnull`.
 - Express query parser should be `extended` for deep object query parsing.
 
-## 10) Help Notes
+## 11) Help Notes
 
 - Use `disabledEndpoints` in service options to hide generated routes without rewriting controllers.
 - `relations` option lets you resolve `propertyId` payload fields into related entities.

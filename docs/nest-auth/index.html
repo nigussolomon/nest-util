@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@nest-util/nest-auth — JWT Auth, RBAC, OTP &amp; Password Reset</title>
+  <meta name="description" content="JWT authentication with refresh token rotation, RBAC, OTP login, and password reset for NestJS — ready out of the box.">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════════════════════ -->
+<nav>
+  <div class="container">
+    <div class="nav-brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E0234E"/>
+        <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      Nest-Util
+    </div>
+    <ul class="nav-links">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#auth-module">Auth Module</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#guards">Guards</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="../index.html" class="nav-cta">Back to Home</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     DOC LAYOUT — SIDEBAR + CONTENT
+     ═══════════════════════════════════════════════════════ -->
+<div class="doc-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="doc-sidebar">
+    <div class="sidebar-section">Getting Started</div>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+    </ul>
+    <div class="sidebar-section">Configuration</div>
+    <ul>
+      <li><a href="#auth-module">Auth Module</a></li>
+      <li><a href="#password-reset">Password Reset</a></li>
+      <li><a href="#otp">OTP Login</a></li>
+    </ul>
+    <div class="sidebar-section">Usage</div>
+    <ul>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#guards">Guards</a></li>
+    </ul>
+    <div class="sidebar-section">Reference</div>
+    <ul>
+      <li><a href="#help">Help Notes</a></li>
+    </ul>
+  </aside>
+
+  <!-- CONTENT -->
+  <main class="doc-content">
+
+    <!-- ═══════════════════════════════════════════════════════
+         HERO
+         ═══════════════════════════════════════════════════════ -->
+    <section id="overview">
+      <h1>nest-auth</h1>
+      <p class="subtitle">JWT authentication with refresh token rotation, RBAC, OTP login, and password reset — ready out of the box.</p>
+
+      <div class="features-grid" style="margin-top:32px">
+        <div class="feature-card">
+          <div class="feature-icon purple">&#128274;</div>
+          <h3>JWT + Refresh Rotation</h3>
+          <p>Short-lived access tokens with rotating refresh tokens and nonce validation for single-session security.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon red">&#9879;</div>
+          <h3>RBAC</h3>
+          <p>Role-based access control with <code>@Permissions()</code> decorator and a pluggable permission registry.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon green">&#9889;</div>
+          <h3>OTP Login</h3>
+          <p>One-time password login with configurable code length, cooldown, lockout, and delivery callbacks.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon amber">&#128273;</div>
+          <h3>Password Reset</h3>
+          <p>Token-based password reset with configurable expiry, hashed storage, and session invalidation.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         INSTALL
+         ═══════════════════════════════════════════════════════ -->
+    <section id="install">
+      <h2>Install</h2>
+
+      <div class="install-box">
+        <code>pnpm add @nest-util/nest-auth</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth').then(()=>this.textContent='Copied!')">Copy</button>
+      </div>
+
+      <h3>Prerequisites</h3>
+      <ol>
+        <li>TypeORM must be configured in your application.</li>
+        <li>Your <code>User</code> entity must include:
+          <ul>
+            <li><strong>identifier</strong> field (e.g. <code>email</code>)</li>
+            <li><strong>password</strong> field (e.g. <code>password</code>)</li>
+            <li><strong>refreshToken</strong> — hashed refresh token storage</li>
+            <li><strong>accessToken</strong> — hashed access token storage</li>
+            <li><em>(Optional, for OTP)</em> <code>otpCodeHash</code>, <code>otpCodeExpiresAt</code>, <code>otpRequestAttempts</code>, <code>otpLastSentAt</code>, <code>otpLockedUntil</code></li>
+            <li><em>(Optional, for Password Reset)</em> <code>passwordResetTokenHash</code>, <code>passwordResetTokenExpiresAt</code></li>
+          </ul>
+        </li>
+        <li>Create DTOs for login, register, and refresh payloads.</li>
+      </ol>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">auth.dto.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">ApiProperty</span> } <span class="kw">from</span> <span class="str">'@nestjs/swagger'</span>;
+
+<span class="kw">export class</span> <span class="typ">LoginDto</span> {
+  <span class="dec">@ApiProperty</span>({ example: <span class="str">'user@example.com'</span> })
+  email!: <span class="typ">string</span>;
+
+  <span class="dec">@ApiProperty</span>({ example: <span class="str">'password123'</span> })
+  password!: <span class="typ">string</span>;
+}
+
+<span class="kw">export class</span> <span class="typ">RefreshDto</span> {
+  <span class="dec">@ApiProperty</span>()
+  refreshToken!: <span class="typ">string</span>;
+}</pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         AUTH MODULE
+         ═══════════════════════════════════════════════════════ -->
+    <section id="auth-module">
+      <h2>Auth Module</h2>
+      <p>Register <code>AuthModule.forRoot()</code> in your root module with the full configuration.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">Module</span> } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { <span class="typ">AuthModule</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-auth'</span>;
+<span class="kw">import</span> { <span class="typ">User</span> } <span class="kw">from</span> <span class="str">'./user/user.entity'</span>;
+<span class="kw">import</span> { <span class="typ">LoginDto</span>, <span class="typ">RegisterDto</span>, <span class="typ">RefreshDto</span> } <span class="kw">from</span> <span class="str">'./auth/auth.dto'</span>;
+<span class="kw">import</span> { <span class="fn">permissionRegistry</span> } <span class="kw">from</span> <span class="str">'./auth/permission-registry'</span>;
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+      <span class="cm">// Entity &amp; fields</span>
+      userEntity: <span class="typ">User</span>,
+      identifierField: <span class="str">'email'</span>,
+      passkeyField: <span class="str">'password'</span>,
+
+      <span class="cm">// JWT configuration</span>
+      jwtSecret: process.env.<span class="typ">JWT_SECRET</span> ?? <span class="str">'super-secret-key'</span>,
+      refreshTokenSecret: process.env.<span class="typ">REFRESH_TOKEN_SECRET</span>,
+      expiresIn: <span class="str">'1h'</span>,
+      refreshTokenExpiresIn: <span class="str">'7d'</span>,
+
+      <span class="cm">// Token storage fields on User entity</span>
+      refreshTokenField: <span class="str">'refreshToken'</span>,
+      accessTokenField: <span class="str">'accessToken'</span>,
+
+      <span class="cm">// DTOs</span>
+      loginDto: <span class="typ">LoginDto</span>,
+      registerDto: <span class="typ">RegisterDto</span>,
+      refreshDto: <span class="typ">RefreshDto</span>,
+
+      <span class="cm">// Relations loaded during JWT validation</span>
+      relations: [<span class="str">'userRoles'</span>, <span class="str">'userRoles.role'</span>],
+
+      <span class="cm">// RBAC configuration</span>
+      rbac: {
+        userRolesRelation: <span class="str">'userRoles'</span>,
+        rolesKey: <span class="str">'userRoles'</span>,
+        nestedRoleKey: <span class="str">'role'</span>,
+      },
+
+      <span class="cm">// Permission registry for @Permissions() checks</span>
+      permissionRegistry,
+
+      <span class="cm">// Optionally disable specific routes</span>
+      disabledRoutes: [],
+
+      <span class="cm">// Password reset (optional)</span>
+      passwordReset: {
+        enabled: <span class="num">true</span>,
+        tokenLength: <span class="num">64</span>,
+        tokenTtlSeconds: <span class="num">3600</span>,
+        tokenField: <span class="str">'passwordResetTokenHash'</span>,
+        expiresAtField: <span class="str">'passwordResetTokenExpiresAt'</span>,
+        deliverToken: <span class="kw">async</span> ({ identifier, token, expiresAt }) =&gt; {
+          <span class="cm">// Send email/SMS with the reset token</span>
+          console.<span class="fn">log</span>(<span class="str">`Send reset token <span class="typ">${token}</span> to <span class="typ">${identifier}</span>`</span>);
+        },
+      },
+
+      <span class="cm">// OTP login (optional)</span>
+      otp: {
+        enabled: <span class="num">true</span>,
+        codeLength: <span class="num">6</span>,
+        ttlSeconds: <span class="num">300</span>,
+        cooldownSeconds: <span class="num">60</span>,
+        maxAttempts: <span class="num">5</span>,
+        lockSeconds: <span class="num">300</span>,
+        channel: <span class="str">'email'</span>,
+        deliverCode: <span class="kw">async</span> ({ identifier, code, expiresAt }) =&gt; {
+          <span class="cm">// Send email/SMS with the OTP code</span>
+          console.<span class="fn">log</span>(<span class="str">`Send OTP code <span class="typ">${code}</span> to <span class="typ">${identifier}</span>`</span>);
+        },
+      },
+    }),
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+      </div>
+
+      <h3>Configuration Options</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Option</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>userEntity</code></td>
+              <td>Entity class</td>
+              <td>Your TypeORM User entity</td>
+            </tr>
+            <tr>
+              <td><code>identifierField</code></td>
+              <td>string</td>
+              <td>Field used as login identifier (e.g. <code>'email'</code>)</td>
+            </tr>
+            <tr>
+              <td><code>passkeyField</code></td>
+              <td>string</td>
+              <td>Field storing the hashed password</td>
+            </tr>
+            <tr>
+              <td><code>jwtSecret</code></td>
+              <td>string</td>
+              <td>Secret for signing access tokens</td>
+            </tr>
+            <tr>
+              <td><code>refreshTokenSecret</code></td>
+              <td>string</td>
+              <td>Secret for signing refresh tokens</td>
+            </tr>
+            <tr>
+              <td><code>expiresIn</code></td>
+              <td>string</td>
+              <td>Access token expiry (e.g. <code>'1h'</code>)</td>
+            </tr>
+            <tr>
+              <td><code>refreshTokenExpiresIn</code></td>
+              <td>string</td>
+              <td>Refresh token expiry (e.g. <code>'7d'</code>)</td>
+            </tr>
+            <tr>
+              <td><code>refreshTokenField</code></td>
+              <td>string</td>
+              <td>DB field for refresh token hash</td>
+            </tr>
+            <tr>
+              <td><code>accessTokenField</code></td>
+              <td>string</td>
+              <td>DB field for access token hash</td>
+            </tr>
+            <tr>
+              <td><code>loginDto</code></td>
+              <td>DTO class</td>
+              <td>DTO for the login endpoint body</td>
+            </tr>
+            <tr>
+              <td><code>registerDto</code></td>
+              <td>DTO class</td>
+              <td>DTO for the register endpoint body</td>
+            </tr>
+            <tr>
+              <td><code>refreshDto</code></td>
+              <td>DTO class</td>
+              <td>DTO for the refresh endpoint body</td>
+            </tr>
+            <tr>
+              <td><code>relations</code></td>
+              <td>string[]</td>
+              <td>Relations to load on User during JWT validation</td>
+            </tr>
+            <tr>
+              <td><code>rbac</code></td>
+              <td>object</td>
+              <td>RBAC relation mapping for role-based access</td>
+            </tr>
+            <tr>
+              <td><code>permissionRegistry</code></td>
+              <td>object</td>
+              <td>Map of permission keys to role sets</td>
+            </tr>
+            <tr>
+              <td><code>disabledRoutes</code></td>
+              <td>string[]</td>
+              <td>Route names to hard-disable</td>
+            </tr>
+            <tr>
+              <td><code>passwordReset</code></td>
+              <td>object</td>
+              <td>Password reset configuration (see below)</td>
+            </tr>
+            <tr>
+              <td><code>otp</code></td>
+              <td>object</td>
+              <td>OTP login configuration (see below)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         ENDPOINTS
+         ═══════════════════════════════════════════════════════ -->
+    <section id="endpoints">
+      <h2>Endpoints</h2>
+      <p><code>AuthModule</code> provides these built-in endpoints under <code>/auth</code>:</p>
+
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+              <th>Auth</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/register</code></td>
+              <td>Create a new user account</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/login</code></td>
+              <td>Login with credentials, returns access &amp; refresh tokens</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/refresh</code></td>
+              <td>Rotate refresh token, return new token pair</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/me</code></td>
+              <td>Get current authenticated user</td>
+              <td>Required</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/update-password</code></td>
+              <td>Update own password (current + new)</td>
+              <td>Required</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/logout</code></td>
+              <td>Invalidate current session tokens</td>
+              <td>Required</td>
+            </tr>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/me/permissions</code></td>
+              <td>Get current user's resolved permissions</td>
+              <td>Required</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/password-reset/request</code></td>
+              <td>Request a password reset token</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/password-reset/reset</code></td>
+              <td>Reset password with token, invalidates all sessions</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/otp/request</code></td>
+              <td>Request an OTP code via delivery callback</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/otp/login</code></td>
+              <td>Login with OTP code, returns auth tokens</td>
+              <td>Public</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Role &amp; Permission Management</h3>
+      <p>When RBAC is enabled, additional admin-protected endpoints are available:</p>
+
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/roles</code></td>
+              <td>List all roles</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/roles</code></td>
+              <td>Create a new role</td>
+            </tr>
+            <tr>
+              <td><span class="method patch">PATCH</span></td>
+              <td><code>/auth/roles/:id</code></td>
+              <td>Update a role</td>
+            </tr>
+            <tr>
+              <td><span class="method delete">DELETE</span></td>
+              <td><code>/auth/roles/:id</code></td>
+              <td>Delete a role</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/users/:id/roles</code></td>
+              <td>Assign roles to a user</td>
+            </tr>
+            <tr>
+              <td><span class="method delete">DELETE</span></td>
+              <td><code>/auth/users/:id/roles/:roleId</code></td>
+              <td>Remove a role from a user</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         GUARDS
+         ═══════════════════════════════════════════════════════ -->
+    <section id="guards">
+      <h2>Guards</h2>
+      <p>Protect your endpoints with <code>JwtAuthGuard</code> for authentication and <code>PermissionsGuard</code> for authorization. Use the <code>@CurrentUser()</code> and <code>@Permissions()</code> decorators to access the authenticated user and enforce permissions.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">profile.controller.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">Controller</span>, <span class="typ">Get</span>, <span class="typ">UseGuards</span> } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> {
+  <span class="fn">CurrentUser</span>,
+  <span class="typ">JwtAuthGuard</span>,
+  <span class="fn">Permissions</span>,
+  <span class="typ">PermissionsGuard</span>,
+  <span class="kw">type</span> <span class="typ">AuthUser</span>,
+} <span class="kw">from</span> <span class="str">'@nest-util/nest-auth'</span>;
+
+<span class="dec">@Controller</span>(<span class="str">'profile'</span>)
+<span class="kw">export class</span> <span class="typ">ProfileController</span> {
+
+  <span class="cm">// Authenticated user profile</span>
+  <span class="dec">@Get</span>(<span class="str">'me'</span>)
+  <span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>)
+  <span class="fn">me</span>(<span class="dec">@CurrentUser</span>() user: <span class="typ">AuthUser</span>) {
+    <span class="kw">return</span> user;
+  }
+
+  <span class="cm">// Admin-only endpoint</span>
+  <span class="dec">@Get</span>(<span class="str">'admin'</span>)
+  <span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
+  <span class="dec">@Permissions</span>(<span class="str">'admin.access'</span>)
+  <span class="fn">adminOnly</span>() {
+    <span class="kw">return</span> { ok: <span class="num">true</span> };
+  }
+}</pre>
+      </div>
+
+      <h3>Decorators</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Decorator</th>
+              <th>Guard Required</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>@CurrentUser()</code></td>
+              <td><code>JwtAuthGuard</code></td>
+              <td>Injects the authenticated <code>AuthUser</code> into the handler parameter</td>
+            </tr>
+            <tr>
+              <td><code>@Permissions('key')</code></td>
+              <td><code>PermissionsGuard</code></td>
+              <td>Requires the user to hold the specified permission</td>
+            </tr>
+            <tr>
+              <td><code>@Public()</code></td>
+              <td>None</td>
+              <td>Marks a route as public (skips JWT validation)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         QUICK START
+         ═══════════════════════════════════════════════════════ -->
+    <section id="quickstart">
+      <h2>Quick Start</h2>
+      <p>Get up and running in three steps.</p>
+
+      <div class="steps" style="margin-top:24px">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Install the package</h3>
+          <p>Run <code>pnpm add @nest-util/nest-auth</code> and ensure TypeORM is configured with a User entity.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Register AuthModule</h3>
+          <p>Add <code>AuthModule.forRoot()</code> to your root module imports with entity, secrets, and DTOs.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Protect endpoints</h3>
+          <p>Apply <code>JwtAuthGuard</code> and <code>PermissionsGuard</code> to your controllers.</p>
+        </div>
+      </div>
+
+      <div style="margin-top:32px">
+        <div class="code-block">
+          <div class="code-block-header">
+            <div class="code-block-dots"><span></span><span></span><span></span></div>
+            <div class="code-block-title">app.module.ts</div>
+          </div>
+          <pre><span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">TypeOrmModule</span>.<span class="fn">forRoot</span>({
+      type: <span class="str">'postgres'</span>,
+      autoLoadEntities: <span class="num">true</span>,
+      <span class="cm">// ... connection options</span>
+    }),
+    <span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+      userEntity: <span class="typ">User</span>,
+      identifierField: <span class="str">'email'</span>,
+      passkeyField: <span class="str">'password'</span>,
+      jwtSecret: process.env.<span class="typ">JWT_SECRET</span>,
+      refreshTokenSecret: process.env.<span class="typ">REFRESH_TOKEN_SECRET</span>,
+      expiresIn: <span class="str">'1h'</span>,
+      refreshTokenExpiresIn: <span class="str">'7d'</span>,
+      refreshTokenField: <span class="str">'refreshToken'</span>,
+      accessTokenField: <span class="str">'accessToken'</span>,
+      loginDto: <span class="typ">LoginDto</span>,
+      registerDto: <span class="typ">RegisterDto</span>,
+      refreshDto: <span class="typ">RefreshDto</span>,
+      relations: [<span class="str">'userRoles'</span>, <span class="str">'userRoles.role'</span>],
+      rbac: {
+        userRolesRelation: <span class="str">'userRoles'</span>,
+        rolesKey: <span class="str">'userRoles'</span>,
+        nestedRoleKey: <span class="str">'role'</span>,
+      },
+      permissionRegistry,
+    }),
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         PASSWORD RESET
+         ═══════════════════════════════════════════════════════ -->
+    <section id="password-reset">
+      <h2>Password Reset</h2>
+      <p>Enable token-based password reset by adding the <code>passwordReset</code> option to <code>AuthModule.forRoot()</code>. You must provide a <code>deliverToken</code> callback to send the reset link or token to the user.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts (passwordReset config)</div>
+        </div>
+        <pre><span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+  <span class="cm">// ... other options</span>
+  passwordReset: {
+    enabled: <span class="num">true</span>,
+    tokenLength: <span class="num">64</span>,          <span class="cm">// Length of the generated token</span>
+    tokenTtlSeconds: <span class="num">3600</span>,    <span class="cm">// Token validity (1 hour)</span>
+    tokenField: <span class="str">'passwordResetTokenHash'</span>,
+    expiresAtField: <span class="str">'passwordResetTokenExpiresAt'</span>,
+    deliverToken: <span class="kw">async</span> ({ identifier, token, expiresAt }) =&gt; {
+      <span class="cm">// Send email/SMS with the reset token or link</span>
+      console.<span class="fn">log</span>(<span class="str">`Send reset token <span class="typ">${token}</span> to <span class="typ">${identifier}</span>`</span>);
+    },
+  },
+})</pre>
+      </div>
+
+      <h3>Endpoints</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/password-reset/request</code></td>
+              <td>Accepts <code>{ email }</code>. Returns success even if the user doesn't exist (prevents account enumeration).</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/password-reset/reset</code></td>
+              <td>Accepts <code>{ token, newPassword }</code>. Invalidates all existing sessions upon success.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         OTP LOGIN
+         ═══════════════════════════════════════════════════════ -->
+    <section id="otp">
+      <h2>OTP Login</h2>
+      <p>Enable One-Time Password login by adding the <code>otp</code> option to <code>AuthModule.forRoot()</code>. You must provide a <code>deliverCode</code> callback.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts (otp config)</div>
+        </div>
+        <pre><span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+  <span class="cm">// ... other options</span>
+  otp: {
+    enabled: <span class="num">true</span>,
+    codeLength: <span class="num">6</span>,
+    ttlSeconds: <span class="num">300</span>,         <span class="cm">// Code validity (5 minutes)</span>
+    cooldownSeconds: <span class="num">60</span>,     <span class="cm">// Min time between requests</span>
+    maxAttempts: <span class="num">5</span>,           <span class="cm">// Max failed attempts before lockout</span>
+    lockSeconds: <span class="num">300</span>,         <span class="cm">// Lockout duration</span>
+    channel: <span class="str">'email'</span>,
+    deliverCode: <span class="kw">async</span> ({ identifier, code, expiresAt }) =&gt; {
+      <span class="cm">// Send email/SMS with the OTP code</span>
+      console.<span class="fn">log</span>(<span class="str">`Send OTP code <span class="typ">${code}</span> to <span class="typ">${identifier}</span>`</span>);
+    },
+  },
+})</pre>
+      </div>
+
+      <h3>Endpoints</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/otp/request</code></td>
+              <td>Accepts <code>{ email }</code>. Triggers the <code>deliverCode</code> callback.</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/otp/login</code></td>
+              <td>Accepts <code>{ email, otpCode }</code>. Validates the code and returns auth tokens.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         HELP NOTES
+         ═══════════════════════════════════════════════════════ -->
+    <section id="help">
+      <h2>Help Notes</h2>
+      <ul>
+        <li><strong>Refresh token field:</strong> The <code>/auth/refresh</code> endpoint currently expects <code>refreshToken</code> in the request body.</li>
+        <li><strong>Nonce validation:</strong> Access and refresh tokens are validated against hashed nonce values stored in the database, enabling single-session token rotation. Each refresh rotates both tokens.</li>
+        <li><strong>Relations requirement:</strong> If you enable RBAC, ensure <code>relations</code> includes the role relations needed during JWT validation (e.g. <code>['userRoles', 'userRoles.role']</code>).</li>
+        <li><strong>disabledRoutes:</strong> Use <code>disabledRoutes</code> to hard-disable selected auth endpoints (e.g. <code>['register', 'otp/request']</code>). Disabled routes return 404.</li>
+      </ul>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <p style="margin-bottom:12px">
+      <a href="../index.html">Back to Nest-Util</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a>
+    </p>
+    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+  </div>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateToggleIcon(next);
+}
+function updateToggleIcon(theme) {
+  document.querySelector('.icon-sun').style.display = theme === 'light' ? 'none' : 'block';
+  document.querySelector('.icon-moon').style.display = theme === 'light' ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateToggleIcon(saved);
+  }
+})();
+</script>
+
+</body>
+</html>

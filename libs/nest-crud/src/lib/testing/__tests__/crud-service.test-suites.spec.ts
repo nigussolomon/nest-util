@@ -1,7 +1,5 @@
-import { ObjectLiteral, Repository } from 'typeorm';
 import { NestCrudService } from '../../services/nest-crud.service';
 import { crudServiceTests } from '../crud-service.test-suites';
-import { createMockRepository, createMockQb, createDefaultMockEntity } from '../mock-repository';
 
 class TestEntity {
   id!: number;

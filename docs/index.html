@@ -1,427 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nest-Util — Production-Ready NestJS Toolkit</title>
   <meta name="description" content="A modern, production-ready collection of NestJS utilities for CRUD operations, authentication, and rapid code generation.">
-  <style>
-    /* ═══════════════════════════════════════════════════════
-       DESIGN TOKENS
-       ═══════════════════════════════════════════════════════ */
-    :root {
-      --bg:          #0a0a0f;
-      --bg-raised:   #12121a;
-      --bg-card:     #16161f;
-      --bg-code:     #1a1a26;
-      --border:      #232333;
-      --border-hover:#3a3a55;
-      --text:        #e4e4ef;
-      --text-muted:  #8888a0;
-      --accent:      #e0234e;
-      --accent-glow: rgba(224, 35, 78, 0.15);
-      --accent-2:    #7c5cfc;
-      --accent-2-glow: rgba(124, 92, 252, 0.12);
-      --accent-3:    #10b981;
-      --accent-3-glow: rgba(16, 185, 129, 0.12);
-      --accent-4:    #f59e0b;
-      --accent-4-glow: rgba(245, 158, 11, 0.12);
-      --radius:      12px;
-      --radius-sm:   8px;
-      --font:        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --mono:        'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      --max-w:       1120px;
-    }
-
-    /* ═══════════════════════════════════════════════════════
-       RESET & BASE
-       ═══════════════════════════════════════════════════════ */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
-    a:hover { color: #ff4a72; }
-
-    code, pre { font-family: var(--mono); }
-
-    /* ═══════════════════════════════════════════════════════
-       LAYOUT
-       ═══════════════════════════════════════════════════════ */
-    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
-
-    section { padding: 80px 0; }
-    section + section { border-top: 1px solid var(--border); }
-
-    /* ═══════════════════════════════════════════════════════
-       NAVIGATION
-       ═══════════════════════════════════════════════════════ */
-    nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      background: rgba(10, 10, 15, 0.85);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-    }
-    nav .container {
-      display: flex; align-items: center; justify-content: space-between;
-      height: 64px;
-    }
-    .nav-brand {
-      font-size: 1.15rem; font-weight: 700; color: var(--text);
-      display: flex; align-items: center; gap: 10px;
-    }
-    .nav-brand svg { width: 28px; height: 28px; }
-    .nav-links { display: flex; gap: 32px; list-style: none; }
-    .nav-links a {
-      color: var(--text-muted); font-size: 0.9rem; font-weight: 500;
-      transition: color 0.2s;
-    }
-    .nav-links a:hover { color: var(--text); }
-    .nav-cta {
-      background: var(--accent); color: #fff !important;
-      padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: 0.85rem;
-      transition: transform 0.15s, box-shadow 0.2s;
-    }
-    .nav-cta:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px var(--accent-glow);
-      color: #fff !important;
-    }
-
-    /* ═══════════════════════════════════════════════════════
-       HERO
-       ═══════════════════════════════════════════════════════ */
-    .hero {
-      padding: 160px 0 100px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-    .hero::before {
-      content: '';
-      position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
-      width: 800px; height: 800px;
-      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 999px; padding: 6px 16px 6px 8px;
-      font-size: 0.8rem; color: var(--text-muted); margin-bottom: 32px;
-    }
-    .hero-badge .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--accent-3); animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4rem);
-      font-weight: 800; line-height: 1.1;
-      letter-spacing: -0.03em;
-      margin-bottom: 20px;
-    }
-    .hero h1 .gradient {
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero p {
-      font-size: 1.15rem; color: var(--text-muted);
-      max-width: 580px; margin: 0 auto 40px;
-    }
-    .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 14px 28px; border-radius: var(--radius-sm);
-      font-weight: 600; font-size: 0.95rem; border: none; cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.2s;
-    }
-    .btn-primary {
-      background: var(--accent); color: #fff;
-    }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px var(--accent-glow);
-      color: #fff;
-    }
-    .btn-secondary {
-      background: var(--bg-card); color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover {
-      border-color: var(--border-hover);
-      transform: translateY(-2px);
-      color: var(--text);
-    }
-
-    /* ═══════════════════════════════════════════════════════
-       STATS BAR
-       ═══════════════════════════════════════════════════════ */
-    .stats {
-      display: flex; justify-content: center; gap: 64px;
-      padding: 48px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .stat { text-align: center; }
-    .stat-value {
-      font-size: 2rem; font-weight: 800;
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
-
-    /* ═══════════════════════════════════════════════════════
-       SECTION HEADERS
-       ═══════════════════════════════════════════════════════ */
-    .section-header { text-align: center; margin-bottom: 56px; }
-    .section-header h2 {
-      font-size: 2rem; font-weight: 700; margin-bottom: 12px;
-      letter-spacing: -0.02em;
-    }
-    .section-header p { color: var(--text-muted); font-size: 1.05rem; max-width: 500px; margin: 0 auto; }
-
-    /* ═══════════════════════════════════════════════════════
-       FEATURE CARDS
-       ═══════════════════════════════════════════════════════ */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 24px;
-    }
-    .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
-    }
-    .feature-card:hover {
-      border-color: var(--border-hover);
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-    }
-    .feature-icon {
-      width: 48px; height: 48px; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.4rem; margin-bottom: 20px;
-    }
-    .feature-icon.red    { background: var(--accent-glow); }
-    .feature-icon.purple { background: var(--accent-2-glow); }
-    .feature-icon.green  { background: var(--accent-3-glow); }
-    .feature-icon.amber  { background: var(--accent-4-glow); }
-    .feature-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
-    .feature-card p  { color: var(--text-muted); font-size: 0.92rem; line-height: 1.6; }
-
-    /* ═══════════════════════════════════════════════════════
-       PACKAGES
-       ═══════════════════════════════════════════════════════ */
-    .packages { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-    .package-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      transition: border-color 0.3s;
-    }
-    .package-card:hover { border-color: var(--border-hover); }
-    .package-header {
-      padding: 28px 32px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .package-name {
-      font-family: var(--mono); font-size: 1.1rem; font-weight: 600;
-      margin-bottom: 4px;
-    }
-    .package-desc { color: var(--text-muted); font-size: 0.9rem; }
-    .package-body { padding: 24px 32px 28px; }
-    .package-body ul { list-style: none; }
-    .package-body li {
-      padding: 8px 0; font-size: 0.9rem; color: var(--text-muted);
-      display: flex; align-items: flex-start; gap: 10px;
-    }
-    .package-body li::before {
-      content: '';
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent); flex-shrink: 0; margin-top: 8px;
-    }
-
-    /* ═══════════════════════════════════════════════════════
-       CODE BLOCKS
-       ═══════════════════════════════════════════════════════ */
-    .code-section { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
-    .code-section.reverse { direction: rtl; }
-    .code-section.reverse > * { direction: ltr; }
-    .code-text h3 { font-size: 1.5rem; font-weight: 700; margin-bottom: 16px; }
-    .code-text p  { color: var(--text-muted); margin-bottom: 24px; line-height: 1.7; }
-    .code-text ul { list-style: none; margin-bottom: 24px; }
-    .code-text li {
-      padding: 6px 0; font-size: 0.92rem; color: var(--text-muted);
-      display: flex; align-items: center; gap: 10px;
-    }
-    .code-text li::before {
-      content: '';
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent-3); flex-shrink: 0;
-    }
-    .code-block {
-      background: var(--bg-code);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .code-block-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 20px;
-      background: rgba(255,255,255,0.02);
-      border-bottom: 1px solid var(--border);
-    }
-    .code-block-dots { display: flex; gap: 6px; }
-    .code-block-dots span {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--border);
-    }
-    .code-block-dots span:nth-child(1) { background: #ff5f57; }
-    .code-block-dots span:nth-child(2) { background: #ffbd2e; }
-    .code-block-dots span:nth-child(3) { background: #28c840; }
-    .code-block-title {
-      font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted);
-    }
-    .code-block pre {
-      padding: 20px; overflow-x: auto;
-      font-size: 0.82rem; line-height: 1.7;
-      color: var(--text);
-    }
-    .code-block .kw  { color: var(--accent-2); }
-    .code-block .fn  { color: #60a5fa; }
-    .code-block .str { color: var(--accent-3); }
-    .code-block .cm  { color: #555570; }
-    .code-block .dec { color: var(--accent-4); }
-    .code-block .typ { color: #f472b6; }
-    .code-block .num { color: #f59e0b; }
-
-    /* ═══════════════════════════════════════════════════════
-       ENDPOINTS TABLE
-       ═══════════════════════════════════════════════════════ */
-    .endpoints-table {
-      width: 100%; border-collapse: collapse;
-      font-size: 0.88rem;
-    }
-    .endpoints-table th {
-      text-align: left; padding: 12px 16px;
-      font-weight: 600; color: var(--text-muted);
-      border-bottom: 1px solid var(--border);
-      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .endpoints-table td {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .endpoints-table tr:last-child td { border-bottom: none; }
-    .endpoints-table .method {
-      display: inline-block;
-      padding: 2px 8px; border-radius: 4px;
-      font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
-      text-transform: uppercase;
-    }
-    .method.get    { background: rgba(16, 185, 129, 0.15); color: var(--accent-3); }
-    .method.post   { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
-    .method.patch  { background: rgba(245, 158, 11, 0.15); color: var(--accent-4); }
-    .method.delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-
-    /* ═══════════════════════════════════════════════════════
-       QUICK START STEPS
-       ═══════════════════════════════════════════════════════ */
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-    .step {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      position: relative;
-    }
-    .step-number {
-      position: absolute; top: 24px; right: 24px;
-      font-size: 3rem; font-weight: 800;
-      color: rgba(255,255,255,0.04);
-      line-height: 1;
-    }
-    .step h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 12px; }
-    .step p  { color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; }
-
-    /* ═══════════════════════════════════════════════════════
-       INSTALL BOX
-       ═══════════════════════════════════════════════════════ */
-    .install-box {
-      background: var(--bg-code);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px 28px;
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 20px;
-    }
-    .install-box code {
-      font-size: 0.9rem; color: var(--text);
-    }
-    .install-box .copy-btn {
-      background: transparent; border: 1px solid var(--border);
-      color: var(--text-muted); padding: 6px 14px; border-radius: 6px;
-      cursor: pointer; font-size: 0.8rem; font-family: var(--mono);
-      transition: border-color 0.2s, color 0.2s;
-    }
-    .install-box .copy-btn:hover {
-      border-color: var(--accent); color: var(--accent);
-    }
-
-    /* ═══════════════════════════════════════════════════════
-       FOOTER
-       ═══════════════════════════════════════════════════════ */
-    footer {
-      padding: 48px 0;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
-    footer a { color: var(--text-muted); }
-    footer a:hover { color: var(--text); }
-
-    /* ═══════════════════════════════════════════════════════
-       RESPONSIVE
-       ═══════════════════════════════════════════════════════ */
-    @media (max-width: 768px) {
-      .nav-links { display: none; }
-      .packages { grid-template-columns: 1fr; }
-      .code-section { grid-template-columns: 1fr; }
-      .code-section.reverse { direction: ltr; }
-      .steps { grid-template-columns: 1fr; }
-      .stats { flex-direction: column; gap: 24px; }
-      .features-grid { grid-template-columns: 1fr; }
-      section { padding: 56px 0; }
-      .hero { padding: 120px 0 60px; }
-    }
-
-    /* ═══════════════════════════════════════════════════════
-       SCROLLBAR
-       ═══════════════════════════════════════════════════════ */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -441,11 +25,18 @@
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#packages">Packages</a></li>
+      <li><a href="#testing">Testing</a></li>
       <li><a href="#quickstart">Quick Start</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
     </ul>
-    <a href="#quickstart" class="nav-cta">Get Started</a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="#quickstart" class="nav-cta">Get Started</a>
+    </div>
   </div>
 </nav>
 
@@ -456,14 +47,14 @@
   <div class="container">
     <div class="hero-badge">
       <span class="dot"></span>
-      v0.1.1 — TypeORM 1.1.0, Hooks, findMine, Cursor Pagination
+      v1.0.0 — TypeORM 1.1.0, Hooks, findMine, Cursor Pagination, Testing Factory
     </div>
     <h1>
       Production-Ready<br>
       <span class="gradient">NestJS Toolkit</span>
     </h1>
     <p>
-      Eliminate boilerplate. Get type-safe CRUD, JWT auth with RBAC, audit logging, lifecycle hooks, and cursor pagination — all in one package.
+      Eliminate boilerplate. Get type-safe CRUD, JWT auth with RBAC, audit logging, lifecycle hooks, cursor pagination, and a testing factory — all in one package.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn btn-primary">
@@ -497,6 +88,10 @@
   <div class="stat">
     <div class="stat-value">12</div>
     <div class="stat-label">Filter Operators</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">35+</div>
+    <div class="stat-label">Auto-Generated Tests</div>
   </div>
 </div>
 
@@ -540,6 +135,11 @@
         <h3>findMine</h3>
         <p>User-scoped record retrieval via <code>GET /resource/mine</code>. Simple column match or custom query builder callbacks.</p>
       </div>
+      <div class="feature-card">
+        <div class="feature-icon red">&#9889;</div>
+        <h3>Testing Factory</h3>
+        <p>Generate ~35 tests per resource from a single config. Service tests, controller tests, mock repositories — all auto-generated.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -567,9 +167,13 @@
             <li>8 lifecycle hooks with transactions</li>
             <li>Built-in audit logging interceptor</li>
             <li>findMine with custom query support</li>
+            <li>Testing factory with auto-generated suites</li>
             <li>Automatic Swagger documentation</li>
             <li>TypeORM exception filter</li>
           </ul>
+        </div>
+        <div class="package-footer">
+          <a href="nest-crud/">Read the docs &rarr;</a>
         </div>
       </div>
       <div class="package-card">
@@ -588,6 +192,9 @@
             <li><code>@Public()</code>, <code>@CurrentUser()</code>, <code>@Permissions()</code></li>
             <li>Auto-stripped sensitive fields</li>
           </ul>
+        </div>
+        <div class="package-footer">
+          <a href="nest-auth/">Read the docs &rarr;</a>
         </div>
       </div>
     </div>
@@ -792,6 +399,50 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
+     TESTING FACTORY
+     ═══════════════════════════════════════════════════════ -->
+<section id="testing">
+  <div class="container">
+    <div class="code-section">
+      <div class="code-text">
+        <h3>Test Every Endpoint Automatically</h3>
+        <p>Import <code>crudServiceTests</code> or <code>crudControllerTests</code> and get ~35 tests generated from your entity metadata and config.</p>
+        <ul>
+          <li>Covers all 7 CRUD endpoints</li>
+          <li>Tests filters, pagination, and sorting</li>
+          <li>Verifies disabled endpoint guards</li>
+          <li>Checks permission metadata on controllers</li>
+          <li>Mock repository with auto-generated entity data</li>
+          <li>Zero-config for standard use cases</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">post.service.spec.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="fn">crudServiceTests</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud/testing'</span>;
+<span class="kw">import</span> { <span class="typ">PostService</span> } <span class="kw">from</span> <span class="str">'./post.service'</span>;
+<span class="kw">import</span> { <span class="typ">Post</span> } <span class="kw">from</span> <span class="str">'./post.entity'</span>;
+
+<span class="fn">describe</span>(<span class="str">'PostService'</span>, () =&gt; {
+  <span class="fn">crudServiceTests</span>({
+    serviceClass: <span class="typ">PostService</span>,
+    entity: <span class="typ">Post</span>,
+    allowedFilters: [<span class="str">'title'</span>],
+    userOwnershipField: <span class="str">'authorId'</span>,
+    test: {
+      createPayload: { title: <span class="str">'Hello'</span> },
+      updatePayload: { title: <span class="str">'Updated'</span> },
+    },
+  });
+});</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
      QUICK START
      ═══════════════════════════════════════════════════════ -->
 <section id="quickstart">
@@ -869,6 +520,27 @@
     <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
   </div>
 </footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateToggleIcon(next);
+}
+function updateToggleIcon(theme) {
+  document.querySelector('.icon-sun').style.display = theme === 'light' ? 'none' : 'block';
+  document.querySelector('.icon-moon').style.display = theme === 'light' ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateToggleIcon(saved);
+  }
+})();
+</script>
 
 </body>
 </html>

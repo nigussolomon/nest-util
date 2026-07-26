@@ -34,15 +34,21 @@ describe('crudControllerTests', () => {
 });
 
 describe('crudControllerTests with permissions', () => {
+  const allPermissions = {
+    findAll: 'items.read',
+    findOne: 'items.read',
+    create: ['items.create', 'items.write'],
+    update: 'items.update',
+    remove: 'items.delete',
+    findAuditLogs: 'items.audit',
+    findMine: 'items.read',
+  };
   const PermissionedBase = CreateNestedCrudController(
     TestDto,
     TestDto,
     TestResponseDto,
     {
-      permissions: {
-        findAll: 'items.read',
-        create: ['items.create', 'items.write'],
-      },
+      permissions: allPermissions,
     }
   );
 
@@ -53,15 +59,7 @@ describe('crudControllerTests with permissions', () => {
     createDto: TestDto,
     updateDto: TestDto,
     responseDto: TestResponseDto,
-    permissions: {
-      findAll: 'items.read',
-      findOne: 'items.read',
-      create: ['items.create', 'items.write'],
-      update: 'items.update',
-      remove: 'items.delete',
-      findAuditLogs: 'items.audit',
-      findMine: 'items.read',
-    },
+    permissions: allPermissions,
     test: {
       createPayload: { name: 'New Item' },
       updatePayload: { name: 'Updated' },
