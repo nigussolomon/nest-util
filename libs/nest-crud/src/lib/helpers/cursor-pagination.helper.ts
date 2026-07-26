@@ -9,11 +9,11 @@ import {
 // ─── Base64-URL helpers ──────────────────────────────────────────────
 
 export function base64UrlEncode(payload: Record<string, unknown>): string {
-  return Buffer.from(JSON.stringify(payload))
+  const b64 = Buffer.from(JSON.stringify(payload))
     .toString('base64')
     .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+    .replace(/\//g, '_');
+  return b64.endsWith('==') ? b64.slice(0, -2) : b64.endsWith('=') ? b64.slice(0, -1) : b64;
 }
 
 export function base64UrlDecode(raw: string): Record<string, unknown> {

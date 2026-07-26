@@ -5,7 +5,7 @@ description: Complete guide for using @nest-util/nest-crud and @nest-util/nest-a
 
 # Nest-Util Consumer Guide
 
-Complete reference for consuming `@nest-util/nest-crud` v1.0.1 and `@nest-util/nest-auth` v1.0.1 in any NestJS project.
+Complete reference for consuming `@nest-util/nest-crud` v1.0.2 and `@nest-util/nest-auth` v1.0.2 in any NestJS project.
 
 ## Overview
 
@@ -13,8 +13,8 @@ Two packages that eliminate NestJS boilerplate:
 
 | Package | Version | Purpose |
 |---|---|---|
-| `@nest-util/nest-crud` | 1.0.1 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
-| `@nest-util/nest-auth` | 1.0.1 | JWT auth with RBAC, OTP login, password reset |
+| `@nest-util/nest-crud` | 1.0.2 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
+| `@nest-util/nest-auth` | 1.0.2 | JWT auth with RBAC, OTP login, password reset |
 
 **Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. No separate packages needed.
 
@@ -27,7 +27,7 @@ Two packages that eliminate NestJS boilerplate:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.1 @nest-util/nest-auth@^1.0.1 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
@@ -39,7 +39,7 @@ These packages expect the following to be installed in your project:
 |---|---|---|
 | `@nestjs/common` | ^11.0.0 | NestJS core |
 | `@nestjs/core` | ^11.0.0 | NestJS core |
-| `@nestjs/typeorm` | ^11.0.1 | TypeORM integration |
+| `@nestjs/typeorm` | ^11.0.2 | TypeORM integration |
 | `@nestjs/swagger` | ^11.2.6 | Swagger decorators |
 | `@nestjs/jwt` | ^11.0.2 | JWT module (auth) |
 | `@nestjs/passport` | ^11.0.5 | Passport integration (auth) |
