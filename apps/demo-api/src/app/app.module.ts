@@ -24,9 +24,9 @@ import {
 } from './auth/auth.dto';
 import { permissionRegistry } from './auth/permission-registry';
 import {
-  NestUtilNestAuditModule,
   AuditInterceptor,
-} from '@nest-util/nest-audit';
+  NestCrudModule,
+} from '@nest-util/nest-crud';
 
 @Module({
   imports: [
@@ -42,7 +42,7 @@ import {
     }),
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
-    NestUtilNestAuditModule,
+    NestCrudModule,
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',

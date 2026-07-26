@@ -14,8 +14,10 @@ import { ApiBody, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { Message } from '../decorators/response-message.decorator';
 import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
 import { PaginationDto } from '../dtos/pagination.dto';
+import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
-import { Audit, ListAuditLogsDto } from '@nest-util/nest-audit';
+import { Audit } from '../decorators/audit-log.decorator';
+import { ListAuditLogsDto } from '../dtos/list-audit-logs.dto';
 
 export const AUTH_PERMISSIONS_METADATA_KEY = 'auth:permissions';
 
@@ -135,8 +137,19 @@ export function CreateNestedCrudController<CD, UD, RD>(
       required: false,
       enum: ['ASC', 'DESC'],
     })
-    findAll(@Query() query: PaginationDto & FilterDto) {
+    @ApiQuery({ name: 'cursor', required: false, type: String })
+    @ApiQuery({ name: 'includeTotal', required: false, type: Boolean })
+    findAll(@Query() query: PaginationDto & CursorPaginationDto & FilterDto) {
       this.ensureEndpointEnabled('findAll');
+
+      // Cursor-based pagination: dispatch to cursor endpoint
+      if (query.cursor !== undefined) {
+        if (!this.service.findAllWithCursor) {
+          throw new NotFoundException('Resource not found');
+        }
+        return this.service.findAllWithCursor(query);
+      }
+
       return this.service.findAll(query);
     }
 

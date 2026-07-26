@@ -1,11 +1,19 @@
 import { Injectable, NotFoundException, Type } from '@nestjs/common';
 import { DeepPartial, ObjectLiteral, Repository } from 'typeorm';
-import { AuditLogEntity } from '@nest-util/nest-audit';
+import { AuditLogEntity } from '../entities/audit-log.entity';
 import { applyFilters } from '../helpers/filter.helper';
 import { PaginationDto } from '../dtos/pagination.dto';
+import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
 import { applyPagination } from '../helpers/pagination.helper';
-import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
+import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
+import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
+import {
+  applyCursorFilter,
+  buildNextCursor,
+  decodeCursor,
+  detectCursorStrategy,
+} from '../helpers/cursor-pagination.helper';
 
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   repository: Repository<Entity>;
@@ -21,6 +29,7 @@ export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   createDtoClass?: Type<unknown>;
   updateDtoClass?: Type<unknown>;
   disabledEndpoints?: readonly CrudEndpoint[];
+  cursorStrategy?: CursorStrategy;
 }
 
 @Injectable()
@@ -46,6 +55,7 @@ export class NestCrudService<
   protected readonly createDtoClass?: Type<unknown>;
   protected readonly updateDtoClass?: Type<unknown>;
   readonly disabledEndpoints: readonly CrudEndpoint[];
+  protected readonly cursorStrategy: CursorStrategy;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -57,6 +67,8 @@ export class NestCrudService<
     this.createDtoClass = options.createDtoClass;
     this.updateDtoClass = options.updateDtoClass;
     this.disabledEndpoints = options.disabledEndpoints ?? [];
+    this.cursorStrategy =
+      options.cursorStrategy ?? detectCursorStrategy(this.repo);
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
@@ -132,10 +144,88 @@ export class NestCrudService<
       : { data };
   }
 
+  async findAllWithCursor(
+    query: CursorPaginationDto & FilterDto
+  ): Promise<CursorPaginationResult<ResponseDto>> {
+    const limit = query.limit ?? 10;
+    const strategy = this.cursorStrategy;
+    const orderDirection = 'DESC';
+
+    const qb = this.repo.createQueryBuilder('e');
+
+    // Join relations
+    if (this.include.length > 0) {
+      this.include.forEach((relation) => {
+        const parts = relation.split('.');
+        if (parts.length === 1) {
+          qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
+        } else {
+          const parentAlias = parts.slice(0, -1).join('_');
+          const field = parts[parts.length - 1];
+          const alias = parts.join('_');
+          qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
+        }
+      });
+    }
+
+    // Apply filters
+    applyFilters(qb, query.filter, this.allowedFilters);
+
+    // Apply cursor filter
+    if (query.cursor) {
+      const decoded = decodeCursor(query.cursor, strategy);
+      applyCursorFilter(qb, decoded, strategy, orderDirection);
+    }
+
+    // Default ordering by id
+    qb.orderBy(`e.id`, orderDirection);
+
+    // Fetch limit + 1 to detect hasMore
+    const take = limit + 1;
+    const entities = await qb.take(take).getMany();
+
+    const hasMore = entities.length > limit;
+    const data = hasMore ? entities.slice(0, limit) : entities;
+
+    // Build next cursor from last entity
+    const nextCursor = hasMore ? buildNextCursor(data, strategy) : null;
+
+    // Optionally compute total count
+    let total: number | undefined;
+    if (query.includeTotal) {
+      // Build a clean count query (reuse same filters but no cursor/order/take)
+      const countQb = this.repo.createQueryBuilder('e');
+      if (this.include.length > 0) {
+        this.include.forEach((relation) => {
+          const parts = relation.split('.');
+          if (parts.length === 1) {
+            countQb.leftJoin(`e.${parts[0]}`, parts[0]);
+          }
+        });
+      }
+      applyFilters(countQb, query.filter, this.allowedFilters);
+      total = await countQb.getCount();
+    }
+
+    const response = this.toResponseDto
+      ? (this.toResponseDto(data) as ResponseDto[])
+      : (data as unknown as ResponseDto[]);
+
+    return {
+      data: response,
+      meta: {
+        limit,
+        hasMore,
+        nextCursor,
+        ...(total !== undefined ? { total } : {}),
+      },
+    };
+  }
+
   async findOne(id: number) {
     const entity = await this.repo.findOne({
       where: { id } as unknown as Partial<Entity>,
-      relations: this.include as string[],
+      relations: this.include as any,
     });
 
     if (!entity) {

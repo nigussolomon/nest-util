@@ -11,9 +11,6 @@
     },
     {
       "path": "./apps/demo-api"
-    },
-    {
-      "path": "./libs/nest-audit"
     }
   ]
 }

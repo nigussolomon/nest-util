@@ -37,9 +37,11 @@ export class AuditLogEntity {
   @Column({ nullable: true })
   ip?: string;
 
+  @Index()
   @Column({ nullable: true })
   userAgent?: string;
 
+  @Index()
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

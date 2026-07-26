@@ -95,7 +95,6 @@
     }
   },
   "dependencies": {
-    "@nest-util/nest-audit": "workspace:*",
     "@nest-util/nest-auth": "workspace:*",
     "@nest-util/nest-crud": "workspace:*",
     "@nestjs/common": "^11.0.0",

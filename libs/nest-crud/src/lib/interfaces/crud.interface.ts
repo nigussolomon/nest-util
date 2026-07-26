@@ -1,5 +1,6 @@
 import { FilterDto } from '../dtos/filter.dto';
 import { PaginationDto } from '../dtos/pagination.dto';
+import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 
 export type CrudEndpoint =
   | 'findAll'
@@ -17,6 +18,16 @@ export interface AuditLogQuery {
   limit?: number;
 }
 
+export interface CursorPaginationResult<T> {
+  data: T[];
+  meta: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    total?: number;
+  };
+}
+
 export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   disabledEndpoints?: readonly CrudEndpoint[];
 
@@ -24,6 +35,10 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
     data: ResponseDto[];
     meta?: unknown;
   }>;
+
+  findAllWithCursor?(
+    query: CursorPaginationDto & FilterDto
+  ): Promise<CursorPaginationResult<ResponseDto>>;
 
   findOne(id: number): Promise<ResponseDto>;
 

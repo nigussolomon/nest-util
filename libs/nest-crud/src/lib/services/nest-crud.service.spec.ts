@@ -4,7 +4,7 @@ import { Repository, SelectQueryBuilder, DeleteResult } from 'typeorm';
 import { NestCrudService } from './nest-crud.service';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
-import { AuditLogEntity } from '@nest-util/nest-audit';
+import { AuditLogEntity } from '../entities/audit-log.entity';
 
 class MockEntity {
   id!: number;
@@ -85,7 +85,10 @@ describe('NestCrudService', () => {
       save: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
-      metadata: { name: 'MockEntity' },
+      metadata: {
+        name: 'MockEntity',
+        primaryColumns: [{ type: () => Number }],
+      },
       manager: {
         getRepository: jest.fn().mockReturnValue(auditRepo),
       },

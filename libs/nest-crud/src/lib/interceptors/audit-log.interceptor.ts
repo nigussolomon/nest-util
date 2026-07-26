@@ -51,7 +51,7 @@ export class AuditInterceptor implements NestInterceptor {
       tap(async (result) => {
         await this.auditService.log({
           action: auditOptions.action,
-          entity: entityName, // dynamically resolved or default
+          entity: entityName,
           userId,
           ip,
           userAgent,
