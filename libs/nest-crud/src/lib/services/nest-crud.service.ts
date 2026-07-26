@@ -8,6 +8,7 @@ import { FilterDto } from '../dtos/filter.dto';
 import { applyPagination } from '../helpers/pagination.helper';
 import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
 import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
+import { CrudHookConfig, CrudHooks, TransactionConfig } from '../interfaces/hooks.interface';
 import {
   applyCursorFilter,
   buildNextCursor,
@@ -30,6 +31,8 @@ export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto> {
   updateDtoClass?: Type<unknown>;
   disabledEndpoints?: readonly CrudEndpoint[];
   cursorStrategy?: CursorStrategy;
+  hooks?: CrudHooks<Entity, any, any>;
+  transactionConfig?: TransactionConfig;
 }
 
 @Injectable()
@@ -56,6 +59,8 @@ export class NestCrudService<
   protected readonly updateDtoClass?: Type<unknown>;
   readonly disabledEndpoints: readonly CrudEndpoint[];
   protected readonly cursorStrategy: CursorStrategy;
+  protected readonly hooks: CrudHooks<Entity, any, any>;
+  protected readonly transactionConfig: TransactionConfig;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -69,6 +74,8 @@ export class NestCrudService<
     this.disabledEndpoints = options.disabledEndpoints ?? [];
     this.cursorStrategy =
       options.cursorStrategy ?? detectCursorStrategy(this.repo);
+    this.hooks = options.hooks ?? {};
+    this.transactionConfig = options.transactionConfig ?? {};
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
@@ -100,6 +107,41 @@ export class NestCrudService<
     }
 
     return payload;
+  }
+
+  private async executeInTransaction<T>(
+    fn: () => Promise<T>,
+    isolationLevel?: string
+  ): Promise<T> {
+    const queryRunner = this.repo.manager.connection.createQueryRunner();
+    await queryRunner.startTransaction(
+      isolationLevel as 'READ UNCOMMITTED' | 'READ COMMITTED' | 'REPEATABLE READ' | 'SERIALIZABLE'
+    );
+    try {
+      const result = await fn();
+      await queryRunner.commitTransaction();
+      return result;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  private async executeHook<TContext>(
+    hook: CrudHookConfig<TContext> | undefined,
+    context: TContext
+  ): Promise<void> {
+    if (!hook) return;
+    if (hook.transaction) {
+      await this.executeInTransaction(
+        () => hook.handler(context),
+        this.transactionConfig?.isolationLevel
+      );
+    } else {
+      await hook.handler(context);
+    }
   }
 
   async findAll(query: PaginationDto & FilterDto) {
@@ -223,6 +265,8 @@ export class NestCrudService<
   }
 
   async findOne(id: number) {
+    await this.executeHook(this.hooks.beforeFindOne, { id });
+
     const entity = await this.repo.findOne({
       where: { id } as unknown as Partial<Entity>,
       relations: this.include as any,
@@ -232,21 +276,31 @@ export class NestCrudService<
       throw new NotFoundException('Resource not found');
     }
 
-    return this.toResponseDto
+    const result = this.toResponseDto
       ? (this.toResponseDto(entity) as ResponseDto)
       : (entity as unknown as ResponseDto);
+
+    await this.executeHook(this.hooks.afterFindOne, { entity, id });
+
+    return result;
   }
 
   async create(payload: CreateDto) {
+    await this.executeHook(this.hooks.beforeCreate, { payload });
+
     const resolved = await this.resolveRelations(
       payload as unknown as ObjectLiteral
     );
 
     const entity = await this.repo.save(resolved as unknown as Entity);
 
-    return this.toResponseDto
+    const result = this.toResponseDto
       ? (this.toResponseDto(entity) as ResponseDto)
       : (entity as unknown as ResponseDto);
+
+    await this.executeHook(this.hooks.afterCreate, { entity, payload });
+
+    return result;
   }
 
   async update(id: number, payload: UpdateDto) {
@@ -258,6 +312,8 @@ export class NestCrudService<
       throw new NotFoundException('Resource not found');
     }
 
+    await this.executeHook(this.hooks.beforeUpdate, { payload, entity: existing, id });
+
     const resolved = await this.resolveRelations(
       payload as unknown as ObjectLiteral
     );
@@ -265,17 +321,30 @@ export class NestCrudService<
     this.repo.merge(existing, resolved as DeepPartial<Entity>);
     await this.repo.save(existing);
 
-    return this.findOne(id);
+    const result = await this.findOne(id);
+
+    await this.executeHook(this.hooks.afterUpdate, { entity: result as any, payload, id });
+
+    return result;
   }
 
   async remove(id: number) {
-    const result = await this.repo.delete(id);
+    const existing = await this.repo.findOneBy({
+      id,
+    } as unknown as Partial<Entity>);
 
-    if (result.affected === 0) {
+    if (!existing) {
       throw new NotFoundException('Resource not found');
     }
 
-    return true;
+    await this.executeHook(this.hooks.beforeRemove, { entity: existing, id });
+
+    const result = await this.repo.delete(id);
+    const deleted = result.affected !== 0;
+
+    await this.executeHook(this.hooks.afterRemove, { id, deleted });
+
+    return deleted;
   }
 
   async findAuditLogs(query: {

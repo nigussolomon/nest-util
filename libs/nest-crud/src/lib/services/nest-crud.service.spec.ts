@@ -490,16 +490,18 @@ describe('NestCrudService', () => {
 
   describe('remove', () => {
     it('should delete entity and return true', async () => {
+      repository.findOneBy.mockResolvedValue({ id: 1 } as any);
       repository.delete.mockResolvedValue({ affected: 1 } as DeleteResult);
 
       const result = await service.remove(1);
 
+      expect(repository.findOneBy).toHaveBeenCalledWith({ id: 1 });
       expect(repository.delete).toHaveBeenCalledWith(1);
       expect(result).toBe(true);
     });
 
-    it('should throw NotFoundException if no rows affected', async () => {
-      repository.delete.mockResolvedValue({ affected: 0 } as DeleteResult);
+    it('should throw NotFoundException if entity not found', async () => {
+      repository.findOneBy.mockResolvedValue(null);
 
       await expect(service.remove(1)).rejects.toThrow(NotFoundException);
     });
