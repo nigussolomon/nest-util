@@ -5,7 +5,7 @@ description: Complete guide for using @nest-util/nest-crud and @nest-util/nest-a
 
 # Nest-Util Consumer Guide
 
-Complete reference for consuming `@nest-util/nest-crud` v1.0.2 and `@nest-util/nest-auth` v1.0.2 in any NestJS project.
+Complete reference for consuming `@nest-util/nest-crud` v1.0.6 and `@nest-util/nest-auth` v1.0.2 in any NestJS project.
 
 ## Overview
 
@@ -13,7 +13,7 @@ Two packages that eliminate NestJS boilerplate:
 
 | Package | Version | Purpose |
 |---|---|---|
-| `@nest-util/nest-crud` | 1.0.2 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
+| `@nest-util/nest-crud` | 1.0.6 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
 | `@nest-util/nest-auth` | 1.0.2 | JWT auth with RBAC, OTP login, password reset |
 
 **Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. No separate packages needed.
@@ -27,7 +27,7 @@ Two packages that eliminate NestJS boilerplate:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 

@@ -123,6 +123,7 @@ nav .container {
   height: 56px;
 }
 .nav-brand {
+.nav-brand {
   font-size: 0.95rem; font-weight: 600; color: var(--text);
   display: flex; align-items: center; gap: 8px;
   text-decoration: none;

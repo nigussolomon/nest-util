@@ -26,7 +26,7 @@ If you just want the commands:
 
 ```bash
 # 1. Upgrade dependencies
-pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0
+pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0
 pnpm add @nestjs/common@^11.0.0 @nestjs/core@^11.0.0 @nestjs/swagger@^11.2.6 @nestjs/typeorm@^11.0.1
 pnpm add express@^5.2.1
 
@@ -70,7 +70,7 @@ npm run build  # or your build command
 
 | Package | Old Version | New Version |
 |---|---|---|
-| `@nest-util/nest-crud` | 0.1.1 | 1.0.2 |
+| `@nest-util/nest-crud` | 0.1.1 | 1.0.6 |
 | `@nest-util/nest-auth` | 0.0.3 | 1.0.2 |
 | `@nest-util/nest-audit` | 0.1.1 | **Deleted** |
 | `typeorm` | ^0.3.28 | ^1.1.0 |
@@ -113,7 +113,7 @@ Update these dependencies to the specified versions:
 ```json
 {
   "dependencies": {
-    "@nest-util/nest-crud": "^1.0.2",
+    "@nest-util/nest-crud": "^1.0.6",
     "@nest-util/nest-auth": "^1.0.2",
     "typeorm": "^1.1.0",
     "@nestjs/common": "^11.0.0",
@@ -777,7 +777,7 @@ npm install
 
 ```bash
 # Step 1: Upgrade dependencies
-pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0
+pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0
 pnpm add @nestjs/common@^11.0.0 @nestjs/core@^11.0.0 @nestjs/swagger@^11.2.6 @nestjs/typeorm@^11.0.1
 pnpm add express@^5.2.1
 
