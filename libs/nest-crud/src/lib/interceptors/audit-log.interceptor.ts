@@ -3,14 +3,17 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, catchError, throwError } from 'rxjs';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditService } from '../services/audit-log.service';
 import {
   AUDIT_METADATA_KEY,
   AuditOptions,
 } from '../decorators/audit-log.decorator';
+import type { AuditEvent } from '../events/audit-event.interface';
 
 const CONTROLLER_ENTITY_NAME_KEY = 'entityName';
 const ENTITY_ENTITY_NAME_KEY = 'custom:entityName';
@@ -19,7 +22,8 @@ const ENTITY_ENTITY_NAME_KEY = 'custom:entityName';
 export class AuditInterceptor implements NestInterceptor {
   constructor(
     private readonly auditService: AuditService,
-    private readonly reflector: Reflector
+    private readonly reflector: Reflector,
+    @Optional() private readonly eventEmitter?: EventEmitter2
   ) {}
 
   intercept(
@@ -40,6 +44,7 @@ export class AuditInterceptor implements NestInterceptor {
     const userId = request.user?.id;
     const ip = request.ip;
     const userAgent = request.headers?.['user-agent'];
+    const entityIdFromParams = request.params?.id;
 
     let entityName = auditOptions.entity;
 
@@ -47,11 +52,21 @@ export class AuditInterceptor implements NestInterceptor {
       entityName = this.resolveEntityName(context);
     }
 
+    const basePayload = {
+      entity: entityName,
+      userId,
+      ip,
+      userAgent,
+    };
+
     return next.handle().pipe(
       tap(async (result) => {
+        const entityId = (result as any)?.id ?? entityIdFromParams;
+
         await this.auditService.log({
           action: auditOptions.action,
           entity: entityName,
+          entityId,
           userId,
           ip,
           userAgent,
@@ -62,8 +77,43 @@ export class AuditInterceptor implements NestInterceptor {
             response: result,
           },
         });
+
+        this.emitEvent({
+          ...basePayload,
+          action: `crud.${entityName.toLowerCase()}.${auditOptions.action.toLowerCase()}.success`,
+          entityId,
+          timestamp: new Date(),
+          metadata: {
+            body: request.body,
+            params: request.params,
+            query: request.query,
+          },
+        });
+      }),
+      catchError((error) => {
+        const entityId = entityIdFromParams;
+
+        this.emitEvent({
+          ...basePayload,
+          action: `crud.${entityName.toLowerCase()}.${auditOptions.action.toLowerCase()}.error`,
+          entityId,
+          timestamp: new Date(),
+          metadata: {
+            body: request.body,
+            params: request.params,
+            query: request.query,
+            error: { message: error.message, statusCode: error.status },
+          },
+        });
+
+        return throwError(() => error);
       })
     );
+  }
+
+  private emitEvent(event: AuditEvent): void {
+    if (!this.eventEmitter) return;
+    this.eventEmitter.emit(event.action, event);
   }
 
   private resolveEntityName(context: ExecutionContext): string {
