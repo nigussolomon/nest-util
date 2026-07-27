@@ -17,13 +17,5 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false
-  },
-  "references": [
-    {
-      "path": "../libs/nest-crud"
-    },
-    {
-      "path": "../libs/nest-auth"
-    }
-  ]
+  }
 }

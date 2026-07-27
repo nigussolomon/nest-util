@@ -19,7 +19,7 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Nest-Util Starter')
-    .description('API with auth, RBAC, and CRUD powered by @nest-util')
+    .setDescription('API with auth, RBAC, and CRUD powered by @nest-util')
     .setVersion('1.0')
     .addBearerAuth()
     .build();

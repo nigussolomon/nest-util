@@ -1,12 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"],
-  "references": [
-    {
-      "path": "../libs/nest-crud/tsconfig.lib.json"
-    },
-    {
-      "path": "../libs/nest-auth/tsconfig.lib.json"
-    }
-  ]
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }
