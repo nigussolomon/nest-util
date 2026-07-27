@@ -4,8 +4,10 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AUTH_OPTIONS } from '../constants';
 import { IS_PUBLIC_KEY } from '../decorators/public';
 import { PERMISSIONS_KEY } from '../decorators/permissions';
@@ -17,7 +19,8 @@ import { resolvePermissions } from '../helpers/permission.helper';
 export class PermissionsGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions
+    @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
+    @Optional() @Inject(EventEmitter2) private readonly eventEmitter?: EventEmitter2
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -44,6 +47,14 @@ export class PermissionsGuard implements CanActivate {
     const user = request.user;
 
     if (!user) {
+      this.emitDenied('auth.permissions.denied', {
+        userId: undefined,
+        metadata: {
+          requiredPermissions,
+          userPermissions: [],
+          reason: 'Authenticated user not found',
+        },
+      });
       throw new ForbiddenException('Authenticated user not found');
     }
 
@@ -58,6 +69,15 @@ export class PermissionsGuard implements CanActivate {
       });
 
       if (!isAllowed) {
+        this.emitDenied('auth.permissions.denied', {
+          userId: user.id,
+          metadata: {
+            requiredPermissions,
+            userPermissions: resolvedPermissions,
+            evaluateMode: 'custom',
+            reason: 'Custom evaluator rejected',
+          },
+        });
         throw new ForbiddenException('Missing required permissions');
       }
 
@@ -75,9 +95,28 @@ export class PermissionsGuard implements CanActivate {
         );
 
     if (!isAllowed) {
+      this.emitDenied('auth.permissions.denied', {
+        userId: user.id,
+        metadata: {
+          requiredPermissions,
+          userPermissions: resolvedPermissions,
+          evaluateMode: requireAllPermissions ? 'all' : 'any',
+          reason: 'Missing required permissions',
+        },
+      });
       throw new ForbiddenException('Missing required permissions');
     }
 
     return true;
+  }
+
+  private emitDenied(action: string, data: Record<string, unknown>): void {
+    if (!this.eventEmitter) return;
+    this.eventEmitter.emit(action, {
+      action,
+      entity: 'auth',
+      timestamp: new Date(),
+      ...data,
+    });
   }
 }

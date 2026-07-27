@@ -18,3 +18,4 @@ export * from './lib/helpers/exception-filter.helper';
 export * from './lib/helpers/cursor-pagination.helper';
 export * from './lib/entities/audit-log.entity';
 export * from './lib/services/audit-log.service';
+export * from './lib/events';

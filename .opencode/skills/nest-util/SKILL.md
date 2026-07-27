@@ -13,8 +13,8 @@ Nx monorepo (`pnpm workspaces`) with these packages:
 
 | Package | Version | Purpose |
 |---|---|---|
-| `@nest-util/nest-crud` | 1.0.6 | Generic CRUD service + controller factory + audit + hooks + cursor pagination + findMine |
-| `@nest-util/nest-auth` | 1.0.2 | JWT auth with RBAC, OTP, password reset |
+| `@nest-util/nest-crud` | 1.0.7 | Generic CRUD service + controller factory + audit + hooks + cursor pagination + findMine |
+| `@nest-util/nest-auth` | 1.1.0 | JWT auth with RBAC, OTP, password reset, API key auth |
 
 **Key design**: Audit logging, lifecycle hooks, cursor pagination, and findMine are all built into `nest-crud`. No separate audit package exists.
 

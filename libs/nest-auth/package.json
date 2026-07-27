@@ -1,6 +1,6 @@
 {
   "name": "@nest-util/nest-auth",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,6 +25,7 @@
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
+    "@nestjs/event-emitter": "^3.0.0",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/swagger": "^11.2.6",
@@ -32,6 +33,11 @@
     "class-validator": "^0.14.3",
     "rxjs": "^7.8.0",
     "typeorm": "^1.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/event-emitter": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

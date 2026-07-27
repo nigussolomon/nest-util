@@ -5,6 +5,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { PERMISSIONS_KEY } from '../decorators/permissions';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { Reflector } from '@nestjs/core';
+import { ApiKeyService } from '../services/api-key.service';
 
 import { CreateAuthController } from './auth.controller';
 
@@ -70,6 +71,16 @@ describe('AuthController', () => {
         {
           provide: Reflector,
           useValue: { getAllAndOverride: jest.fn() },
+        },
+        {
+          provide: ApiKeyService,
+          useValue: {
+            create: jest.fn(),
+            list: jest.fn(),
+            revoke: jest.fn(),
+            assignRole: jest.fn(),
+            removeRole: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -233,6 +244,11 @@ describe('AuthController', () => {
         'removePermissionsFromRole',
         'removeRoleFromUser',
         'getUserRoles',
+        'createApiKey',
+        'listApiKeys',
+        'revokeApiKey',
+        'assignRoleToApiKey',
+        'removeRoleFromApiKey',
       ] as const;
 
       for (const methodName of methodNames) {

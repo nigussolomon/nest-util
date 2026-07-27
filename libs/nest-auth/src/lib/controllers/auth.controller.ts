@@ -10,6 +10,7 @@ import {
   Param,
   ParseIntPipe,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -30,6 +31,8 @@ import { Permissions } from '../decorators/permissions';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { resolvePermissionRegistry } from '../helpers/permission-registry.helper';
 import { resolvePermissions } from '../helpers/permission.helper';
+import { CreateApiKeyDto } from '../dtos/create-api-key.dto';
+import { ApiKeyService } from '../services/api-key.service';
 
 const ADMIN_ROUTE_PERMISSION = 'admin.access';
 
@@ -79,9 +82,9 @@ export function CreateAuthController(
   class AuthController {
     constructor(
       protected readonly authService: AuthService,
-      @Inject(AUTH_OPTIONS) protected readonly options: AuthModuleOptions
+      @Inject(AUTH_OPTIONS) protected readonly options: AuthModuleOptions,
+      protected readonly apiKeyService?: ApiKeyService
     ) {}
-
     @Post('register')
     @ApiOperation({ summary: 'Register a new user' })
     @ApiBody({ type: registerDto })
@@ -385,6 +388,83 @@ export function CreateAuthController(
     @ApiResponse({ status: 404, description: 'User not found' })
     async getUserRoles(@Param('userId', ParseIntPipe) userId: number) {
       return await this.authService.getUserRoles(userId);
+    }
+
+    // --- API Key Management ---
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
+    @Post('api-keys')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Create a new API key' })
+    @ApiBody({ type: CreateApiKeyDto })
+    @ApiResponse({ status: 201, description: 'API key created (raw key returned once)' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 403, description: 'Forbidden' })
+    async createApiKey(
+      @CurrentUser() user: AuthUser,
+      @Body() data: CreateApiKeyDto
+    ) {
+      return await this.apiKeyService!.create(user.id as number, data);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
+    @Get('api-keys')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'List all API keys for the current user' })
+    @ApiResponse({ status: 200, description: 'API keys listed' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async listApiKeys(@CurrentUser() user: AuthUser) {
+      return await this.apiKeyService!.list(user.id as number);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
+    @Delete('api-keys/:id')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Revoke an API key' })
+    @ApiResponse({ status: 200, description: 'API key revoked' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 404, description: 'Key not found' })
+    async revokeApiKey(
+      @CurrentUser() user: AuthUser,
+      @Param('id', ParseUUIDPipe) id: string
+    ) {
+      return await this.apiKeyService!.revoke(user.id as number, id);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
+    @Post('api-keys/:id/roles/:roleId')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Assign a role to an API key' })
+    @ApiResponse({ status: 201, description: 'Role assigned to API key' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 404, description: 'Key or role not found' })
+    @ApiResponse({ status: 409, description: 'Role already assigned' })
+    async assignRoleToApiKey(
+      @CurrentUser() user: AuthUser,
+      @Param('id', ParseUUIDPipe) id: string,
+      @Param('roleId', ParseIntPipe) roleId: number
+    ) {
+      return await this.apiKeyService!.assignRole(user.id as number, id, roleId);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(ADMIN_ROUTE_PERMISSION)
+    @Delete('api-keys/:id/roles/:roleId')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Remove a role from an API key' })
+    @ApiResponse({ status: 200, description: 'Role removed from API key' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    @ApiResponse({ status: 404, description: 'Key or role not found' })
+    async removeRoleFromApiKey(
+      @CurrentUser() user: AuthUser,
+      @Param('id', ParseUUIDPipe) id: string,
+      @Param('roleId', ParseIntPipe) roleId: number
+    ) {
+      return await this.apiKeyService!.removeRole(user.id as number, id, roleId);
     }
 
     protected checkIfRouteDisabled(routeName: string) {

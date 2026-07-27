@@ -1,6 +1,7 @@
 import { Type } from '@nestjs/common';
 import { AuthRbacOptions } from './rbac-options.interface';
 import { PermissionRegistryConfig } from './permission-registry.interface';
+import { ApiKeyModuleOptions } from './api-key-options';
 
 export interface OtpDeliveryPayload {
   identifier: string;
@@ -147,4 +148,6 @@ export interface AuthModuleOptions {
   otp?: AuthOtpOptions;
 
   passwordReset?: AuthPasswordResetOptions;
+
+  apiKey?: ApiKeyModuleOptions;
 }
