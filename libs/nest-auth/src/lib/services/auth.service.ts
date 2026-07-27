@@ -1,6 +1,7 @@
 import {
   Injectable,
   Inject,
+  Optional,
   UnauthorizedException,
   ConflictException,
   BadRequestException,
@@ -12,6 +13,7 @@ import { DataSource } from 'typeorm';
 import type { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AUTH_OPTIONS } from '../constants';
 import type {
   AuthModuleOptions,
@@ -22,6 +24,18 @@ import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 import { RoleEntity } from '../entities/role.entity';
 import { UserRoleEntity } from '../entities/user-role.entity';
 import { CreateRoleDto } from '../dtos/create-role.dto';
+
+interface AuditEvent {
+  action: string;
+  entity: string;
+  entityId?: unknown;
+  userId?: unknown;
+  ip?: string;
+  userAgent?: string;
+  tenantId?: string;
+  timestamp: Date;
+  metadata?: Record<string, unknown>;
+}
 
 interface ResolvedOtpOptions {
   codeLength: number;
@@ -54,13 +68,24 @@ export class AuthService {
   constructor(
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
     private readonly jwtService: JwtService,
-    @Inject(DataSource) private readonly dataSource: DataSource
+    @Inject(DataSource) private readonly dataSource: DataSource,
+    @Optional() @Inject(EventEmitter2) private readonly eventEmitter?: EventEmitter2
   ) {
     this.userRepository = this.dataSource.getRepository(
       this.options.userEntity
     ) as Repository<Record<string, unknown>>;
     this.roleRepository = this.dataSource.getRepository(RoleEntity);
     this.userRoleRepository = this.dataSource.getRepository(UserRoleEntity);
+  }
+
+  private emitAuthEvent(action: string, data: Partial<AuditEvent> = {}): void {
+    if (!this.eventEmitter) return;
+    this.eventEmitter.emit(action, {
+      action,
+      entity: 'user',
+      timestamp: new Date(),
+      ...data,
+    });
   }
 
   async register(data: Record<string, unknown>): Promise<AuthUser> {
@@ -72,6 +97,7 @@ export class AuthService {
     });
 
     if (existingUser) {
+      this.emitAuthEvent('auth.user.register.conflict', { metadata: { identifier } });
       throw new ConflictException('User already exists');
     }
 
@@ -84,6 +110,11 @@ export class AuthService {
     });
 
     const savedUser = await this.userRepository.save(newUser);
+    this.emitAuthEvent('auth.user.register.success', {
+      entityId: (savedUser as any).id,
+      userId: (savedUser as any).id,
+      metadata: { identifier },
+    });
     return this.removeSensitiveData(savedUser);
   }
 
@@ -98,6 +129,7 @@ export class AuthService {
       .getOne();
 
     if (!user) {
+      this.emitAuthEvent('auth.user.login.failed.user_not_found', { metadata: { identifier } });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -109,9 +141,19 @@ export class AuthService {
       : false;
 
     if (!isPasswordValid) {
+      this.emitAuthEvent('auth.user.login.failed.invalid_password', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier },
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    this.emitAuthEvent('auth.user.login.success', {
+      entityId: user.id,
+      userId: user.id,
+      metadata: { identifier },
+    });
     return await this.generateTokens(user);
   }
 
@@ -141,12 +183,18 @@ export class AuthService {
 
     // Avoid account enumeration by returning the same response for unknown users.
     if (!user) {
+      this.emitAuthEvent('auth.otp.request.user_not_found', { metadata: { identifier: normalizedIdentifier } });
       return { success: true, message: 'OTP has been sent if the user exists' };
     }
 
     const now = new Date();
     const lockUntil = this.toDate(user[otpConfig.lockUntilField]);
     if (lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.otp.request.locked', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier, lockUntil },
+      });
       return {
         success: false,
         message:
@@ -159,6 +207,11 @@ export class AuthService {
       lastSentAt &&
       now.getTime() - lastSentAt.getTime() < otpConfig.cooldownSeconds * 1000
     ) {
+      this.emitAuthEvent('auth.otp.request.cooldown', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
       return { success: false, message: 'OTP request is on cooldown' };
     }
 
@@ -188,9 +241,19 @@ export class AuthService {
       });
     } catch {
       await this.clearOtpState(user.id as string | number, otpConfig);
+      this.emitAuthEvent('auth.otp.request.delivery_failed', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier, channel: otpOptions.channel || otpConfig.channel },
+      });
       throw new InternalServerErrorException('Failed to deliver OTP');
     }
 
+    this.emitAuthEvent('auth.otp.request.success', {
+      entityId: user.id,
+      userId: user.id,
+      metadata: { identifier: normalizedIdentifier, channel: otpOptions.channel || otpConfig.channel },
+    });
     return { success: true };
   }
 
@@ -229,6 +292,7 @@ export class AuthService {
       .getOne();
 
     if (!user) {
+      this.emitAuthEvent('auth.otp.login.failed.user_not_found', { metadata: { identifier: normalizedIdentifier } });
       throw new UnauthorizedException({
         code: 'USER_NOT_FOUND',
         message: 'User not found',
@@ -240,6 +304,11 @@ export class AuthService {
     const lockUntil = this.toDate(user[otpConfig.lockUntilField]);
 
     if (lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.otp.login.failed.locked', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier, lockUntil },
+      });
       throw new BadRequestException({
         code: 'OTP_LOCKED',
         message: 'Too many OTP attempts',
@@ -251,6 +320,11 @@ export class AuthService {
     const expiresAt = this.toDate(user[otpConfig.expiresAtField]);
 
     if (!storedOtpHash) {
+      this.emitAuthEvent('auth.otp.login.failed.not_requested', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
       throw new UnauthorizedException({
         code: 'OTP_NOT_REQUESTED',
         message: 'No OTP has been generated',
@@ -266,6 +340,11 @@ export class AuthService {
 
     if (expiresAt <= now) {
       await this.clearOtpState(user.id as string | number, otpConfig);
+      this.emitAuthEvent('auth.otp.login.failed.expired', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
 
       throw new UnauthorizedException({
         code: 'OTP_EXPIRED',
@@ -291,6 +370,11 @@ export class AuthService {
         updatePayload[otpConfig.lockUntilField] = nextLockUntil;
 
         await this.updateOtpState(user.id as string | number, updatePayload);
+        this.emitAuthEvent('auth.otp.login.failed.max_attempts', {
+          entityId: user.id,
+          userId: user.id,
+          metadata: { identifier: normalizedIdentifier, lockUntil: nextLockUntil },
+        });
 
         throw new BadRequestException({
           code: 'OTP_MAX_ATTEMPTS_REACHED',
@@ -301,6 +385,11 @@ export class AuthService {
 
       await this.updateOtpState(user.id as string | number, updatePayload);
 
+      this.emitAuthEvent('auth.otp.login.failed.invalid', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier, attemptsRemaining: otpConfig.maxAttempts - nextAttempts },
+      });
       throw new UnauthorizedException({
         code: 'OTP_INVALID',
         message: 'Invalid OTP code',
@@ -310,6 +399,11 @@ export class AuthService {
 
     await this.clearOtpState(user.id as string | number, otpConfig);
 
+    this.emitAuthEvent('auth.otp.login.success', {
+      entityId: user.id,
+      userId: user.id,
+      metadata: { identifier: normalizedIdentifier },
+    });
     return this.generateTokens(user);
   }
 
@@ -326,22 +420,31 @@ export class AuthService {
         .getOne();
 
       if (!user) {
+        this.emitAuthEvent('auth.token.refresh.failed', { metadata: { reason: 'Invalid refresh token' } });
         throw new UnauthorizedException('Invalid refresh token');
       }
 
       const storedHash = user[refreshTokenField] as string;
       if (!storedHash) {
+        this.emitAuthEvent('auth.token.refresh.failed', { userId: payload.sub, metadata: { reason: 'Invalid refresh token' } });
         throw new UnauthorizedException('Invalid refresh token');
       }
 
       const isTokenValid = await bcrypt.compare(payload.nonce, storedHash);
       if (!isTokenValid) {
+        this.emitAuthEvent('auth.token.refresh.failed', { userId: payload.sub, metadata: { reason: 'Refresh token reused or invalid' } });
         throw new UnauthorizedException('Refresh token reused or invalid');
       }
 
+      this.emitAuthEvent('auth.token.refresh.success', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { sub: payload.sub },
+      });
       return await this.generateTokens(user);
     } catch (e: unknown) {
       if (e instanceof UnauthorizedException) throw e;
+      this.emitAuthEvent('auth.token.refresh.failed', { metadata: { reason: 'Invalid refresh token' } });
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -358,9 +461,11 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
+      this.emitAuthEvent('auth.user.logout.failed', { userId, metadata: { reason: 'No user affected' } });
       throw new UnauthorizedException('Failed to logout');
     }
 
+    this.emitAuthEvent('auth.user.logout.success', { entityId: userId, userId });
     return true;
   }
 
@@ -377,6 +482,7 @@ export class AuthService {
       .getOne();
 
     if (!user) {
+      this.emitAuthEvent('auth.password.change.failed.user_not_found', { userId, metadata: { reason: 'User not found' } });
       throw new NotFoundException('User not found');
     }
 
@@ -389,9 +495,19 @@ export class AuthService {
       );
 
       if (!isCurrentPasswordValid) {
+        this.emitAuthEvent('auth.password.change.failed.current_password_wrong', {
+          entityId: userId,
+          userId,
+          metadata: { reason: 'Current password is incorrect' },
+        });
         throw new UnauthorizedException('Current password is incorrect');
       }
     } else {
+      this.emitAuthEvent('auth.password.change.failed.no_password_set', {
+        entityId: userId,
+        userId,
+        metadata: { reason: 'User does not have a password set' },
+      });
       throw new BadRequestException('User does not have a password set');
     }
 
@@ -408,6 +524,7 @@ export class AuthService {
       throw new InternalServerErrorException('Failed to change password');
     }
 
+    this.emitAuthEvent('auth.password.change.success', { entityId: userId, userId });
     return { success: true, message: 'Password changed successfully' };
   }
 
@@ -438,6 +555,7 @@ export class AuthService {
 
     // Prevent account enumeration
     if (!user) {
+      this.emitAuthEvent('auth.password.reset.request.user_not_found', { metadata: { identifier: normalizedIdentifier } });
       return {
         success: true,
         message:
@@ -486,10 +604,20 @@ export class AuthService {
         user.id as string | number,
         resetConfig
       );
+      this.emitAuthEvent('auth.password.reset.request.delivery_failed', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
 
       throw new InternalServerErrorException('Failed to deliver reset token');
     }
 
+    this.emitAuthEvent('auth.password.reset.request.success', {
+      entityId: user.id,
+      userId: user.id,
+      metadata: { identifier: normalizedIdentifier, expiresAt },
+    });
     return { success: true };
   }
 
@@ -535,6 +663,7 @@ export class AuthService {
     }
 
     if (!matchedUser) {
+      this.emitAuthEvent('auth.password.reset.failed.invalid_token', { metadata: { reason: 'Invalid reset token' } });
       throw new BadRequestException('Invalid reset token');
     }
 
@@ -545,6 +674,11 @@ export class AuthService {
         matchedUser.id as string | number,
         resetConfig
       );
+      this.emitAuthEvent('auth.password.reset.failed.expired', {
+        entityId: matchedUser.id,
+        userId: matchedUser.id,
+        metadata: { reason: 'Reset token has expired' },
+      });
 
       throw new BadRequestException('Reset token has expired');
     }
@@ -570,6 +704,10 @@ export class AuthService {
       throw new InternalServerErrorException('Failed to reset password');
     }
 
+    this.emitAuthEvent('auth.password.reset.success', {
+      entityId: matchedUser.id,
+      userId: matchedUser.id,
+    });
     return {
       success: true,
       message: 'Password reset successfully',
@@ -588,6 +726,7 @@ export class AuthService {
     });
 
     if (existingRole) {
+      this.emitAuthEvent('auth.role.created.conflict', { metadata: { roleName } });
       throw new ConflictException('Role already exists');
     }
 
@@ -600,7 +739,14 @@ export class AuthService {
       permissions: this.toPermissionArray(data.permissions),
     });
 
-    return await this.roleRepository.save(role);
+    const savedRole = await this.roleRepository.save(role);
+    this.emitAuthEvent('auth.role.created', {
+      entity: 'role',
+      entityId: savedRole.id,
+      userId: undefined,
+      metadata: { roleName, permissions: savedRole.permissions },
+    });
+    return savedRole;
   }
 
   async assignRoleToUser(userId: number, roleId: number): Promise<RoleEntity> {
@@ -620,6 +766,11 @@ export class AuthService {
       await this.userRoleRepository.save(assignment);
     }
 
+    this.emitAuthEvent('auth.role.assigned', {
+      entity: 'role',
+      entityId: roleId,
+      metadata: { targetUserId: userId, targetRoleId: roleId, roleName: role.name },
+    });
     return role;
   }
 
@@ -644,7 +795,13 @@ export class AuthService {
     role.permissions = [
       ...new Set([...currentPermissions, ...parsedPermissions]),
     ];
-    return await this.roleRepository.save(role);
+    const saved = await this.roleRepository.save(role);
+    this.emitAuthEvent('auth.role.permissions.added', {
+      entity: 'role',
+      entityId: roleId,
+      metadata: { roleName: role.name, addedPermissions: parsedPermissions, allPermissions: saved.permissions },
+    });
+    return saved;
   }
 
   async removePermissionsFromRole(
@@ -669,7 +826,13 @@ export class AuthService {
       (permission) => !parsedPermissions.includes(permission)
     );
 
-    return await this.roleRepository.save(role);
+    const saved = await this.roleRepository.save(role);
+    this.emitAuthEvent('auth.role.permissions.removed', {
+      entity: 'role',
+      entityId: roleId,
+      metadata: { roleName: role.name, removedPermissions: parsedPermissions, remainingPermissions: saved.permissions },
+    });
+    return saved;
   }
 
   async removeRoleFromUser(userId: number, roleId: number): Promise<boolean> {
@@ -681,7 +844,15 @@ export class AuthService {
     }
 
     const result = await this.userRoleRepository.delete({ userId, roleId });
-    return (result.affected ?? 0) > 0;
+    const removed = (result.affected ?? 0) > 0;
+    if (removed) {
+      this.emitAuthEvent('auth.role.removed', {
+        entity: 'role',
+        entityId: roleId,
+        metadata: { targetUserId: userId, targetRoleId: roleId },
+      });
+    }
+    return removed;
   }
 
   async getUserRoles(userId: number): Promise<RoleEntity[]> {
