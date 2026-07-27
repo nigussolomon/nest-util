@@ -600,7 +600,10 @@
         <h4>Starter template available</h4>
         <p>Auth, RBAC, user CRUD, OTP, password reset, and audit events — pre-configured.</p>
       </div>
-      <code>git clone .../starter.git my-app</code>
+      <div style="display:flex;align-items:center;gap:8px">
+        <code>git clone .../starter.git my-app</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('git clone https://github.com/nigussolomon/nest-util/starter.git my-app').then(()=>this.textContent='Copied!')">Copy</button>
+      </div>
     </div>
 
     <div class="terminal-block">
