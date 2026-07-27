@@ -152,6 +152,13 @@
         <p>User-scoped records via <code>GET /resource/mine</code>. Simple column match or custom query callbacks.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon amber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        </div>
+        <h3>API Key Auth</h3>
+        <p>Server-to-server auth with per-key RBAC. Composable guard chains with JWT seamlessly.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon red">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         </div>
@@ -204,13 +211,14 @@
       <div class="package-card">
         <div class="package-header">
           <div class="package-name">@nest-util/nest-auth</div>
-          <div class="package-desc">JWT, RBAC, OTP, password reset</div>
+          <div class="package-desc">JWT, RBAC, OTP, password reset, API keys</div>
         </div>
         <div class="package-body">
           <ul>
             <li>Dynamic auth module configuration</li>
             <li>Refresh token rotation with nonce</li>
             <li>Role-based access control (RBAC)</li>
+            <li>API key authentication with per-key roles</li>
             <li>OTP login with delivery callbacks</li>
             <li>Password reset with token expiry</li>
             <li>Permission registry for CRUD</li>

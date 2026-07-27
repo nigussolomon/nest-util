@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>@nest-util/nest-auth — JWT Auth, RBAC, OTP &amp; Password Reset</title>
-  <meta name="description" content="JWT authentication with refresh token rotation, RBAC, OTP login, and password reset for NestJS — ready out of the box.">
+  <title>@nest-util/nest-auth — JWT Auth, RBAC, API Keys, OTP &amp; Password Reset</title>
+  <meta name="description" content="JWT authentication with refresh token rotation, RBAC, API key auth, OTP login, and password reset for NestJS — ready out of the box.">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
@@ -27,6 +27,7 @@
       <li><a href="#auth-module">Auth Module</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
       <li><a href="#guards">Guards</a></li>
+      <li><a href="#api-keys">API Keys</a></li>
       <li><a href="#audit-events">Audit Events</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util/blob/main/skill/SKILL.md">Skill</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
@@ -64,6 +65,7 @@
     <ul>
       <li><a href="#endpoints">Endpoints</a></li>
       <li><a href="#guards">Guards</a></li>
+      <li><a href="#api-keys">API Keys</a></li>
     </ul>
     <div class="sidebar-section">Reference</div>
     <ul>
@@ -96,6 +98,11 @@
           <div class="feature-icon green">&#9889;</div>
           <h3>OTP Login</h3>
           <p>One-time password login with configurable code length, cooldown, lockout, and delivery callbacks.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon blue">&#128273;</div>
+          <h3>API Key Auth</h3>
+          <p>Server-to-server authentication with named keys, per-key RBAC, expiration, and revocation.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon amber">&#128273;</div>
@@ -346,6 +353,11 @@
               <td>object</td>
               <td>OTP login configuration (see below)</td>
             </tr>
+            <tr>
+              <td><code>apiKey</code></td>
+              <td>object</td>
+              <td>API key authentication configuration (see below)</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -485,6 +497,48 @@
           </tbody>
         </table>
       </div>
+
+      <h3>API Key Management</h3>
+      <p>When API key auth is enabled, admin-protected endpoints for key lifecycle management are available:</p>
+
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/api-keys</code></td>
+              <td>Create a new API key (raw key returned once)</td>
+            </tr>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/api-keys</code></td>
+              <td>List all API keys (prefix only, no raw key)</td>
+            </tr>
+            <tr>
+              <td><span class="method delete">DELETE</span></td>
+              <td><code>/auth/api-keys/:id</code></td>
+              <td>Revoke an API key</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/api-keys/:id/roles/:roleId</code></td>
+              <td>Assign a role to an API key</td>
+            </tr>
+            <tr>
+              <td><span class="method delete">DELETE</span></td>
+              <td><code>/auth/api-keys/:id/roles/:roleId</code></td>
+              <td>Remove a role from an API key</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════
@@ -492,7 +546,7 @@
          ═══════════════════════════════════════════════════════ -->
     <section id="guards">
       <h2>Guards</h2>
-      <p>Protect your endpoints with <code>JwtAuthGuard</code> for authentication and <code>PermissionsGuard</code> for authorization. Use the <code>@CurrentUser()</code> and <code>@Permissions()</code> decorators to access the authenticated user and enforce permissions.</p>
+      <p>Protect your endpoints with <code>JwtAuthGuard</code> for authentication, <code>PermissionsGuard</code> for authorization, and <code>ApiKeyGuard</code> for API key authentication. Use the <code>@CurrentUser()</code> and <code>@Permissions()</code> decorators to access the authenticated user and enforce permissions.</p>
 
       <div class="code-block">
         <div class="code-block-header">
@@ -503,6 +557,7 @@
 <span class="kw">import</span> {
   <span class="fn">CurrentUser</span>,
   <span class="typ">JwtAuthGuard</span>,
+  <span class="typ">ApiKeyGuard</span>,
   <span class="fn">Permissions</span>,
   <span class="typ">PermissionsGuard</span>,
   <span class="kw">type</span> <span class="typ">AuthUser</span>,
@@ -511,19 +566,19 @@
 <span class="dec">@Controller</span>(<span class="str">'profile'</span>)
 <span class="kw">export class</span> <span class="typ">ProfileController</span> {
 
-  <span class="cm">// Authenticated user profile</span>
+  <span class="cm">// Authenticated user profile (JWT only)</span>
   <span class="dec">@Get</span>(<span class="str">'me'</span>)
   <span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>)
   <span class="fn">me</span>(<span class="dec">@CurrentUser</span>() user: <span class="typ">AuthUser</span>) {
     <span class="kw">return</span> user;
   }
 
-  <span class="cm">// Admin-only endpoint</span>
-  <span class="dec">@Get</span>(<span class="str">'admin'</span>)
-  <span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
+  <span class="cm">// Works with both API key and JWT</span>
+  <span class="dec">@Get</span>(<span class="str">'data'</span>)
+  <span class="dec">@UseGuards</span>(<span class="typ">ApiKeyGuard</span>, <span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
   <span class="dec">@Permissions</span>(<span class="str">'admin.access'</span>)
-  <span class="fn">adminOnly</span>() {
-    <span class="kw">return</span> { ok: <span class="num">true</span> };
+  <span class="fn">getData</span>(<span class="dec">@CurrentUser</span>() user: <span class="typ">AuthUser</span>) {
+    <span class="kw">return</span> { ok: <span class="num">true</span>, userId: user.id };
   }
 }</pre>
       </div>
@@ -541,7 +596,7 @@
           <tbody>
             <tr>
               <td><code>@CurrentUser()</code></td>
-              <td><code>JwtAuthGuard</code></td>
+              <td><code>JwtAuthGuard</code> / <code>ApiKeyGuard</code></td>
               <td>Injects the authenticated <code>AuthUser</code> into the handler parameter</td>
             </tr>
             <tr>
@@ -557,6 +612,108 @@
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         API KEYS
+         ═══════════════════════════════════════════════════════ -->
+    <section id="api-keys">
+      <h2>API Key Authentication</h2>
+      <p>Enable API key authentication for server-to-server requests. Each key has its own roles and permissions, independent of the user who created it.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts (apiKey config)</div>
+        </div>
+        <pre><span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+  <span class="cm">// ... other options</span>
+  apiKey: {
+    enabled: <span class="num">true</span>,
+    headerName: <span class="str">'x-api-key'</span>,    <span class="cm">// default</span>
+    keyPrefix: <span class="str">'nuk_live_'</span>,      <span class="cm">// default</span>
+    hashRounds: <span class="num">10</span>,              <span class="cm">// default</span>
+  },
+})</pre>
+      </div>
+
+      <h3>Configuration Options</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Option</th>
+              <th>Type</th>
+              <th>Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>enabled</code></td>
+              <td>boolean</td>
+              <td><code>false</code></td>
+              <td>Enable API key authentication</td>
+            </tr>
+            <tr>
+              <td><code>headerName</code></td>
+              <td>string</td>
+              <td><code>'x-api-key'</code></td>
+              <td>Header to read the API key from</td>
+            </tr>
+            <tr>
+              <td><code>keyPrefix</code></td>
+              <td>string</td>
+              <td><code>'nuk_live_'</code></td>
+              <td>Prefix for generated keys</td>
+            </tr>
+            <tr>
+              <td><code>hashRounds</code></td>
+              <td>number</td>
+              <td><code>10</code></td>
+              <td>Bcrypt hash rounds for key storage</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Usage</h3>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">data.controller.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">Controller</span>, <span class="typ">Get</span>, <span class="typ">UseGuards</span> } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> {
+  <span class="typ">ApiKeyGuard</span>,
+  <span class="typ">JwtAuthGuard</span>,
+  <span class="typ">PermissionsGuard</span>,
+  <span class="fn">CurrentUser</span>,
+  <span class="kw">type</span> <span class="typ">AuthUser</span>,
+} <span class="kw">from</span> <span class="str">'@nest-util/nest-auth'</span>;
+
+<span class="dec">@Controller</span>(<span class="str">'data'</span>)
+<span class="dec">@UseGuards</span>(<span class="typ">ApiKeyGuard</span>, <span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
+<span class="kw">export class</span> <span class="typ">DataController</span> {
+
+  <span class="dec">@Get</span>()
+  <span class="fn">findAll</span>(<span class="dec">@CurrentUser</span>() user: <span class="typ">AuthUser</span>) {
+    <span class="cm">// user.id comes from either API key or JWT</span>
+    <span class="kw">return</span> this.service.findAll();
+  }
+}</pre>
+      </div>
+
+      <p><code>ApiKeyGuard</code> is composable — if no <code>X-API-Key</code> header is present, it skips silently and lets the next guard (e.g. <code>JwtAuthGuard</code>) handle authentication. This means both API keys and JWT tokens work on the same endpoint.</p>
+
+      <h3>How It Works</h3>
+      <ol>
+        <li>Create a key via <code>POST /auth/api-keys</code> (raw key returned once)</li>
+        <li>Assign roles to the key via <code>POST /auth/api-keys/:id/roles/:roleId</code></li>
+        <li>Send the key in the <code>X-API-Key</code> header</li>
+        <li>The guard loads the key's user and the key's roles (not the user's own roles)</li>
+        <li><code>@CurrentUser()</code> resolves permissions from the key's roles</li>
+      </ol>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════
@@ -618,6 +775,20 @@
         <tbody>
           <tr><td><code>auth.jwt.denied</code></td><td>JWT authentication failed (401)</td></tr>
           <tr><td><code>auth.permissions.denied</code></td><td>Missing required permissions (403)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>API Key Events</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>auth.api-key.used</code></td><td>API key authenticated successfully</td></tr>
+          <tr><td><code>auth.api-key.denied</code></td><td>API key invalid, expired, or revoked</td></tr>
         </tbody>
       </table>
 

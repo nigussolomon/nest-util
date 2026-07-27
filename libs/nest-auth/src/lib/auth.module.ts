@@ -10,8 +10,12 @@ import { CreateAuthController } from './controllers/auth.controller';
 import { JwtStrategy } from './guards/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
+import { ApiKeyGuard } from './guards/api-key.guard';
+import { ApiKeyService } from './services/api-key.service';
 import { RoleEntity } from './entities/role.entity';
 import { UserRoleEntity } from './entities/user-role.entity';
+import { ApiKeyEntity } from './entities/api-key.entity';
+import { ApiKeyRoleEntity } from './entities/api-key-role.entity';
 import { Reflector } from '@nestjs/core';
 
 @Global()
@@ -19,6 +23,16 @@ import { Reflector } from '@nestjs/core';
 export class AuthModule {
   static forRoot(options: AuthModuleOptions): DynamicModule {
     const Controller = CreateAuthController(options);
+    const apiKeyEnabled = options.apiKey?.enabled === true;
+    const apiKeyEntities = apiKeyEnabled
+      ? [ApiKeyEntity, ApiKeyRoleEntity]
+      : [];
+    const apiKeyProviders = apiKeyEnabled
+      ? [ApiKeyService, ApiKeyGuard]
+      : [];
+    const apiKeyExports = apiKeyEnabled
+      ? [ApiKeyService, ApiKeyGuard]
+      : [];
 
     return {
       module: AuthModule,
@@ -36,6 +50,7 @@ export class AuthModule {
           options.userEntity,
           RoleEntity,
           UserRoleEntity,
+          ...apiKeyEntities,
         ]),
       ],
       providers: [
@@ -49,6 +64,7 @@ export class AuthModule {
         JwtAuthGuard,
         PermissionsGuard,
         Reflector,
+        ...apiKeyProviders,
       ],
       exports: [
         AUTH_OPTIONS,
@@ -61,6 +77,7 @@ export class AuthModule {
         JwtAuthGuard,
         PermissionsGuard,
         Reflector,
+        ...apiKeyExports,
       ],
     };
   }

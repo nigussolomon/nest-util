@@ -9,6 +9,7 @@ A dynamic NestJS authentication library designed to be flexible, plug-and-play, 
 - **Type Safety**: Built-in `AuthUser` and `AuthTokens` types.
 - **Single-Use Refresh Tokens**: Robust refresh token rotation logic to prevent replay attacks.
 - **Profile Endpoint**: Built-in `/auth/me` to retrieve the current user profile.
+- **API Key Authentication**: Server-to-server authentication with per-key RBAC and composable guard.
 
 ## Quick Start
 
@@ -50,6 +51,46 @@ getProfile(@CurrentUser() user: AuthUser) {
   return user; // Returns user without sensitive fields
 }
 ```
+
+## API Key Authentication
+
+Enable API key authentication for server-to-server requests. Each key has its own roles and permissions, independent of the user who created it.
+
+### Configuration
+
+```typescript
+AuthModule.forRoot({
+  // ... other options
+  apiKey: {
+    enabled: true,
+    headerName: 'x-api-key',    // default
+    keyPrefix: 'nuk_live_',      // default
+    hashRounds: 10,              // default
+  },
+})
+```
+
+### Usage
+
+```typescript
+import { ApiKeyGuard, JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
+
+@Controller('data')
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionsGuard)
+export class DataController {
+  // API keys and JWT tokens work on the same endpoint
+}
+```
+
+### API Key Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/auth/api-keys` | Create new API key | Yes (JWT) |
+| GET | `/auth/api-keys` | List user's API keys | Yes (JWT) |
+| DELETE | `/auth/api-keys/:id` | Revoke API key | Yes (JWT) |
+| POST | `/auth/api-keys/:id/roles/:roleId` | Assign role to key | Yes (JWT) |
+| DELETE | `/auth/api-keys/:id/roles/:roleId` | Remove role from key | Yes (JWT) |
 
 ## Authentication Endpoints
 

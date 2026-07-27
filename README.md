@@ -42,7 +42,7 @@ Nest-Util is composed of focused modules that integrate into the same NestJS app
 **Architecture Components:**
 
 - `@nest-util/nest-crud`: provides reusable CRUD service/controller building blocks, audit logging, lifecycle hooks, cursor pagination, and findMine
-- `@nest-util/nest-auth`: handles JWT auth, refresh tokens, and permissions
+- `@nest-util/nest-auth`: handles JWT auth, refresh tokens, permissions, and API key authentication
 - `TypeORM + Database`: persistence layer used by all runtime modules
 
 ### Integration Flow
@@ -90,7 +90,8 @@ A dynamic and flexible authentication library:
 - **`AuthModule`**: Dynamic configuration for entities, fields, and JWT settings
 - **`AuthService`**: Built-in registration and login with bcrypt hashing
 - **Token Security**: Refresh token rotation with nonce-based validation
-- **Custom Decorators**: `@Public()`, `@CurrentUser()`, `@AuthOptions()`
+- **API Key Authentication**: Server-to-server auth with per-key RBAC and composable guard
+- **Custom Decorators**: `@Public()`, `@CurrentUser()`, `@Permissions()`
 - **Flexible DTOs**: Bring your own DTOs for full control over validation and documentation
 - **Route Control**: Enable/disable auth endpoints via configuration
 
@@ -284,6 +285,34 @@ export class PostController
   getMyPosts(@CurrentUser() user: AuthUser) {
     return this.service.findAll({ filter: { authorId_eq: user.id } });
   }
+}
+```
+
+### Step 3: Enable API Key Authentication (Optional)
+
+For server-to-server requests, enable API key authentication:
+
+```typescript
+AuthModule.forRoot({
+  // ... other options
+  apiKey: {
+    enabled: true,
+    headerName: 'x-api-key',    // default
+    keyPrefix: 'nuk_live_',      // default
+    hashRounds: 10,              // default
+  },
+})
+```
+
+Use the composable `ApiKeyGuard` with JWT:
+
+```typescript
+import { ApiKeyGuard, JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
+
+@Controller('data')
+@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionsGuard)
+export class DataController {
+  // API keys and JWT tokens work on the same endpoint
 }
 ```
 
