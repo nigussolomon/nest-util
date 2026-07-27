@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nest-Util — Production-Ready NestJS Toolkit</title>
-  <meta name="description" content="A modern, production-ready collection of NestJS utilities for CRUD operations, authentication, and rapid code generation.">
+  <meta name="description" content="Type-safe CRUD scaffolding, JWT auth with RBAC, audit logging, lifecycle hooks, and cursor pagination for NestJS.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,12 +27,10 @@
       <li><a href="#packages">Packages</a></li>
       <li><a href="#audit-events">Events</a></li>
       <li><a href="#testing">Testing</a></li>
-      <li><a href="#skill">Skill</a></li>
       <li><a href="#quickstart">Quick Start</a></li>
-      <li><a href="#endpoints">Endpoints</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
     </ul>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px">
       <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -49,23 +47,23 @@
   <div class="container">
     <div class="hero-badge">
       <span class="dot"></span>
-      v1.0.2 — Latest Release
+      v1.0.6 / v1.0.2
     </div>
     <h1>
-      Production-Ready<br>
-      <span class="gradient">NestJS Toolkit</span>
+      NestJS CRUD &amp; Auth<br>
+      <span class="accent">That Just Works</span>
     </h1>
     <p>
-      Eliminate boilerplate. Get type-safe CRUD, JWT auth with RBAC, audit logging, lifecycle hooks, cursor pagination, and a testing factory — all in one package.
+      Type-safe CRUD scaffolding, JWT auth with RBAC, audit events, lifecycle hooks, and cursor pagination. Two packages, zero boilerplate.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn btn-primary">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0L6.5 1.5L12.5 7.5H0V9H12.5L6.5 15L8 16L16 8L8 0Z"/></svg>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0L6.5 1.5L12.5 7.5H0V9H12.5L6.5 15L8 16L16 8L8 0Z"/></svg>
         Quick Start
       </a>
       <a href="https://github.com/nigussolomon/nest-util" class="btn btn-secondary">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        View on GitHub
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
       </a>
     </div>
   </div>
@@ -81,11 +79,11 @@
   </div>
   <div class="stat">
     <div class="stat-value">7</div>
-    <div class="stat-label">Generated Endpoints</div>
+    <div class="stat-label">Endpoints / Resource</div>
   </div>
   <div class="stat">
     <div class="stat-value">8</div>
-    <div class="stat-label">Lifecycle Hooks</div>
+    <div class="stat-label">Hook Points</div>
   </div>
   <div class="stat">
     <div class="stat-value">12</div>
@@ -95,10 +93,6 @@
     <div class="stat-value">50+</div>
     <div class="stat-label">Audit Events</div>
   </div>
-  <div class="stat">
-    <div class="stat-value">35+</div>
-    <div class="stat-label">Auto-Generated Tests</div>
-  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -107,49 +101,65 @@
 <section id="features">
   <div class="container">
     <div class="section-header">
-      <h2>Everything You Need</h2>
-      <p>One package replaces hours of boilerplate. Type-safe, extensible, production-ready.</p>
+      <h2>What You Get</h2>
+      <p>Two packages that replace hours of boilerplate.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card">
-        <div class="feature-icon red">&#9881;</div>
+        <div class="feature-icon red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
         <h3>CRUD Scaffolding</h3>
-        <p>Generate complete REST endpoints from a single service class. Filtering, pagination, Swagger docs, and error handling included.</p>
+        <p>Generate 7 REST endpoints from a service class. Filtering, pagination, Swagger docs, and error handling included.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon purple">&#128274;</div>
+        <div class="feature-icon purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
         <h3>JWT Auth + RBAC</h3>
-        <p>Dynamic auth module with refresh token rotation, nonce validation, OTP, password reset, and role-based access control.</p>
+        <p>Token rotation, nonce validation, OTP, password reset, and role-based access control. One module, full config.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon green">&#9878;</div>
-        <h3>Audit Logging</h3>
-        <p>Built-in <code>@Audit()</code> decorator tracks entity-level mutations with user, IP, and metadata — no separate package needed.</p>
+        <div class="feature-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Audit Events</h3>
+        <p>50+ typed events for CRUD, auth, RBAC, and guards. Plug in PostHog, Sentry, or custom handlers.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon amber">&#9201;</div>
+        <div class="feature-icon amber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
         <h3>Lifecycle Hooks</h3>
-        <p>Before/after hooks for create, update, remove, and findOne — with optional transaction wrapping and configurable isolation levels.</p>
+        <p>Before/after hooks for every operation. Optional transaction wrapping with configurable isolation levels.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon purple">&#8635;</div>
+        <div class="feature-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </div>
         <h3>Cursor Pagination</h3>
-        <p>Efficient keyset pagination for large datasets. Auto-detects integer vs UUID primary keys. Opaque base64url cursors.</p>
+        <p>Keyset pagination for large datasets. Auto-detects integer vs UUID primary keys. Opaque base64url cursors.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon green">&#128100;</div>
+        <div class="feature-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
         <h3>findMine</h3>
-        <p>User-scoped record retrieval via <code>GET /resource/mine</code>. Simple column match or custom query builder callbacks.</p>
+        <p>User-scoped records via <code>GET /resource/mine</code>. Simple column match or custom query callbacks.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon red">&#9889;</div>
+        <div class="feature-icon red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        </div>
         <h3>Testing Factory</h3>
-        <p>Generate ~35 tests per resource from a single config. Service tests, controller tests, mock repositories — all auto-generated.</p>
+        <p>Generate ~35 tests per resource from a config. Service tests, controller tests, mock repos &mdash; all auto-generated.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon amber">&#128227;</div>
+        <div class="feature-icon purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
         <h3>Pluggable Events</h3>
-        <p>50+ typed audit events for CRUD, auth, RBAC, and guards. Plug in PostHog, Sentry, or any custom handler via a simple interface.</p>
+        <p>EventEmitter2-based bus with glob filtering. Write a handler, register it, done.</p>
       </div>
     </div>
   </div>
@@ -161,8 +171,8 @@
 <section id="packages">
   <div class="container">
     <div class="section-header">
-      <h2>Two Packages, Zero Compromise</h2>
-      <p>Focused modules that integrate seamlessly into any NestJS app.</p>
+      <h2>Two Packages</h2>
+      <p>Focused modules. No bloat.</p>
     </div>
     <div class="packages">
       <div class="package-card">
@@ -184,7 +194,7 @@
           </ul>
         </div>
         <div class="package-footer">
-          <a href="nest-crud/index.html">Read the docs &rarr;</a>
+          <a href="nest-crud/index.html">Docs &rarr;</a>
         </div>
       </div>
       <div class="package-card">
@@ -205,7 +215,7 @@
           </ul>
         </div>
         <div class="package-footer">
-          <a href="nest-auth/index.html">Read the docs &rarr;</a>
+          <a href="nest-auth/index.html">Docs &rarr;</a>
         </div>
       </div>
     </div>
@@ -220,12 +230,12 @@
     <div class="code-section">
       <div class="code-text">
         <h3>Define Once, Get Everything</h3>
-        <p>Extend <code>NestCrudService</code> with your entity and DTOs. Filtering, pagination, hooks, and audit logging are automatic.</p>
+        <p>Extend <code>NestCrudService</code> with your entity and DTOs. Filtering, pagination, hooks, and audit logging come free.</p>
         <ul>
           <li>Whitelist filterable &amp; sortable fields</li>
           <li>Auto-join relations with <code>include</code></li>
           <li>Resolve foreign keys with <code>relations</code></li>
-          <li>Add lifecycle hooks with transaction support</li>
+          <li>Lifecycle hooks with transaction support</li>
         </ul>
       </div>
       <div class="code-block">
@@ -234,7 +244,7 @@
           <div class="code-block-title">post.service.ts</div>
         </div>
         <pre><span class="dec">@Injectable</span>()
-<span class="kw">export class</span> <span class="typ">PostService</span> <span class="kw">extends</span> <span class="typ">NestCrudService</span>&lt;<span class="typ">Post</span>, <span class="typ">CreatePostDto</span>, <span class="typ">UpdatePostDto</span>&gt; {
+<span class="kw">export class</span> <span class="typ">PostService</span> <span class="kw">extends</span> <span class="typ">NestCrudService</span>&lt;<span class="typ">Post</span>, <span class="typ">CreateDto</span>, <span class="typ">UpdateDto</span>&gt; {
   <span class="fn">constructor</span>(<span class="dec">@InjectRepository</span>(<span class="typ">Post</span>) repo: <span class="typ">Repository</span>&lt;<span class="typ">Post</span>&gt;) {
     <span class="kw">super</span>({
       repository: repo,
@@ -245,7 +255,7 @@
       hooks: {
         afterCreate: {
           handler: <span class="kw">async</span> (ctx) =&gt; {
-            <span class="cm">// Send notifications, emit events</span>
+            <span class="cm">// notifications, events, etc.</span>
           },
         },
       },
@@ -265,7 +275,7 @@
     <div class="code-section reverse">
       <div class="code-text">
         <h3>Full REST API in Seconds</h3>
-        <p><code>CreateNestedCrudController</code> generates all standard endpoints with Swagger docs, audit decorators, and permission metadata.</p>
+        <p><code>CreateNestedCrudController</code> generates all endpoints with Swagger docs, audit decorators, and permission metadata.</p>
         <ul>
           <li>7 endpoints generated automatically</li>
           <li>Built-in <code>@Audit()</code> on mutations</li>
@@ -290,11 +300,10 @@
 
 <span class="dec">@ApiTags</span>(<span class="str">'post'</span>)
 <span class="dec">@Controller</span>(<span class="str">'post'</span>)
-<span class="dec">@ApiBearerAuth</span>()
 <span class="dec">@UseGuards</span>(<span class="typ">JwtAuthGuard</span>, <span class="typ">PermissionsGuard</span>)
 <span class="kw">export class</span> <span class="typ">PostController</span> <span class="kw">extends</span> PostBase {
-  <span class="fn">constructor</span>(<span class="kw">override readonly</span> service: <span class="typ">PostService</span>) {
-    <span class="kw">super</span>(service);
+  <span class="fn">constructor</span>(<span class="kw">override readonly</span> svc: <span class="typ">PostService</span>) {
+    <span class="kw">super</span>(svc);
   }
 }</pre>
       </div>
@@ -309,7 +318,7 @@
   <div class="container">
     <div class="section-header">
       <h2>Generated Endpoints</h2>
-      <p>One controller factory produces a complete REST API.</p>
+      <p>One factory call. Seven endpoints.</p>
     </div>
     <div class="code-block">
       <table class="endpoints-table">
@@ -325,13 +334,13 @@
           <tr>
             <td><span class="method get">GET</span></td>
             <td><code>/resource</code></td>
-            <td>List with filtering, pagination, cursor support</td>
+            <td>List with filtering, pagination, cursor</td>
             <td>Optional</td>
           </tr>
           <tr>
             <td><span class="method get">GET</span></td>
             <td><code>/resource/mine</code></td>
-            <td>User-scoped records (requires <code>enableFindMine</code>)</td>
+            <td>User-scoped records</td>
             <td>Required</td>
           </tr>
           <tr>
@@ -343,19 +352,19 @@
           <tr>
             <td><span class="method post">POST</span></td>
             <td><code>/resource</code></td>
-            <td>Create record (auto-audited)</td>
+            <td>Create (auto-audited)</td>
             <td>Optional</td>
           </tr>
           <tr>
             <td><span class="method patch">PATCH</span></td>
             <td><code>/resource/:id</code></td>
-            <td>Update record (auto-audited)</td>
+            <td>Update (auto-audited)</td>
             <td>Optional</td>
           </tr>
           <tr>
             <td><span class="method delete">DELETE</span></td>
             <td><code>/resource/:id</code></td>
-            <td>Delete record (auto-audited)</td>
+            <td>Delete (auto-audited)</td>
             <td>Optional</td>
           </tr>
           <tr>
@@ -371,39 +380,79 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
-     HOOKS VISUAL
+     HOOKS
      ═══════════════════════════════════════════════════════ -->
 <section id="hooks">
   <div class="container">
     <div class="section-header">
       <h2>Lifecycle Hooks</h2>
-      <p>Intercept any CRUD operation with before/after hooks — with optional transaction wrapping.</p>
+      <p>Intercept any CRUD operation. Wrap in a transaction if needed.</p>
+    </div>
+    <div class="hooks-flow">
+      <div class="hook-item">
+        <div class="hook-name">beforeCreate</div>
+        <div class="hook-timing">before save</div>
+        <div class="hook-arrow">&rarr; entity</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">afterCreate</div>
+        <div class="hook-timing">after save</div>
+        <div class="hook-arrow">&rarr; response</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">beforeUpdate</div>
+        <div class="hook-timing">before merge</div>
+        <div class="hook-arrow">&rarr; entity</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">afterUpdate</div>
+        <div class="hook-timing">after re-fetch</div>
+        <div class="hook-arrow">&rarr; response</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">beforeRemove</div>
+        <div class="hook-timing">before delete</div>
+        <div class="hook-arrow">&rarr; entity</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">afterRemove</div>
+        <div class="hook-timing">after delete</div>
+        <div class="hook-arrow">&rarr; boolean</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">beforeFindOne</div>
+        <div class="hook-timing">before query</div>
+        <div class="hook-arrow">&rarr; id</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">afterFindOne</div>
+        <div class="hook-timing">after query</div>
+        <div class="hook-arrow">&rarr; entity</div>
+      </div>
     </div>
     <div class="code-block">
       <div class="code-block-header">
         <div class="code-block-dots"><span></span><span></span><span></span></div>
-        <div class="code-block-title">hooks.interface.ts</div>
+        <div class="code-block-title">hooks in service options</div>
       </div>
-      <pre><span class="kw">interface</span> <span class="typ">CrudHooks</span>&lt;<span class="typ">TEntity</span>, <span class="typ">TCreateDto</span>, <span class="typ">TUpdateDto</span>&gt; {
-  beforeCreate?: <span class="typ">CrudHookConfig</span>&lt;{ payload: <span class="typ">TCreateDto</span> }&gt;;
-  afterCreate?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; payload: <span class="typ">TCreateDto</span> }&gt;;
-  beforeUpdate?: <span class="typ">CrudHookConfig</span>&lt;{ payload: <span class="typ">TUpdateDto</span>; entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
-  afterUpdate?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; payload: <span class="typ">TUpdateDto</span>; id: <span class="typ">number</span> }&gt;;
-  beforeRemove?: <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
-  afterRemove?:  <span class="typ">CrudHookConfig</span>&lt;{ id: <span class="typ">number</span>; deleted: <span class="typ">boolean</span> }&gt;;
-  beforeFindOne?: <span class="typ">CrudHookConfig</span>&lt;{ id: <span class="typ">number</span> }&gt;;
-  afterFindOne?:  <span class="typ">CrudHookConfig</span>&lt;{ entity: <span class="typ">TEntity</span>; id: <span class="typ">number</span> }&gt;;
-}
-
-<span class="kw">interface</span> <span class="typ">CrudHookConfig</span>&lt;<span class="typ">TContext</span>&gt; {
-  handler: (context: <span class="typ">TContext</span>) =&gt; <span class="typ">Promise</span>&lt;<span class="typ">any</span>&gt; | <span class="typ">any</span>;
-  transaction?: <span class="typ">boolean</span>;  <span class="cm">// wraps in DB transaction</span>
-}
-
-<span class="kw">interface</span> <span class="typ">TransactionConfig</span> {
-  isolationLevel?: <span class="str">'READ UNCOMMITTED'</span> | <span class="str">'READ COMMITTED'</span>
-    | <span class="str">'REPEATABLE READ'</span> | <span class="str">'SERIALIZABLE'</span>;
-  timeout?: <span class="typ">number</span>;
+      <pre>hooks: {
+  beforeCreate: {
+    handler: <span class="kw">async</span> (ctx) =&gt; {
+      ctx.payload.title = ctx.payload.title.trim();
+    },
+  },
+  afterCreate: {
+    handler: <span class="kw">async</span> (ctx) =&gt; {
+      <span class="kw">await</span> <span class="kw">this</span>.notifications.<span class="fn">send</span>(ctx.entity);
+    },
+  },
+  beforeRemove: {
+    handler: <span class="kw">async</span> (ctx) =&gt; {
+      <span class="kw">if</span> (ctx.entity.published)
+        <span class="kw">throw new</span> <span class="typ">BadRequestException</span>(<span class="str">'Cannot delete published'</span>);
+    },
+    transaction: <span class="num">true</span>,
+  },
 }</pre>
     </div>
   </div>
@@ -417,14 +466,13 @@
     <div class="code-section reverse">
       <div class="code-text">
         <h3>Pluggable Audit Events</h3>
-        <p>50+ typed events emitted for every CRUD operation, auth action, guard denial, and RBAC change. Plug in your own handlers — PostHog, Sentry, or anything else.</p>
+        <p>50+ typed events emitted for every operation. Write a handler, register it, done.</p>
         <ul>
-          <li>CRUD: create, update, delete, findAll, findOne, findMine</li>
-          <li>Auth: login, register, OTP, password reset, logout</li>
+          <li>CRUD: create, update, delete, findAll, findOne</li>
+          <li>Auth: login, register, OTP, password reset</li>
           <li>RBAC: role create, assign, remove, permissions</li>
           <li>Guards: JWT denied, permissions denied</li>
-          <li>Include/exclude glob filtering</li>
-          <li>Error-isolated handler dispatch</li>
+          <li>Glob-based include/exclude filtering</li>
         </ul>
       </div>
       <div class="code-block">
@@ -434,7 +482,6 @@
         </div>
         <pre><span class="kw">import</span> { <span class="typ">AuditEventModule</span>, <span class="typ">ConsoleHandler</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
 
-<span class="cm">// Write your own handler</span>
 <span class="kw">class</span> <span class="typ">PostHogHandler</span> <span class="kw">implements</span> <span class="typ">AuditEventHandler</span> {
   <span class="fn">handle</span>(event: <span class="typ">AuditEvent</span>) {
     posthog.<span class="fn">capture</span>({
@@ -458,25 +505,58 @@
 })</pre>
       </div>
     </div>
+    <div class="events-grid">
+      <div class="event-item">
+        <div class="event-prefix">crud</div>
+        <div class="event-name">.entity.create.success</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">crud</div>
+        <div class="event-name">.entity.update.success</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">crud</div>
+        <div class="event-name">.entity.delete.success</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">auth</div>
+        <div class="event-name">.user.login.success</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">auth</div>
+        <div class="event-name">.user.register.success</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">auth</div>
+        <div class="event-name">.otp.login.success</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">auth</div>
+        <div class="event-name">.jwt.denied</div>
+      </div>
+      <div class="event-item">
+        <div class="event-prefix">auth</div>
+        <div class="event-name">.permissions.denied</div>
+      </div>
+    </div>
   </div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
-     TESTING FACTORY
+     TESTING
      ═══════════════════════════════════════════════════════ -->
 <section id="testing">
   <div class="container">
     <div class="code-section">
       <div class="code-text">
-        <h3>Test Every Endpoint Automatically</h3>
-        <p>Import <code>crudServiceTests</code> or <code>crudControllerTests</code> and get ~35 tests generated from your entity metadata and config.</p>
+        <h3>Test Every Endpoint</h3>
+        <p>Import <code>crudServiceTests</code> or <code>crudControllerTests</code> and get ~35 tests from your entity metadata.</p>
         <ul>
           <li>Covers all 7 CRUD endpoints</li>
-          <li>Tests filters, pagination, and sorting</li>
+          <li>Tests filters, pagination, sorting</li>
           <li>Verifies disabled endpoint guards</li>
-          <li>Checks permission metadata on controllers</li>
-          <li>Mock repository with auto-generated entity data</li>
-          <li>Zero-config for standard use cases</li>
+          <li>Checks permission metadata</li>
+          <li>Mock repository with generated data</li>
         </ul>
       </div>
       <div class="code-block">
@@ -511,43 +591,48 @@
 <section id="quickstart">
   <div class="container">
     <div class="section-header">
-      <h2>Get Started in 3 Steps</h2>
-      <p>From zero to production-ready CRUD API in minutes.</p>
+      <h2>Quick Start</h2>
+      <p>From zero to production-ready API in minutes.</p>
     </div>
 
-    <div class="install-box" style="background:linear-gradient(135deg,#059669,#10b981);border-color:#059669;margin-bottom:24px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="font-weight:600">Want everything pre-configured?</span>
-        <code style="background:rgba(0,0,0,0.2);padding:4px 10px;border-radius:6px">git clone https://github.com/nigussolomon/nest-util/starter.git my-app</code>
+    <div class="starter-callout">
+      <div class="starter-callout-text">
+        <h4>Starter template available</h4>
+        <p>Auth, RBAC, user CRUD, OTP, password reset, and audit events — pre-configured.</p>
       </div>
-      <p style="margin:8px 0 0;font-size:0.82rem;opacity:0.85">Starter template with auth, RBAC, user CRUD, OTP, password reset, and audit events — ready to go.</p>
+      <code>git clone .../starter.git my-app</code>
     </div>
 
-    <div class="install-box">
-      <code>pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^0.3.20 @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^0.3.20 @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+    <div class="terminal-block">
+      <div class="terminal-header">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <div class="label">install</div>
+      </div>
+      <div class="terminal-body">
+        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+      </div>
     </div>
-    <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-bottom:32px">Recommended package manager: <strong>pnpm</strong></p>
 
     <div class="steps">
       <div class="step">
         <div class="step-number">1</div>
         <h3>Create Entity &amp; Service</h3>
-        <p>Define your TypeORM entity, then extend <code>NestCrudService</code> with filters, hooks, and ownership.</p>
+        <p>Define your TypeORM entity, extend <code>NestCrudService</code> with filters, hooks, and ownership.</p>
       </div>
       <div class="step">
         <div class="step-number">2</div>
         <h3>Generate Controller</h3>
-        <p>Use <code>CreateNestedCrudController</code> to generate 7 REST endpoints with Swagger docs and audit logging.</p>
+        <p>Use <code>CreateNestedCrudController</code> for 7 REST endpoints with Swagger and audit.</p>
       </div>
       <div class="step">
         <div class="step-number">3</div>
         <h3>Wire Up AppModule</h3>
-        <p>Import <code>NestCrudModule</code>, register global interceptors, and you're ready for production.</p>
+        <p>Import <code>NestCrudModule</code>, register interceptors, deploy.</p>
       </div>
     </div>
 
-    <div style="margin-top:48px">
+    <div style="margin-top:40px">
       <div class="code-block">
         <div class="code-block-header">
           <div class="code-block-dots"><span></span><span></span><span></span></div>
@@ -558,7 +643,7 @@
     <span class="typ">TypeOrmModule</span>.<span class="fn">forRoot</span>({
       type: <span class="str">'postgres'</span>,
       autoLoadEntities: <span class="num">true</span>,
-      <span class="cm">// ... connection options</span>
+      <span class="cm">// ...</span>
     }),
     <span class="typ">NestCrudModule</span>,
     <span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
@@ -587,11 +672,11 @@
     <div class="code-section">
       <div class="code-text">
         <h3>AI-Powered Reference</h3>
-        <p>Install the nest-util skill into any AI coding assistant for instant access to the full API reference, code examples, guardrails, and troubleshooting.</p>
+        <p>Install the nest-util skill for your AI coding assistant. Full API reference, code examples, and guardrails.</p>
         <ul>
           <li>Complete API reference with all options</li>
-          <li>Copy-paste code examples for every feature</li>
-          <li>Security rules and guardrails built in</li>
+          <li>Copy-paste code examples</li>
+          <li>Security rules and guardrails</li>
           <li>Troubleshooting for common issues</li>
         </ul>
       </div>
@@ -603,8 +688,8 @@
         <pre><span class="cm"># Install via npx skills CLI</span>
 npx skills add nigussolomon/nest-util
 
-<span class="cm"># Or copy skill/SKILL.md directly into your project</span>
-<span class="cm"># at .opencode/skills/nest-util/SKILL.md</span></pre>
+<span class="cm"># Or copy skill/SKILL.md directly</span>
+<span class="cm"># into .opencode/skills/nest-util/SKILL.md</span></pre>
       </div>
     </div>
   </div>
@@ -615,12 +700,22 @@ npx skills add nigussolomon/nest-util
      ═══════════════════════════════════════════════════════ -->
 <footer>
   <div class="container">
-    <p style="margin-bottom:12px">
-      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
-      <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a> &middot;
-      <a href="https://github.com/nigussolomon/nest-util/blob/main/skill/SKILL.md">Skill Reference</a>
-    </p>
-    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="#E0234E"/>
+          <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span>Nest-Util</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/nigussolomon/nest-util">GitHub</a>
+        <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a>
+        <a href="https://github.com/nigussolomon/nest-util/blob/main/skill/SKILL.md">Skill Reference</a>
+      </div>
+      <div class="footer-copy">MIT License</div>
+    </div>
   </div>
 </footer>
 
