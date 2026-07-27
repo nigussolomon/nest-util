@@ -10,6 +10,9 @@
       "path": "./libs/nest-auth"
     },
     {
+      "path": "./libs/nest-file"
+    },
+    {
       "path": "./apps/demo-api"
     }
   ]
