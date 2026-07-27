@@ -25,6 +25,7 @@
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#packages">Packages</a></li>
+      <li><a href="#audit-events">Events</a></li>
       <li><a href="#testing">Testing</a></li>
       <li><a href="#skill">Skill</a></li>
       <li><a href="#quickstart">Quick Start</a></li>
@@ -91,6 +92,10 @@
     <div class="stat-label">Filter Operators</div>
   </div>
   <div class="stat">
+    <div class="stat-value">50+</div>
+    <div class="stat-label">Audit Events</div>
+  </div>
+  <div class="stat">
     <div class="stat-value">35+</div>
     <div class="stat-label">Auto-Generated Tests</div>
   </div>
@@ -140,6 +145,11 @@
         <div class="feature-icon red">&#9889;</div>
         <h3>Testing Factory</h3>
         <p>Generate ~35 tests per resource from a single config. Service tests, controller tests, mock repositories — all auto-generated.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon amber">&#128227;</div>
+        <h3>Pluggable Events</h3>
+        <p>50+ typed audit events for CRUD, auth, RBAC, and guards. Plug in PostHog, Sentry, or any custom handler via a simple interface.</p>
       </div>
     </div>
   </div>
@@ -400,6 +410,58 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
+     AUDIT EVENTS
+     ═══════════════════════════════════════════════════════ -->
+<section id="audit-events">
+  <div class="container">
+    <div class="code-section reverse">
+      <div class="code-text">
+        <h3>Pluggable Audit Events</h3>
+        <p>50+ typed events emitted for every CRUD operation, auth action, guard denial, and RBAC change. Plug in your own handlers — PostHog, Sentry, or anything else.</p>
+        <ul>
+          <li>CRUD: create, update, delete, findAll, findOne, findMine</li>
+          <li>Auth: login, register, OTP, password reset, logout</li>
+          <li>RBAC: role create, assign, remove, permissions</li>
+          <li>Guards: JWT denied, permissions denied</li>
+          <li>Include/exclude glob filtering</li>
+          <li>Error-isolated handler dispatch</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">AuditEventModule</span>, <span class="typ">ConsoleHandler</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+
+<span class="cm">// Write your own handler</span>
+<span class="kw">class</span> <span class="typ">PostHogHandler</span> <span class="kw">implements</span> <span class="typ">AuditEventHandler</span> {
+  <span class="fn">handle</span>(event: <span class="typ">AuditEvent</span>) {
+    posthog.<span class="fn">capture</span>({
+      distinctId: <span class="fn">String</span>(event.userId),
+      event: event.action,
+      properties: event.metadata,
+    });
+  }
+}
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">AuditEventModule</span>.<span class="fn">forRoot</span>({
+      handlers: [
+        <span class="kw">new</span> <span class="typ">ConsoleHandler</span>(),
+        <span class="kw">new</span> <span class="typ">PostHogHandler</span>(<span class="str">'ph_key'</span>),
+      ],
+      include: [<span class="str">'auth.*'</span>, <span class="str">'crud.*'</span>],
+    }),
+  ],
+})</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
      TESTING FACTORY
      ═══════════════════════════════════════════════════════ -->
 <section id="testing">
@@ -453,9 +515,17 @@
       <p>From zero to production-ready CRUD API in minutes.</p>
     </div>
 
+    <div class="install-box" style="background:linear-gradient(135deg,#059669,#10b981);border-color:#059669;margin-bottom:24px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-weight:600">Want everything pre-configured?</span>
+        <code style="background:rgba(0,0,0,0.2);padding:4px 10px;border-radius:6px">git clone https://github.com/nigussolomon/nest-util/starter.git my-app</code>
+      </div>
+      <p style="margin:8px 0 0;font-size:0.82rem;opacity:0.85">Starter template with auth, RBAC, user CRUD, OTP, password reset, and audit events — ready to go.</p>
+    </div>
+
     <div class="install-box">
-      <code>pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
+      <code>pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^0.3.20 @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^0.3.20 @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
     <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-bottom:32px">Recommended package manager: <strong>pnpm</strong></p>
 
