@@ -74,7 +74,7 @@
    ═══════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 
 body {
   font-family: var(--font);
@@ -114,7 +114,9 @@ nav .container {
 .nav-brand {
   font-size: 1.15rem; font-weight: 700; color: var(--text);
   display: flex; align-items: center; gap: 10px;
+  text-decoration: none;
 }
+a.nav-brand:hover { color: var(--text); }
 .nav-brand svg { width: 28px; height: 28px; }
 .nav-links { display: flex; gap: 32px; list-style: none; }
 .nav-links a {

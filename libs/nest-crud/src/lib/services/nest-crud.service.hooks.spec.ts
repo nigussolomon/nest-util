@@ -214,4 +214,58 @@ describe('NestCrudService - Hooks', () => {
       expect(result).toEqual(mockEntity);
     });
   });
+
+  describe('payload snapshot with relations', () => {
+    const mockOrder = { id: 'order-1', status: 'PENDING' };
+    const mockDriver = { id: 'driver-1', status: 'AVAILABLE' };
+
+    function createServiceWithRelations(hooks?: CrudHooks<any, any, any>) {
+      const orderRepo = {
+        findOneBy: jest.fn().mockResolvedValue(mockOrder),
+      } as any;
+      const driverRepo = {
+        findOneBy: jest.fn().mockResolvedValue(mockDriver),
+      } as any;
+
+      const service = new NestCrudService({
+        repository: repo as any,
+        hooks,
+        relations: [
+          { property: 'order', repo: orderRepo, idField: 'orderId' },
+          { property: 'driver', repo: driverRepo, idField: 'driverId' },
+        ],
+      });
+
+      return { service, orderRepo, driverRepo };
+    }
+
+    it('afterCreate should receive original flat IDs, not mutated payload', async () => {
+      const fn = jest.fn();
+      const { service } = createServiceWithRelations({
+        afterCreate: { handler: fn, transaction: false },
+      });
+
+      await service.create({ orderId: 'order-1', driverId: 'driver-1', assignedBy: 'admin' });
+
+      expect(fn).toHaveBeenCalledWith({
+        entity: mockEntity,
+        payload: { orderId: 'order-1', driverId: 'driver-1', assignedBy: 'admin' },
+      });
+    });
+
+    it('afterUpdate should receive original flat IDs, not mutated payload', async () => {
+      const fn = jest.fn();
+      const { service } = createServiceWithRelations({
+        afterUpdate: { handler: fn, transaction: false },
+      });
+
+      await service.update(1, { orderId: 'order-1', driverId: 'driver-1' });
+
+      expect(fn).toHaveBeenCalledWith({
+        entity: expect.objectContaining({ id: 1 }),
+        payload: { orderId: 'order-1', driverId: 'driver-1' },
+        id: 1,
+      });
+    });
+  });
 });

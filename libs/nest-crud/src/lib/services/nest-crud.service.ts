@@ -150,6 +150,26 @@ export class NestCrudService<
     }
   }
 
+  private buildRelationsObject(relations: readonly string[]): Record<string, any> {
+    const result: Record<string, any> = {};
+    for (const relation of relations) {
+      const parts = relation.split('.');
+      let current = result;
+      for (let i = 0; i < parts.length; i++) {
+        const isLast = i === parts.length - 1;
+        if (isLast) {
+          current[parts[i]] = true;
+        } else {
+          if (!(parts[i] in current) || current[parts[i]] === true) {
+            current[parts[i]] = {};
+          }
+          current = current[parts[i]];
+        }
+      }
+    }
+    return result;
+  }
+
   async findAll(query: PaginationDto & FilterDto) {
     const qb = this.repo.createQueryBuilder('e');
 
@@ -328,9 +348,13 @@ export class NestCrudService<
   async findOne(id: number) {
     await this.executeHook(this.hooks.beforeFindOne, { id });
 
+    const relationsObj = this.include.length > 0
+      ? this.buildRelationsObject(this.include)
+      : undefined;
+
     const entity = await this.repo.findOne({
       where: { id } as unknown as Partial<Entity>,
-      relations: this.include as any,
+      relations: relationsObj as any,
     });
 
     if (!entity) {
@@ -349,6 +373,7 @@ export class NestCrudService<
   async create(payload: CreateDto) {
     await this.executeHook(this.hooks.beforeCreate, { payload });
 
+    const payloadSnapshot = { ...payload };
     const resolved = await this.resolveRelations(
       payload as unknown as ObjectLiteral
     );
@@ -359,7 +384,7 @@ export class NestCrudService<
       ? (this.toResponseDto(entity) as ResponseDto)
       : (entity as unknown as ResponseDto);
 
-    await this.executeHook(this.hooks.afterCreate, { entity, payload });
+    await this.executeHook(this.hooks.afterCreate, { entity, payload: payloadSnapshot });
 
     return result;
   }
@@ -375,6 +400,7 @@ export class NestCrudService<
 
     await this.executeHook(this.hooks.beforeUpdate, { payload, entity: existing, id });
 
+    const payloadSnapshot = { ...payload };
     const resolved = await this.resolveRelations(
       payload as unknown as ObjectLiteral
     );
@@ -384,7 +410,7 @@ export class NestCrudService<
 
     const result = await this.findOne(id);
 
-    await this.executeHook(this.hooks.afterUpdate, { entity: result as any, payload, id });
+    await this.executeHook(this.hooks.afterUpdate, { entity: result as any, payload: payloadSnapshot, id });
 
     return result;
   }

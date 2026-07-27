@@ -270,6 +270,7 @@ This generates ~15 tests covering all endpoints, disabled endpoint guards, and p
 | `test.updatePayload` | Sample update DTO |
 | `test.mockEntity` | Custom mock entity data |
 | `test.mockRepoOverrides` | Override mock repository methods |
+| `authOptions` | Auth options passed to the controller test module |
 
 ### Mock Utilities
 

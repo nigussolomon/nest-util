@@ -119,9 +119,8 @@ export class User {
 // app.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule, NestCrudModule } from '@nest-util/nest-crud';
-// Or: import { AuthModule } from '@nest-util/nest-auth';
-// nest-crud re-exports everything from nest-auth
+import { AuthModule } from '@nest-util/nest-auth';
+import { NestCrudModule } from '@nest-util/nest-crud';
 
 @Module({
   imports: [
@@ -285,7 +284,7 @@ export class PostService extends NestCrudService<
 | `repository` | `Repository<Entity>` | — | TypeORM repository (required) |
 | `allowedFilters` | `readonly (keyof Entity)[]` | `[]` | Whitelist of filterable fields |
 | `allowedSortFields` | `readonly (keyof Entity)[]` | `[]` | Whitelist of sortable fields (empty = all) |
-| `include` | `readonly string[]` | `[]` | Relations to join (e.g. `['author', 'author.profile']`) |
+| `include` | `readonly string[]` | `[]` | Relations to join (e.g. `['author']`). Supports nested dot-notation: `['userRoles.role']` is converted to `{ userRoles: { role: true } }` for TypeORM. |
 | `relations` | `RelationConfig[]` | `[]` | Resolve foreign key IDs → entities |
 | `toResponseDto` | `(entity) => ResponseDto` | — | Transform entity to response DTO |
 | `createDtoClass` | `Type<unknown>` | — | Create DTO class for validation |
@@ -477,9 +476,9 @@ super({
 | Hook | Context | Timing |
 |---|---|---|
 | `beforeCreate` | `{ payload }` | Before `repo.save()` |
-| `afterCreate` | `{ entity, payload }` | After `repo.save()` |
+| `afterCreate` | `{ entity, payload }` | After `repo.save()`. **`payload` is a snapshot of the original DTO before relation resolution.** |
 | `beforeUpdate` | `{ payload, entity, id }` | Before `repo.merge()` + `repo.save()` |
-| `afterUpdate` | `{ entity, payload, id }` | After `findOne()` re-fetch |
+| `afterUpdate` | `{ entity, payload, id }` | After `findOne()` re-fetch. **`payload` is a snapshot of the original DTO before relation resolution.** |
 | `beforeRemove` | `{ entity, id }` | Before `repo.delete()` |
 | `afterRemove` | `{ id, deleted }` | After `repo.delete()` |
 | `beforeFindOne` | `{ id }` | Before `repo.findOne()` |
@@ -803,6 +802,7 @@ This generates ~15 tests covering all endpoints, disabled endpoint guards, and p
 | `test.updatePayload` | Sample update DTO |
 | `test.mockEntity` | Custom mock entity data |
 | `test.mockRepoOverrides` | Override mock repository methods |
+| `authOptions` | Auth options passed to the controller test module |
 
 ### Mock Utilities
 

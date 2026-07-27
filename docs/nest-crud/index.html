@@ -14,14 +14,14 @@
      ═══════════════════════════════════════════════════════ -->
 <nav>
   <div class="container">
-    <div class="nav-brand">
+    <a href="../index.html" class="nav-brand">
       <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="32" height="32" rx="8" fill="#E0234E"/>
         <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
       </svg>
       Nest-Util
-    </div>
+    </a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#hooks">Hooks</a></li>
@@ -47,7 +47,7 @@
   <aside class="doc-sidebar">
     <ul>
       <li class="sidebar-section">Getting Started</li>
-      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Install</a></li>
       <li><a href="#quickstart">Quick Start</a></li>
       <li class="sidebar-section">Core</li>
       <li><a href="#service">Service</a></li>
@@ -76,7 +76,7 @@
     <!-- ═══════════════════════════════════════════════════
          INSTALL
          ═══════════════════════════════════════════════════ -->
-    <h2 id="install">Install</h2>
+    <h2 id="quickstart">Install</h2>
     <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
     <div class="install-box">
       <code>pnpm add @nest-util/nest-crud@^1.0.2 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
@@ -644,6 +644,10 @@
         <tr>
           <td><code>test.mockRepoOverrides</code></td>
           <td>Override mock repository methods</td>
+        </tr>
+        <tr>
+          <td><code>authOptions</code></td>
+          <td>Auth options passed to the controller test module</td>
         </tr>
       </tbody>
     </table>
