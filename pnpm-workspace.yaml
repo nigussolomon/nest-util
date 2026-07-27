@@ -9,6 +9,7 @@ allowBuilds:
   '@swc/core': true
   bcrypt: true
   nx: true
+  sharp: true
   unrs-resolver: true
 
 minimumReleaseAgeExclude:

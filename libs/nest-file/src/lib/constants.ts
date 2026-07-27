@@ -1,0 +1,1 @@
+export const NEST_FILE_OPTIONS = 'NEST_FILE_OPTIONS';

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nest-Util — Production-Ready NestJS Toolkit</title>
-  <meta name="description" content="Type-safe CRUD scaffolding, JWT auth with RBAC, audit logging, lifecycle hooks, and cursor pagination for NestJS.">
+  <meta name="description" content="Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, notifications, audit logging, lifecycle hooks, and cursor pagination for NestJS.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -50,11 +50,11 @@
       v1.0.7 / v1.1.0
     </div>
     <h1>
-      NestJS CRUD &amp; Auth<br>
+      NestJS CRUD, Auth, Files &amp; Notifications<br>
       <span class="accent">That Just Works</span>
     </h1>
     <p>
-      Type-safe CRUD scaffolding, JWT auth with RBAC, audit events, lifecycle hooks, and cursor pagination. Two packages, zero boilerplate.
+      Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, notifications, audit events, lifecycle hooks, and cursor pagination. Four packages, zero boilerplate.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn btn-primary">
@@ -74,7 +74,7 @@
      ═══════════════════════════════════════════════════════ -->
 <div class="stats container">
   <div class="stat">
-    <div class="stat-value">2</div>
+    <div class="stat-value">4</div>
     <div class="stat-label">Packages</div>
   </div>
   <div class="stat">
@@ -106,7 +106,7 @@
   <div class="container">
     <div class="section-header">
       <h2>What You Get</h2>
-      <p>Two packages that replace hours of boilerplate.</p>
+      <p>Four packages that replace hours of boilerplate.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card">
@@ -167,6 +167,13 @@
       </div>
       <div class="feature-card">
         <div class="feature-icon purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <h3>S3 File Management</h3>
+        <p>Presigned URL uploads, image processing (resize, compress, convert), thumbnails, and TypeORM metadata tracking.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
         <h3>Pluggable Events</h3>
@@ -182,7 +189,7 @@
 <section id="packages">
   <div class="container">
     <div class="section-header">
-      <h2>Two Packages</h2>
+      <h2>Four Packages</h2>
       <p>Focused modules. No bloat.</p>
     </div>
     <div class="packages">
@@ -228,6 +235,46 @@
         </div>
         <div class="package-footer">
           <a href="nest-auth/index.html">Docs &rarr;</a>
+        </div>
+      </div>
+      <div class="package-card">
+        <div class="package-header">
+          <div class="package-name">@nest-util/nest-file</div>
+          <div class="package-desc">S3 uploads, image processing, thumbnails</div>
+        </div>
+        <div class="package-body">
+          <ul>
+            <li>S3-compatible presigned URL uploads</li>
+            <li>Image processing (resize, compress, convert, EXIF strip)</li>
+            <li>Automatic thumbnail generation</li>
+            <li>TypeORM file metadata tracking</li>
+            <li>Controller factory via <code>CreateFileController()</code></li>
+            <li>Optional RBAC with <code>@nest-util/nest-auth</code></li>
+            <li>Testing factory with mock factories</li>
+            <li>Automatic Swagger documentation</li>
+          </ul>
+        </div>
+        <div class="package-footer">
+          <a href="nest-file/index.html">Docs &rarr;</a>
+        </div>
+      </div>
+      <div class="package-card coming-soon">
+        <div class="package-header">
+          <div class="package-name">@nest-util/nest-notify <span class="coming-soon-badge">Coming Soon</span></div>
+          <div class="package-desc">Multi-channel notifications</div>
+        </div>
+        <div class="package-body">
+          <ul>
+            <li>Email, SMS, push, and in-app notifications</li>
+            <li>Template engine with Handlebars/EJS</li>
+            <li>Event-driven notification triggers</li>
+            <li>Delivery tracking and retry logic</li>
+            <li>User preference management</li>
+            <li>Rate limiting per channel</li>
+          </ul>
+        </div>
+        <div class="package-footer">
+          <a href="#">Docs &rarr;</a>
         </div>
       </div>
     </div>
@@ -624,8 +671,8 @@
         <div class="label">install</div>
       </div>
       <div class="terminal-body">
-        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file sharp typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file sharp typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
     </div>
 
@@ -643,7 +690,7 @@
       <div class="step">
         <div class="step-number">3</div>
         <h3>Wire Up AppModule</h3>
-        <p>Import <code>NestCrudModule</code>, register interceptors, deploy.</p>
+        <p>Import <code>NestCrudModule</code>, <code>AuthModule</code>, and <code>NestFileModule</code>. Register interceptors, deploy.</p>
       </div>
     </div>
 
@@ -666,6 +713,14 @@
       identifierField: <span class="str">'email'</span>,
       passkeyField: <span class="str">'password'</span>,
       jwtSecret: process.env.<span class="typ">JWT_SECRET</span>,
+    }),
+    <span class="typ">NestFileModule</span>.<span class="fn">forRoot</span>({
+      s3: {
+        region: process.env.<span class="typ">AWS_REGION</span>,
+        bucket: process.env.<span class="typ">S3_BUCKET</span>,
+        accessKeyId: process.env.<span class="typ">AWS_ACCESS_KEY_ID</span>,
+        secretAccessKey: process.env.<span class="typ">AWS_SECRET_ACCESS_KEY</span>,
+      },
     }),
   ],
   providers: [
