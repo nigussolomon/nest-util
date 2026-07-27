@@ -44,6 +44,9 @@ export function crudControllerTests<
 
     moduleRef = await Test.createTestingModule({
       controllers: [TestController],
+      providers: [
+        { provide: 'AUTH_OPTIONS', useValue: config.authOptions ?? {} },
+      ],
     }).compile();
 
     controller = moduleRef.get(TestController) as IBaseController<TCreateDto, TUpdateDto, TResponseDto>;

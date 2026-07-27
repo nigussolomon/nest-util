@@ -13,8 +13,8 @@ Nx monorepo (`pnpm workspaces`) with these packages:
 
 | Package | Version | Purpose |
 |---|---|---|
-| `@nest-util/nest-crud` | 0.1.1 | Generic CRUD service + controller factory + audit + hooks + cursor pagination + findMine |
-| `@nest-util/nest-auth` | 0.0.3 | JWT auth with RBAC, OTP, password reset |
+| `@nest-util/nest-crud` | 1.0.2 | Generic CRUD service + controller factory + audit + hooks + cursor pagination + findMine |
+| `@nest-util/nest-auth` | 1.0.2 | JWT auth with RBAC, OTP, password reset |
 
 **Key design**: Audit logging, lifecycle hooks, cursor pagination, and findMine are all built into `nest-crud`. No separate audit package exists.
 
@@ -110,7 +110,7 @@ interface CrudServiceOptions<Entity, ResponseDto> extends FindMineConfig<Entity>
   repository: Repository<Entity>;
   allowedFilters?: readonly (keyof Entity)[];      // whitelist filterable fields
   allowedSortFields?: readonly (keyof Entity)[];   // whitelist sortable fields
-  include?: readonly string[];                     // joined relations (e.g. ['author', 'author.profile'])
+  include?: readonly string[];                     // joined relations (e.g. ['author']). Supports nested dot-notation: ['userRoles.role'] → { userRoles: { role: true } }
   relations?: {                                     // resolve foreign key IDs → entities
     property: keyof Entity;
     repo: Repository<ObjectLiteral>;
@@ -254,9 +254,9 @@ super({
 | Hook | Context | Timing |
 |---|---|---|
 | `beforeCreate` | `{ payload }` | Before `repo.save()` |
-| `afterCreate` | `{ entity, payload }` | After `repo.save()` |
+| `afterCreate` | `{ entity, payload }` | After `repo.save()`. **`payload` is a snapshot of the original DTO before relation resolution.** |
 | `beforeUpdate` | `{ payload, entity, id }` | Before `repo.merge()` + `repo.save()` |
-| `afterUpdate` | `{ entity, payload, id }` | After `findOne()` re-fetch |
+| `afterUpdate` | `{ entity, payload, id }` | After `findOne()` re-fetch. **`payload` is a snapshot of the original DTO before relation resolution.** |
 | `beforeRemove` | `{ entity, id }` | Before `repo.delete()` |
 | `afterRemove` | `{ id, deleted }` | After `repo.delete()` |
 | `beforeFindOne` | `{ id }` | Before `repo.findOne()` |

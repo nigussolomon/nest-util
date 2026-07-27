@@ -418,7 +418,7 @@ describe('NestCrudService', () => {
 
       expect(repository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
-        relations: [],
+        relations: undefined,
       });
 
       expect(result).toEqual({ id: 1, name: 'test' });
@@ -436,7 +436,7 @@ describe('NestCrudService', () => {
 
       expect(repository.findOne).toHaveBeenCalledWith({
         where: { id: 2 },
-        relations: ['author', 'author.profile'],
+        relations: { author: { profile: true } },
       });
       expect(result).toEqual({ id: 2, name: 'with-relations' });
     });

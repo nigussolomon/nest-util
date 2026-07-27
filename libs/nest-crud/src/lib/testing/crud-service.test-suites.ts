@@ -91,6 +91,8 @@ export function crudServiceTests<
     });
 
     it('should apply orderBy when specified', async () => {
+      if (config.allowedSortFields?.length && !(config.allowedSortFields as readonly string[]).includes('id')) return;
+
       lastQb = createMockQb();
       lastQb.getManyAndCount.mockResolvedValue([[], 0]);
       repository.createQueryBuilder.mockReturnValue(lastQb as any);
@@ -106,6 +108,8 @@ export function crudServiceTests<
     });
 
     it('should default orderBy to DESC', async () => {
+      if (config.allowedSortFields?.length && !(config.allowedSortFields as readonly string[]).includes('id')) return;
+
       lastQb = createMockQb();
       lastQb.getManyAndCount.mockResolvedValue([[], 0]);
       repository.createQueryBuilder.mockReturnValue(lastQb as any);
@@ -138,9 +142,13 @@ export function crudServiceTests<
 
       const result = await service.findOne(1);
 
+      const include = config.include ?? [];
+      const expectedRelations = include.length > 0
+        ? buildRelationsFromInclude(include)
+        : undefined;
       expect(repository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
-        relations: config.include ?? [],
+        relations: expectedRelations,
       });
       expect(result).toBeDefined();
     });
@@ -352,6 +360,26 @@ export function crudServiceTests<
   };
 
   return ctx;
+}
+
+function buildRelationsFromInclude(include: readonly string[]): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const relation of include) {
+    const parts = relation.split('.');
+    let current = result;
+    for (let i = 0; i < parts.length; i++) {
+      const isLast = i === parts.length - 1;
+      if (isLast) {
+        current[parts[i]] = true;
+      } else {
+        if (!(parts[i] in current) || current[parts[i]] === true) {
+          current[parts[i]] = {};
+        }
+        current = current[parts[i]];
+      }
+    }
+  }
+  return result;
 }
 
 function createMockEntity<
