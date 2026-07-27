@@ -27,6 +27,7 @@
       <li><a href="#auth-module">Auth Module</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
       <li><a href="#guards">Guards</a></li>
+      <li><a href="#audit-events">Audit Events</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util/blob/main/skill/SKILL.md">Skill</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
     </ul>
@@ -555,6 +556,89 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         AUDIT EVENTS
+         ═══════════════════════════════════════════════════════ -->
+    <section id="audit-events">
+      <h2>Audit Events</h2>
+      <p>The auth service and guards emit typed events for every security operation. Plug in handlers to track login attempts, password changes, role assignments, and guard denials.</p>
+
+      <h3>Auth Events</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>auth.user.register.success</code></td><td>User created</td></tr>
+          <tr><td><code>auth.user.register.conflict</code></td><td>User already exists</td></tr>
+          <tr><td><code>auth.user.login.success</code></td><td>Password login successful</td></tr>
+          <tr><td><code>auth.user.login.failed.*</code></td><td>Login failed (user_not_found, invalid_password)</td></tr>
+          <tr><td><code>auth.otp.request.*</code></td><td>OTP request (success, locked, cooldown, delivery_failed)</td></tr>
+          <tr><td><code>auth.otp.login.*</code></td><td>OTP login (success, expired, invalid, max_attempts, locked)</td></tr>
+          <tr><td><code>auth.token.refresh.success</code></td><td>New tokens issued</td></tr>
+          <tr><td><code>auth.token.refresh.failed</code></td><td>Invalid refresh token</td></tr>
+          <tr><td><code>auth.user.logout.success</code></td><td>Sessions cleared</td></tr>
+          <tr><td><code>auth.password.change.*</code></td><td>Password change (success, failed)</td></tr>
+          <tr><td><code>auth.password.reset.*</code></td><td>Password reset (request, success, expired, invalid_token)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>RBAC Events</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>auth.role.created</code></td><td>Role created</td></tr>
+          <tr><td><code>auth.role.created.conflict</code></td><td>Role name exists</td></tr>
+          <tr><td><code>auth.role.assigned</code></td><td>Role assigned to user</td></tr>
+          <tr><td><code>auth.role.removed</code></td><td>Role removed from user</td></tr>
+          <tr><td><code>auth.role.permissions.added</code></td><td>Permissions merged into role</td></tr>
+          <tr><td><code>auth.role.permissions.removed</code></td><td>Permissions removed from role</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Guard Events</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>auth.jwt.denied</code></td><td>JWT authentication failed (401)</td></tr>
+          <tr><td><code>auth.permissions.denied</code></td><td>Missing required permissions (403)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Setup</h3>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">AuditEventModule</span>, <span class="typ">ConsoleHandler</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">AuditEventModule</span>.<span class="fn">forRoot</span>({
+      handlers: [
+        <span class="kw">new</span> <span class="typ">ConsoleHandler</span>(),
+      ],
+      include: [<span class="str">'auth.*'</span>],
+    }),
+  ],
+})</pre>
       </div>
     </section>
 
