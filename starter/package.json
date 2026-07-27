@@ -12,8 +12,8 @@
     "migration:revert": "typeorm migration:revert -d src/db/ormconfig.ts"
   },
   "dependencies": {
-    "@nest-util/nest-auth": "^1.0.2",
-    "@nest-util/nest-crud": "^1.0.6",
+    "@nest-util/nest-auth": "^1.1.0",
+    "@nest-util/nest-crud": "^1.0.7",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/event-emitter": "^3.0.0",

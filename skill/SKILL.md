@@ -13,8 +13,8 @@ Two packages that eliminate NestJS boilerplate:
 
 | Package | Version | Purpose |
 |---|---|---|
-| `@nest-util/nest-crud` | 1.0.6 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
-| `@nest-util/nest-auth` | 1.0.2 | JWT auth with RBAC, OTP login, password reset |
+| `@nest-util/nest-crud` | 1.0.7 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
+| `@nest-util/nest-auth` | 1.1.0 | JWT auth with RBAC, OTP login, password reset, API key auth |
 
 **Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. No separate packages needed.
 
@@ -27,7 +27,7 @@ Two packages that eliminate NestJS boilerplate:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.6 @nest-util/nest-auth@^1.0.2 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
