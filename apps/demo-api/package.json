@@ -99,7 +99,6 @@
     "@nest-util/nest-crud": "workspace:*",
     "@nest-util/nest-file": "workspace:*",
     "@nest-util/nest-payment": "workspace:*",
-    "sharp": "^0.33.2",
     "@nestjs/common": "^11.1.18",
     "@nestjs/core": "^11.1.18",
     "@nestjs/platform-express": "^11.1.18",

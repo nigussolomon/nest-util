@@ -1,9 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import sharp from 'sharp';
 import { NEST_FILE_OPTIONS } from '../constants';
 import type { NestFileOptions } from '../interfaces/nest-file-options.interface';
 import type { ThumbnailResult } from '../interfaces/nest-file-options.interface';
 import { DEFAULT_THUMBNAIL_SIZES } from '../helpers/image-pipeline.helper';
+
+let sharp: any;
+try {
+  sharp = require('sharp');
+} catch {
+  /* sharp not available — thumbnail generation disabled */
+}
 
 @Injectable()
 export class ThumbnailService {
@@ -15,7 +21,7 @@ export class ThumbnailService {
 
   async generateThumbnails(buffer: Buffer): Promise<ThumbnailResult[]> {
     const config = this.options.thumbnails;
-    if (!config?.enabled) {
+    if (!config?.enabled || !sharp) {
       return [];
     }
 
@@ -53,6 +59,6 @@ export class ThumbnailService {
   }
 
   isThumbnailEnabled(): boolean {
-    return this.options.thumbnails?.enabled ?? true;
+    return !!(this.options.thumbnails?.enabled ?? true) && !!sharp;
   }
 }

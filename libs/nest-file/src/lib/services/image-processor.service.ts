@@ -1,8 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import sharp from 'sharp';
 import { NEST_FILE_OPTIONS } from '../constants';
 import type { NestFileOptions } from '../interfaces/nest-file-options.interface';
 import type { ImageProcessResult } from '../interfaces/nest-file-options.interface';
+
+let sharp: any;
+try {
+  sharp = require('sharp');
+} catch {
+  /* sharp not available — image processing disabled */
+}
 
 @Injectable()
 export class ImageProcessorService {
@@ -14,7 +20,7 @@ export class ImageProcessorService {
 
   async processImage(buffer: Buffer): Promise<ImageProcessResult> {
     const config = this.options.imageProcessing;
-    if (!config?.enabled) {
+    if (!config?.enabled || !sharp) {
       return {
         buffer,
         width: 0,
@@ -76,6 +82,6 @@ export class ImageProcessorService {
   }
 
   isProcessingEnabled(): boolean {
-    return this.options.imageProcessing?.enabled ?? true;
+    return !!(this.options.imageProcessing?.enabled ?? true) && !!sharp;
   }
 }

@@ -27,7 +27,6 @@ import {
   AuditInterceptor,
   NestCrudModule,
 } from '@nest-util/nest-crud';
-import { NestFileModule } from '@nest-util/nest-file';
 import { PaymentModule } from './payment/payment.module';
 
 @Module({

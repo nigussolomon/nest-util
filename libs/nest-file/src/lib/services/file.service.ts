@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -27,8 +28,8 @@ export class FileService {
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
     private readonly s3Service: S3Service,
-    private readonly imageProcessor: ImageProcessorService,
-    private readonly thumbnailService: ThumbnailService
+    @Optional() private readonly imageProcessor?: ImageProcessorService,
+    @Optional() private readonly thumbnailService?: ThumbnailService
   ) {}
 
   async requestUpload(
@@ -87,7 +88,10 @@ export class FileService {
     let compressedSize: number | undefined;
     let compressionRatio: number | undefined;
 
-    if (isImageMime(entity.mimeType) && this.imageProcessor.isProcessingEnabled()) {
+    if (
+      isImageMime(entity.mimeType) &&
+      this.imageProcessor?.isProcessingEnabled()
+    ) {
       const downloadUrl = await this.s3Service.generatePresignedDownloadUrl(dto.key);
       const response = await fetch(downloadUrl);
       const arrayBuffer = await response.arrayBuffer();
@@ -111,7 +115,7 @@ export class FileService {
       width = processed.width;
       height = processed.height;
 
-      if (this.thumbnailService.isThumbnailEnabled()) {
+      if (this.thumbnailService?.isThumbnailEnabled()) {
         const thumbnails = await this.thumbnailService.generateThumbnails(
           processed.buffer
         );
