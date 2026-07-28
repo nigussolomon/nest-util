@@ -146,7 +146,10 @@
         path: <span class="str">'payments'</span>,
         permissions: {
           checkout: <span class="str">'payments.create'</span>,
+          list: <span class="str">'payments.read'</span>,
           refund: <span class="str">'payments.refund'</span>,
+          subscriptions: <span class="str">'payments.subscriptions'</span>,
+          reconcile: <span class="str">'payments.reconcile'</span>,
         },
       },
     }),
@@ -257,7 +260,7 @@
       amount: input.amount,
       currency: input.currency,
       callback_url: input.callbackUrl,
-      tx_ref: input.idempotencyKey,
+      tx_ref: `tx_${Date.now()}_${randomBytes(8).toString('hex')}`,
     });
     <span class="kw">return</span> {
       providerPaymentId: response.tx_ref,
@@ -348,16 +351,22 @@
             <td>Required</td>
           </tr>
           <tr>
-            <td><span class="method post">POST</span></td>
-            <td><code>/payments/callback</code></td>
-            <td>Handle provider callback/redirect</td>
-            <td>Public</td>
+            <td><span class="method get">GET</span></td>
+            <td><code>/payments</code></td>
+            <td>List all payments</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/payments/mine</code></td>
+            <td>Get current user's payments</td>
+            <td>Required</td>
           </tr>
           <tr>
             <td><span class="method post">POST</span></td>
-            <td><code>/payments/webhook</code></td>
-            <td>Handle provider webhook</td>
-            <td>Public (verified)</td>
+            <td><code>/payments/webhook/:provider</code></td>
+            <td>Handle provider webhook/callback</td>
+            <td>Public</td>
           </tr>
           <tr>
             <td><span class="method get">GET</span></td>
@@ -372,15 +381,33 @@
             <td>Required</td>
           </tr>
           <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/payments/subscriptions</code></td>
+            <td>List all subscriptions</td>
+            <td>Required</td>
+          </tr>
+          <tr>
             <td><span class="method post">POST</span></td>
             <td><code>/payments/subscriptions</code></td>
             <td>Create a subscription</td>
             <td>Required</td>
           </tr>
           <tr>
-            <td><span class="method patch">PATCH</span></td>
+            <td><span class="method delete">DELETE</span></td>
             <td><code>/payments/subscriptions/:id</code></td>
             <td>Cancel a subscription</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/reconcile</code></td>
+            <td>Bulk reconcile stale payments</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/reconcile/:id</code></td>
+            <td>Reconcile a single payment</td>
             <td>Required</td>
           </tr>
         </tbody>
@@ -450,7 +477,7 @@ app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <s
 })</pre>
     </div>
 
-    <p>A per-ID endpoint (<code>POST /payments/reconcile/:id</code>) is also available for targeted reconciliation of a single payment. Orphaned payments (never reached the provider) are automatically marked as <code>failed</code>.</p>
+    <p>A bulk endpoint (<code>POST /payments/reconcile</code>) reconciles all stale payments, and a per-ID endpoint (<code>POST /payments/reconcile/:id</code>) targets a single payment. Orphaned payments (never reached the provider) are automatically marked as <code>failed</code>.</p>
 
     <!-- ═══════════════════════════════════════════════════
          IDEMPOTENCY
@@ -458,7 +485,7 @@ app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <s
     <h2 id="idempotency">Idempotency</h2>
     <p>Three layers prevent duplicate charges and inconsistent state:</p>
     <ul>
-      <li><strong>DB constraints</strong> — unique index on <code>(provider, providerPaymentId)</code></li>
+      <li><strong>DB constraints</strong> — unique index on <code>(provider, providerPaymentId)</code> and <code>(provider, providerSubscriptionId)</code></li>
       <li><strong>Idempotency key</strong> — <code>idempotencyKey</code> field stored with each payment</li>
       <li><strong>Status guards</strong> — forward-only transitions (backward transitions silently ignored)</li>
     </ul>
@@ -512,19 +539,19 @@ app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <s
         <div class="code-block-title">payment.service.spec.ts</div>
       </div>
       <pre><span class="kw">import</span> { <span class="typ">Test</span>, <span class="typ">TestingModule</span> } <span class="kw">from</span> <span class="str">'@nestjs/testing'</span>;
-<span class="kw">import</span> {
-  <span class="typ">PaymentService</span>,
-  <span class="fn">createMockPaymentProvider</span>,
-  <span class="fn">createMockRepository</span>,
-} <span class="kw">from</span> <span class="str">'@nest-util/nest-payment/testing'</span>;
+<span class="kw">import</span> { <span class="fn">paymentServiceTests</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-payment/testing'</span>;
+<span class="kw">import</span> { <span class="typ">PaymentService</span> } <span class="kw">from</span> <span class="str">'./payment.service'</span>;
 
-<span class="kw">const</span> module: <span class="typ">TestingModule</span> = <span class="kw">await</span> <span class="typ">Test</span>.<span class="fn">createTestingModule</span>({
-  providers: [
-    <span class="typ">PaymentService</span>,
-    { provide: <span class="typ">PAYMENT_OPTIONS</span>, useValue: { provider: <span class="fn">createMockPaymentProvider</span>() } },
-    { provide: <span class="fn">getRepositoryToken</span>(<span class="typ">PaymentEntity</span>), useValue: <span class="fn">createMockRepository</span>() },
-  ],
-}).<span class="fn">compile</span>();</pre>
+<span class="fn">describe</span>(<span class="str">'PaymentService'</span>, () =&gt; {
+  <span class="fn">paymentServiceTests</span>({
+    serviceClass: <span class="typ">PaymentService</span>,
+    entity: <span class="typ">Payment</span>,
+    provider: mockProvider,
+    test: {
+      createPayload: { amount: <span class="num">100</span>, currency: <span class="str">'ETB'</span> },
+    },
+  });
+});</pre>
     </div>
 
     <h3>Mock Utilities</h3>

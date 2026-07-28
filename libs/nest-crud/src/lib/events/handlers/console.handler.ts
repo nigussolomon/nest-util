@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { AuditEvent, AuditEventHandler } from '../audit-event.interface';
 
 const COLORS = {
@@ -40,6 +41,6 @@ function formatEvent(event: AuditEvent): string {
 
 export class ConsoleHandler implements AuditEventHandler {
   handle(event: AuditEvent): void {
-    console.log(formatEvent(event));
+    Logger.log(formatEvent(event));
   }
 }

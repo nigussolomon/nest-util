@@ -31,11 +31,12 @@ export class ChapaProvider implements PaymentProvider {
   readonly supportsRefunds = false;
 
   async createCheckout(input): Promise<PaymentCheckoutResult> {
+    const tx_ref = `tx_${Date.now()}_${randomBytes(8).toString('hex')}`;
     const response = await chapa.initialize({
       amount: input.amount,
       currency: input.currency,
       callback_url: input.callbackUrl,
-      tx_ref: input.idempotencyKey,
+      tx_ref,
     });
     return {
       providerPaymentId: response.tx_ref,
@@ -72,8 +73,10 @@ import { ChapaProvider } from './chapa.provider';
         path: 'payments',
         permissions: {
           checkout: 'payments.create',
+          list: 'payments.read',
           refund: 'payments.refund',
-          subscription: 'payments.subscribe',
+          subscriptions: 'payments.subscriptions',
+          reconcile: 'payments.reconcile',
         },
       },
     }),
@@ -144,7 +147,7 @@ Stale payments in `pending`, `processing`, or `succeeded` status are checked aga
 
 ### Idempotency
 
-- DB unique constraints on `(provider, providerPaymentId)`
+- DB unique constraints on `(provider, providerPaymentId)` and `(provider, providerSubscriptionId)`
 - `idempotencyKey` field prevents duplicate charges
 - Forward-only status transitions prevent race conditions
 
@@ -158,7 +161,7 @@ Stale payments in `pending`, `processing`, or `succeeded` status are checked aga
 | `GET` | `/payments/mine` | Get current user's payments | Required |
 | `GET` | `/payments/:id` | Get payment by ID | Required |
 | `POST` | `/payments/:id/refund` | Issue a refund | Required |
-| `GET` | `/payments/subscriptions` | List subscriptions | Required |
+| `GET` | `/payments/subscriptions` | List all subscriptions | Required |
 | `POST` | `/payments/subscriptions` | Create a subscription | Required |
 | `DELETE` | `/payments/subscriptions/:id` | Cancel a subscription | Required |
 | `POST` | `/payments/reconcile` | Bulk reconcile stale payments | Required |

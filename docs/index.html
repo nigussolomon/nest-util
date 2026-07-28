@@ -45,9 +45,11 @@
      ═══════════════════════════════════════════════════════ -->
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">
-      <span class="dot"></span>
-      v1.0.7 / v1.1.0
+    <div class="hero-badges">
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-crud v1.0.7</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-auth v1.1.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-file v1.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-payment v1.0.0</span>
     </div>
     <h1>
       NestJS CRUD, Auth, Files, Payments &amp; Notifications<br>
@@ -170,7 +172,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </div>
         <h3>S3 File Management</h3>
-        <p>Presigned URL uploads, image processing (resize, compress, convert), thumbnails, and TypeORM metadata tracking.</p>
+        <p>Presigned URL uploads, S3 storage, and TypeORM metadata tracking.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon green">
@@ -247,13 +249,11 @@
       <div class="package-card">
         <div class="package-header">
           <div class="package-name">@nest-util/nest-file</div>
-          <div class="package-desc">S3 uploads, image processing, thumbnails</div>
+          <div class="package-desc">S3 uploads with presigned URLs</div>
         </div>
         <div class="package-body">
           <ul>
             <li>S3-compatible presigned URL uploads</li>
-            <li>Image processing (resize, compress, convert, EXIF strip)</li>
-            <li>Automatic thumbnail generation</li>
             <li>TypeORM file metadata tracking</li>
             <li>Controller factory via <code>CreateFileController()</code></li>
             <li>Optional RBAC with <code>@nest-util/nest-auth</code></li>
@@ -700,8 +700,8 @@
         <div class="label">install</div>
       </div>
       <div class="terminal-body">
-        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment sharp typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment sharp typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
     </div>
 

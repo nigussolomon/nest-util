@@ -25,6 +25,8 @@ import {
 import { permissionRegistry } from './auth/permission-registry';
 import {
   AuditInterceptor,
+  AuditEventModule,
+  ConsoleHandler,
   NestCrudModule,
 } from '@nest-util/nest-crud';
 import { PaymentModule } from './payment/payment.module';
@@ -45,6 +47,10 @@ import { NestFileModule } from '@nest-util/nest-file';
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
     NestCrudModule,
+    AuditEventModule.forRoot({
+      handlers: [new ConsoleHandler()],
+      include: ['auth.**', 'crud.**'],
+    }),
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',

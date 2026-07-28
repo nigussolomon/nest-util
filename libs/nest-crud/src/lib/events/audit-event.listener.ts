@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
 import type { AuditEvent, AuditEventHandler, AuditEventModuleOptions } from './audit-event.interface';
 
 function matchesGlob(pattern: string, value: string): boolean {
   const regex = new RegExp(
-    '^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '[^.]*').replace(/\*\*/g, '.*') + '$'
+    '^' +
+      pattern
+        .replace(/\./g, '\\.')
+        .replace(/\*\*/g, '\x00')
+        .replace(/\*/g, '[^.]*')
+        .replace(/\x00/g, '.*') +
+      '$'
   );
   return regex.test(value);
 }
@@ -18,7 +22,6 @@ function shouldDispatch(event: AuditEvent, options: AuditEventModuleOptions): bo
   return !excluded;
 }
 
-@Injectable()
 export class AuditEventListener {
   private handlers: AuditEventHandler[] = [];
   private options: AuditEventModuleOptions = { handlers: [] };
@@ -28,9 +31,7 @@ export class AuditEventListener {
     this.options = options;
   }
 
-  @OnEvent('*')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async handleEvent(event: any): Promise<void> {
+  async handleEvent(event: AuditEvent): Promise<void> {
     const auditEvent = event as AuditEvent;
     if (!shouldDispatch(auditEvent, this.options)) return;
 
