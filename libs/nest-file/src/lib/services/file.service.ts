@@ -11,10 +11,7 @@ import { NEST_FILE_OPTIONS } from '../constants';
 import type { NestFileOptions } from '../interfaces/nest-file-options.interface';
 import { FileEntity } from '../entities/file.entity';
 import { S3Service } from './s3.service';
-import { ImageProcessorService } from './image-processor.service';
-import { ThumbnailService } from './thumbnail.service';
 import { generateStoredName, generateS3Key } from '../helpers/file-naming.helper';
-import { isImageMime } from '../helpers/image-pipeline.helper';
 import type { RequestUploadDto } from '../dtos/request-upload.dto';
 import type { ConfirmUploadDto } from '../dtos/confirm-upload.dto';
 
@@ -27,8 +24,6 @@ export class FileService {
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
     private readonly s3Service: S3Service,
-    private readonly imageProcessor: ImageProcessorService,
-    private readonly thumbnailService: ThumbnailService
   ) {}
 
   async requestUpload(
@@ -81,66 +76,11 @@ export class FileService {
       throw new BadRequestException('File not found in storage');
     }
 
-    let width: number | undefined;
-    let height: number | undefined;
-    let thumbnailUrl: string | undefined;
-    let compressedSize: number | undefined;
-    let compressionRatio: number | undefined;
-
-    if (isImageMime(entity.mimeType) && this.imageProcessor.isProcessingEnabled()) {
-      const downloadUrl = await this.s3Service.generatePresignedDownloadUrl(dto.key);
-      const response = await fetch(downloadUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      const originalBuffer = Buffer.from(arrayBuffer);
-
-      const processed = await this.imageProcessor.processImage(originalBuffer);
-
-      if (processed.buffer.length < originalBuffer.length) {
-        await this.s3Service.uploadBuffer(
-          dto.key,
-          processed.buffer,
-          `image/${processed.format}`
-        );
-        compressedSize = processed.buffer.length;
-        compressionRatio =
-          Math.round(
-            (1 - processed.buffer.length / originalBuffer.length) * 100 * 100
-          ) / 100;
-      }
-
-      width = processed.width;
-      height = processed.height;
-
-      if (this.thumbnailService.isThumbnailEnabled()) {
-        const thumbnails = await this.thumbnailService.generateThumbnails(
-          processed.buffer
-        );
-        if (thumbnails.length > 0) {
-          const thumb = thumbnails[0];
-          const thumbKey = dto.key.replace(
-            /(\.[^.]+)$/,
-            `-${thumb.suffix}.webp`
-          );
-          const thumbResult = await this.s3Service.uploadBuffer(
-            thumbKey,
-            thumb.buffer,
-            'image/webp'
-          );
-          thumbnailUrl = thumbResult.url;
-        }
-      }
-    }
-
     const publicUrl = this.options.s3.publicUrl
       ? `${this.options.s3.publicUrl.replace(/\/$/, '')}/${dto.key}`
       : dto.key;
 
     entity.url = publicUrl;
-    entity.width = width;
-    entity.height = height;
-    entity.thumbnailUrl = thumbnailUrl;
-    entity.compressedSize = compressedSize;
-    entity.compressionRatio = compressionRatio;
 
     const saved = await this.fileRepository.save(entity);
 
@@ -173,11 +113,6 @@ export class FileService {
     }
 
     await this.s3Service.deleteObject(entity.key);
-
-    if (entity.thumbnailUrl) {
-      const thumbKey = entity.key.replace(/(\.[^.]+)$/, '-thumb.webp');
-      await this.s3Service.deleteObject(thumbKey);
-    }
 
     await this.fileRepository.remove(entity);
 

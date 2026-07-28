@@ -33,21 +33,6 @@ export class FileEntity {
   url?: string;
 
   @Column({ nullable: true })
-  thumbnailUrl?: string;
-
-  @Column({ nullable: true })
-  width?: number;
-
-  @Column({ nullable: true })
-  height?: number;
-
-  @Column({ type: 'bigint', nullable: true })
-  compressedSize?: number;
-
-  @Column({ type: 'decimal', nullable: true })
-  compressionRatio?: number;
-
-  @Column({ nullable: true })
   userId!: string;
 
   @Column({ type: 'jsonb', nullable: true })

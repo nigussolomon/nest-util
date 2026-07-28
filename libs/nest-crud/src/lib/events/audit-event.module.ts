@@ -17,8 +17,10 @@ export class AuditEventModule {
         listener.configure(options.handlers, options);
 
         eventEmitter.onAny(async (...args: unknown[]) => {
-          const event = args[0] as AuditEvent;
-          await listener.handleEvent(event);
+          const event = args[1] as AuditEvent;
+          if (event?.action) {
+            await listener.handleEvent(event);
+          }
         });
 
         return listener;
@@ -34,7 +36,7 @@ export class AuditEventModule {
         { provide: AUDIT_EVENT_OPTIONS, useValue: options },
         { provide: AUDIT_EVENT_HANDLERS, useValue: options.handlers },
       ],
-      exports: [EventEmitter2],
+      exports: [EventEmitterModule],
     };
   }
 }

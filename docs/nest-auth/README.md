@@ -92,22 +92,72 @@ export class ProfileController {
 }
 ```
 
+### Super Admin Bypass
+
+Configure a `superAdminPermission` in RBAC options. Any user with this permission bypasses all `@Permissions()` checks on every route, including custom evaluators.
+
+```ts
+AuthModule.forRoot({
+  // ...
+  rbac: {
+    superAdminPermission: 'admin.access',
+    // ...
+  },
+})
+```
+
+When `superAdminPermission` is set and the user's resolved permissions include it, `PermissionsGuard` returns `true` immediately — no `@Permissions()` requirement is checked.
+
+### API Key Authentication
+
+JwtAuthGuard automatically detects the `x-api-key` header. When present, it delegates validation to ApiKeyService instead of JWT. This means `@UseGuards(JwtAuthGuard, PermissionsGuard)` works for both JWT and API key requests without needing `ApiKeyGuard` explicitly.
+
+```ts
+@Controller('data')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Permissions('data.read')
+export class DataController {
+  // Works with both JWT Bearer token and X-API-Key header
+}
+```
+
 ## 5) Built-in Auth Endpoints
 
 `AuthModule` provides these endpoints under `/auth`:
 
+### Authentication
 - `POST /auth/register`
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `GET /auth/me`
 - `POST /auth/update-password`
+- `POST /auth/logout`
 - `POST /auth/password-reset/request`
 - `POST /auth/password-reset/reset`
 - `POST /auth/otp/request`
 - `POST /auth/otp/login`
-- `GET /auth/me/permissions`
-- `POST /auth/logout`
-- Admin-protected role/permission management endpoints under `/auth/roles`, `/auth/users/...`
+
+### Permissions
+- `GET /auth/me/permissions` — current user's resolved permissions
+- `GET /auth/permissions` — registered permission catalog (admin-protected)
+
+### Roles (admin-protected)
+- `POST /auth/roles`
+- `GET /auth/roles`
+- `POST /auth/roles/:roleId/permissions`
+- `DELETE /auth/roles/:roleId/permissions`
+
+### User Roles (admin-protected)
+- `POST /auth/users/:userId/roles/:roleId`
+- `DELETE /auth/users/:userId/roles/:roleId`
+- `GET /auth/users/:userId/roles`
+
+### API Keys (admin-protected)
+- `POST /auth/api-keys`
+- `GET /auth/api-keys`
+- `DELETE /auth/api-keys/:id`
+- `POST /auth/api-keys/:id/roles/:roleId`
+- `DELETE /auth/api-keys/:id/roles/:roleId`
 
 ## 6) Example DTOs
 
@@ -199,3 +249,5 @@ AuthModule.forRoot({
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.
 - If you enable RBAC, ensure `relations` include role relations needed during JWT validation.
 - Use `disabledRoutes` to hard-disable selected auth endpoints (for example `['register', 'otp/request']`).
+- `JwtAuthGuard` auto-detects `x-api-key` header — no need to add `ApiKeyGuard` separately.
+- `superAdminPermission` in `rbac` config grants full access across all guarded routes.

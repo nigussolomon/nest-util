@@ -9,7 +9,8 @@ A dynamic NestJS authentication library designed to be flexible, plug-and-play, 
 - **Type Safety**: Built-in `AuthUser` and `AuthTokens` types.
 - **Single-Use Refresh Tokens**: Robust refresh token rotation logic to prevent replay attacks.
 - **Profile Endpoint**: Built-in `/auth/me` to retrieve the current user profile.
-- **API Key Authentication**: Server-to-server authentication with per-key RBAC and composable guard.
+- **API Key Authentication**: Server-to-server authentication with per-key RBAC. `JwtAuthGuard` auto-detects `x-api-key` header and delegates to `ApiKeyService`.
+- **Super Admin Bypass**: Configure `superAdminPermission` in RBAC to grant full access across all guarded routes.
 
 ## Quick Start
 
@@ -54,7 +55,7 @@ getProfile(@CurrentUser() user: AuthUser) {
 
 ## API Key Authentication
 
-Enable API key authentication for server-to-server requests. Each key has its own roles and permissions, independent of the user who created it.
+Enable API key authentication for server-to-server requests. Each key has its own roles and permissions, independent of the user who created it. `JwtAuthGuard` auto-detects the `x-api-key` header and delegates to `ApiKeyService` — no need to add `ApiKeyGuard` separately.
 
 ### Configuration
 
@@ -73,12 +74,12 @@ AuthModule.forRoot({
 ### Usage
 
 ```typescript
-import { ApiKeyGuard, JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
+import { JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
 
 @Controller('data')
-@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DataController {
-  // API keys and JWT tokens work on the same endpoint
+  // API keys (x-api-key header) and JWT tokens (Bearer) both work
 }
 ```
 
@@ -92,6 +93,18 @@ export class DataController {
 | POST | `/auth/api-keys/:id/roles/:roleId` | Assign role to key | Yes (JWT) |
 | DELETE | `/auth/api-keys/:id/roles/:roleId` | Remove role from key | Yes (JWT) |
 
+## Super Admin
+
+Configure `superAdminPermission` in RBAC options. Users with this permission bypass all `@Permissions()` checks.
+
+```typescript
+AuthModule.forRoot({
+  rbac: {
+    superAdminPermission: 'admin.access',
+  },
+})
+```
+
 ## Authentication Endpoints
 
 | Method | Endpoint | Description | Auth Required |
@@ -100,7 +113,10 @@ export class DataController {
 | POST | `/auth/login` | Login and get tokens | No |
 | POST | `/auth/refresh` | Get new access token | No (Refresh Token in Body) |
 | GET  | `/auth/me` | Get current user profile | Yes (JWT) |
+| POST | `/auth/update-password` | Update own password | Yes (JWT) |
 | POST | `/auth/logout` | Logout user | Yes (JWT) |
+| GET  | `/auth/me/permissions` | Get current user's resolved permissions | Yes (JWT) |
+| GET  | `/auth/permissions` | Registered permission catalog | Yes (admin) |
 
 ## Development
 

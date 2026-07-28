@@ -13,6 +13,9 @@
       "path": "./libs/nest-file"
     },
     {
+      "path": "./libs/nest-payment"
+    },
+    {
       "path": "./apps/demo-api"
     }
   ]

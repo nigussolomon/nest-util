@@ -3,15 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>@nest-util/nest-file — S3 File Management, Image Processing &amp; Thumbnails</title>
-  <meta name="description" content="S3-compatible file management with presigned URL uploads, image processing, thumbnail generation, and TypeORM metadata tracking for NestJS.">
+  <title>@nest-util/nest-file — S3 File Management for NestJS</title>
+  <meta name="description" content="S3-compatible file management with presigned URL uploads and TypeORM metadata tracking for NestJS.">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════
-     NAVIGATION
-     ═══════════════════════════════════════════════════════ -->
 <nav>
   <div class="container">
     <a href="../index.html" class="nav-brand">
@@ -26,9 +23,7 @@
       <li><a href="#features">Features</a></li>
       <li><a href="#upload-flow">Upload Flow</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
-      <li><a href="#image-processing">Image Processing</a></li>
       <li><a href="#testing">Testing</a></li>
-      <li><a href="https://github.com/nigussolomon/nest-util/blob/main/skill/SKILL.md">Skill</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
     </ul>
     <div style="display:flex;align-items:center;gap:10px">
@@ -41,9 +36,6 @@
   </div>
 </nav>
 
-<!-- ═══════════════════════════════════════════════════════
-     DOC LAYOUT: SIDEBAR + CONTENT
-     ═══════════════════════════════════════════════════════ -->
 <div class="doc-layout">
   <aside class="doc-sidebar">
     <ul>
@@ -55,9 +47,7 @@
       <li><a href="#controller">Controller</a></li>
       <li><a href="#upload-flow">Upload Flow</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
-      <li class="sidebar-section">Features</li>
-      <li><a href="#image-processing">Image Processing</a></li>
-      <li><a href="#thumbnails">Thumbnails</li>
+      <li class="sidebar-section">Reference</li>
       <li><a href="#file-entity">File Entity</a></li>
       <li class="sidebar-section">Testing</li>
       <li><a href="#testing">Testing</a></li>
@@ -66,11 +56,8 @@
 
   <main class="doc-content">
 
-    <!-- ═══════════════════════════════════════════════════
-         HERO
-         ═══════════════════════════════════════════════════ -->
     <h1 id="features">nest-file</h1>
-    <p class="subtitle">S3-compatible file management with presigned URL uploads, image processing, thumbnail generation, and TypeORM metadata tracking.</p>
+    <p class="subtitle">S3-compatible file management with presigned URL uploads and TypeORM metadata tracking.</p>
 
     <div class="features-grid" style="margin-top:32px">
       <div class="feature-card">
@@ -79,19 +66,9 @@
         <p>Files go directly to S3 — they never touch your server. Works with AWS S3, MinIO, DigitalOcean Spaces, and any S3-compatible provider.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon purple">&#128248;</div>
-        <h3>Image Processing</h3>
-        <p>Automatic resize, compress, format conversion (WebP, AVIF, JPEG, PNG), and EXIF stripping on upload confirmation.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon amber">&#128247;</div>
-        <h3>Thumbnails</h3>
-        <p>Generate configurable thumbnail sizes automatically during upload processing.</p>
-      </div>
-      <div class="feature-card">
         <div class="feature-icon blue">&#128451;</div>
         <h3>Metadata Tracking</h3>
-        <p>TypeORM entity stores file name, size, dimensions, compression ratio, user ownership, and custom metadata.</p>
+        <p>TypeORM entity stores file name, size, MIME type, user ownership, and custom metadata.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon red">&#128737;</div>
@@ -100,14 +77,11 @@
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         INSTALL
-         ═══════════════════════════════════════════════════ -->
     <h2 id="quickstart">Install</h2>
     <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
     <div class="install-box">
-      <code>pnpm add @nest-util/nest-file@^1.0.0 sharp</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-file@^1.0.0 sharp').then(()=>this.textContent='Copied!')">Copy</button>
+      <code>pnpm add @nest-util/nest-file</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-file').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
 
     <p>Peer dependencies:</p>
@@ -122,9 +96,6 @@
       <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         MODULE
-         ═══════════════════════════════════════════════════ -->
     <h2 id="module">Module</h2>
     <p>Register <code>NestFileModule.forRoot()</code> in your root module. Endpoints are available immediately — no controller class needed.</p>
 
@@ -248,46 +219,6 @@
             <td>Presigned URL expiry in seconds. Default: <code>3600</code></td>
           </tr>
           <tr>
-            <td><code>imageProcessing.enabled</code></td>
-            <td><code>boolean</code></td>
-            <td>Enable image processing. Default: <code>true</code></td>
-          </tr>
-          <tr>
-            <td><code>imageProcessing.format</code></td>
-            <td><code>'webp' | 'avif' | 'jpeg' | 'png'</code></td>
-            <td>Output format. Default: <code>'webp'</code></td>
-          </tr>
-          <tr>
-            <td><code>imageProcessing.quality</code></td>
-            <td><code>number</code></td>
-            <td>Output quality (1-100). Default: <code>80</code></td>
-          </tr>
-          <tr>
-            <td><code>imageProcessing.maxWidth</code></td>
-            <td><code>number</code></td>
-            <td>Max output width. Default: <code>2048</code></td>
-          </tr>
-          <tr>
-            <td><code>imageProcessing.maxHeight</code></td>
-            <td><code>number</code></td>
-            <td>Max output height. Default: <code>2048</code></td>
-          </tr>
-          <tr>
-            <td><code>imageProcessing.stripExif</code></td>
-            <td><code>boolean</code></td>
-            <td>Strip EXIF data. Default: <code>true</code></td>
-          </tr>
-          <tr>
-            <td><code>thumbnails.enabled</code></td>
-            <td><code>boolean</code></td>
-            <td>Enable thumbnail generation. Default: <code>true</code></td>
-          </tr>
-          <tr>
-            <td><code>thumbnails.sizes</code></td>
-            <td><code>{ width, height, suffix }[]</code></td>
-            <td>Thumbnail sizes. Default: <code>[{150x150, 'thumb'}]</code></td>
-          </tr>
-          <tr>
             <td><code>controller.enable</code></td>
             <td><code>boolean</code></td>
             <td>Auto-register controller. Default: <code>true</code></td>
@@ -306,9 +237,6 @@
       </table>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         CONTROLLER
-         ═══════════════════════════════════════════════════ -->
     <h2 id="controller">Controller</h2>
     <p>The module auto-registers a file controller by default — no manual class needed. Configure it via the <code>controller</code> option.</p>
 
@@ -359,9 +287,6 @@
 }</pre>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         UPLOAD FLOW
-         ═══════════════════════════════════════════════════ -->
     <h2 id="upload-flow">Upload Flow</h2>
     <p>Files are uploaded directly to S3 via presigned URLs — they never touch your server.</p>
 
@@ -387,7 +312,7 @@
   body: file,
 });
 
-<span class="cm">// Step 3: Confirm upload — triggers image processing</span>
+<span class="cm">// Step 3: Confirm upload</span>
 <span class="kw">const</span> fileEntity = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'/files/confirm'</span>, {
   method: <span class="str">'POST'</span>,
   headers: { <span class="str">'Content-Type'</span>: <span class="str">'application/json'</span> },
@@ -395,9 +320,6 @@
 }).<span class="fn">then</span>(r =&gt; r.<span class="fn">json</span>());</pre>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         ENDPOINTS
-         ═══════════════════════════════════════════════════ -->
     <h2 id="endpoints">Endpoints</h2>
     <p>One controller factory produces a complete REST API with 7 endpoints.</p>
 
@@ -408,7 +330,6 @@
             <th>Method</th>
             <th>Endpoint</th>
             <th>Description</th>
-            <th>Auth</th>
           </tr>
         </thead>
         <tbody>
@@ -416,106 +337,41 @@
             <td><span class="method post">POST</span></td>
             <td><code>/files/upload-url</code></td>
             <td>Request a presigned upload URL</td>
-            <td>Required</td>
           </tr>
           <tr>
             <td><span class="method post">POST</span></td>
             <td><code>/files/confirm</code></td>
-            <td>Confirm upload and process the file</td>
-            <td>Required</td>
+            <td>Confirm upload and finalize metadata</td>
           </tr>
           <tr>
             <td><span class="method get">GET</span></td>
             <td><code>/files/:id/download</code></td>
             <td>Get a presigned download URL</td>
-            <td>Required</td>
           </tr>
           <tr>
             <td><span class="method get">GET</span></td>
             <td><code>/files</code></td>
             <td>List all files (paginated)</td>
-            <td>Required</td>
           </tr>
           <tr>
             <td><span class="method get">GET</span></td>
             <td><code>/files/mine</code></td>
             <td>Get current user's files (paginated)</td>
-            <td>Required</td>
           </tr>
           <tr>
             <td><span class="method get">GET</span></td>
             <td><code>/files/:id</code></td>
             <td>Get file metadata</td>
-            <td>Required</td>
           </tr>
           <tr>
             <td><span class="method delete">DELETE</span></td>
             <td><code>/files/:id</code></td>
-            <td>Delete a file and its thumbnail</td>
-            <td>Required</td>
+            <td>Delete a file from S3</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         IMAGE PROCESSING
-         ═══════════════════════════════════════════════════ -->
-    <h2 id="image-processing">Image Processing</h2>
-    <p>When a file with an <code>image/*</code> MIME type is confirmed, the processor automatically:</p>
-    <ul>
-      <li><strong>Resizes</strong> — fits within <code>maxWidth</code> x <code>maxHeight</code> without enlarging</li>
-      <li><strong>Converts</strong> — outputs as WebP, AVIF, JPEG, or PNG</li>
-      <li><strong>Compresses</strong> — applies quality setting for optimal file size</li>
-      <li><strong>Strips EXIF</strong> — removes metadata for privacy and smaller files</li>
-    </ul>
-
-    <p>If the compressed version is smaller than the original, it replaces the uploaded file in S3.</p>
-
-    <h3>Processing Pipeline</h3>
-    <div class="code-block">
-      <div class="code-block-header">
-        <div class="code-block-dots"><span></span><span></span><span></span></div>
-        <div class="code-block-title">image-pipeline.ts</div>
-      </div>
-      <pre><span class="cm">// Sharp-based pipeline (runs on confirm)</span>
-sharp(buffer)
-  .<span class="fn">rotate</span>()                    <span class="cm">// auto-rotate + strip EXIF</span>
-  .<span class="fn">resize</span>({
-    width: <span class="num">2048</span>,
-    height: <span class="num">2048</span>,
-    fit: <span class="str">'inside'</span>,
-    withoutEnlargement: <span class="num">true</span>,
-  })
-  .<span class="fn">webp</span>({ quality: <span class="num">80</span> })      <span class="cm">// or .avif(), .jpeg(), .png()</span>
-  .<span class="fn">toBuffer</span>();</pre>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════════
-         THUMBNAILS
-         ═══════════════════════════════════════════════════ -->
-    <h2 id="thumbnails">Thumbnails</h2>
-    <p>Configure thumbnail sizes in the module options. Each size generates a separate file stored alongside the original.</p>
-
-    <div class="code-block">
-      <div class="code-block-header">
-        <div class="code-block-dots"><span></span><span></span><span></span></div>
-        <div class="code-block-title">thumbnail config</div>
-      </div>
-      <pre>thumbnails: {
-  enabled: <span class="num">true</span>,
-  sizes: [
-    { width: <span class="num">150</span>, height: <span class="num">150</span>, suffix: <span class="str">'thumb'</span> },
-    { width: <span class="num">400</span>, height: <span class="num">400</span>, suffix: <span class="str">'medium'</span> },
-  ],
-}</pre>
-    </div>
-
-    <p>Thumbnails are stored as WebP with <code>cover</code> fit mode. The first thumbnail URL is saved to <code>FileEntity.thumbnailUrl</code>.</p>
-
-    <!-- ═══════════════════════════════════════════════════
-         FILE ENTITY
-         ═══════════════════════════════════════════════════ -->
     <h2 id="file-entity">File Entity</h2>
     <p>The <code>FileEntity</code> tracks all file metadata in your database.</p>
 
@@ -531,17 +387,12 @@ sharp(buffer)
         <tbody>
           <tr><td><code>id</code></td><td><code>UUID</code></td><td>Primary key</td></tr>
           <tr><td><code>originalName</code></td><td><code>string</code></td><td>Original filename</td></tr>
-          <tr><td><code>storedName</code></td><td><code>string</code></td><td>Sanitized stored filename (timestamp + name)</td></tr>
+          <tr><td><code>storedName</code></td><td><code>string</code></td><td>Sanitized stored filename</td></tr>
           <tr><td><code>mimeType</code></td><td><code>string</code></td><td>MIME type</td></tr>
           <tr><td><code>size</code></td><td><code>bigint</code></td><td>File size in bytes</td></tr>
           <tr><td><code>bucket</code></td><td><code>string</code></td><td>S3 bucket name</td></tr>
           <tr><td><code>key</code></td><td><code>string</code></td><td>S3 object key</td></tr>
           <tr><td><code>url</code></td><td><code>string?</code></td><td>Public URL (if <code>publicUrl</code> configured)</td></tr>
-          <tr><td><code>thumbnailUrl</code></td><td><code>string?</code></td><td>First thumbnail URL</td></tr>
-          <tr><td><code>width</code></td><td><code>number?</code></td><td>Image width (after processing)</td></tr>
-          <tr><td><code>height</code></td><td><code>number?</code></td><td>Image height (after processing)</td></tr>
-          <tr><td><code>compressedSize</code></td><td><code>bigint?</code></td><td>Compressed size in bytes</td></tr>
-          <tr><td><code>compressionRatio</code></td><td><code>number?</code></td><td>Compression ratio (%)</td></tr>
           <tr><td><code>userId</code></td><td><code>string</code></td><td>Uploader user ID</td></tr>
           <tr><td><code>metadata</code></td><td><code>jsonb?</code></td><td>Custom metadata</td></tr>
           <tr><td><code>createdAt</code></td><td><code>Date</code></td><td>Creation timestamp</td></tr>
@@ -550,11 +401,8 @@ sharp(buffer)
       </table>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         TESTING
-         ═══════════════════════════════════════════════════ -->
     <h2 id="testing">Testing</h2>
-    <p>Use the testing entry point for mock factories and reusable test suites.</p>
+    <p>Use the testing entry point for mock factories.</p>
 
     <div class="code-block">
       <div class="code-block-header">
@@ -568,8 +416,6 @@ sharp(buffer)
   <span class="typ">FileEntity</span>,
   <span class="fn">createMockRepository</span>,
   <span class="fn">createMockS3Service</span>,
-  <span class="fn">createMockImageProcessor</span>,
-  <span class="fn">createMockThumbnailService</span>,
 } <span class="kw">from</span> <span class="str">'@nest-util/nest-file/testing'</span>;
 
 <span class="kw">const</span> module: <span class="typ">TestingModule</span> = <span class="kw">await</span> <span class="typ">Test</span>.<span class="fn">createTestingModule</span>({
@@ -577,8 +423,6 @@ sharp(buffer)
     <span class="typ">FileService</span>,
     { provide: <span class="fn">getRepositoryToken</span>(<span class="typ">FileEntity</span>), useValue: <span class="fn">createMockRepository</span>() },
     { provide: <span class="typ">S3Service</span>, useValue: <span class="fn">createMockS3Service</span>() },
-    { provide: <span class="typ">ImageProcessorService</span>, useValue: <span class="fn">createMockImageProcessor</span>() },
-    { provide: <span class="typ">ThumbnailService</span>, useValue: <span class="fn">createMockThumbnailService</span>() },
   ],
 }).<span class="fn">compile</span>();</pre>
     </div>
@@ -594,8 +438,6 @@ sharp(buffer)
       <tbody>
         <tr><td><code>createMockRepository()</code></td><td>Mock TypeORM repository with default implementations</td></tr>
         <tr><td><code>createMockS3Service()</code></td><td>Mock S3 service with presigned URL stubs</td></tr>
-        <tr><td><code>createMockImageProcessor()</code></td><td>Mock image processor that returns a test buffer</td></tr>
-        <tr><td><code>createMockThumbnailService()</code></td><td>Mock thumbnail service that returns a test thumbnail</td></tr>
         <tr><td><code>createMockFileEntity()</code></td><td>Default mock file entity with all fields populated</td></tr>
       </tbody>
     </table>
@@ -603,9 +445,6 @@ sharp(buffer)
   </main>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
-     FOOTER
-     ═══════════════════════════════════════════════════════ -->
 <footer>
   <div class="container">
     <p style="margin-bottom:12px">

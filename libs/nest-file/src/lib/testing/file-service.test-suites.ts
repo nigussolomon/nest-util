@@ -3,15 +3,11 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { FileEntity } from '../entities/file.entity';
 import { FileService } from '../services/file.service';
 import { S3Service } from '../services/s3.service';
-import { ImageProcessorService } from '../services/image-processor.service';
-import { ThumbnailService } from '../services/thumbnail.service';
 import { NEST_FILE_OPTIONS } from '../constants';
 import {
   FileServiceTestConfig,
   createMockFileEntity,
   createMockS3Service,
-  createMockImageProcessor,
-  createMockThumbnailService,
   createMockRepository,
 } from './testing.interface';
 
@@ -20,9 +16,6 @@ export function fileServiceTests(config: FileServiceTestConfig): void {
     let service: FileService;
     let repository: ReturnType<typeof createMockRepository>;
     let s3Service: ReturnType<typeof createMockS3Service>;
-    let imageProcessor: ReturnType<typeof createMockImageProcessor>;
-    let thumbnailService: ReturnType<typeof createMockThumbnailService>;
-
     const defaultOptions = {
       s3: {
         region: 'us-east-1',
@@ -33,29 +26,18 @@ export function fileServiceTests(config: FileServiceTestConfig): void {
       upload: {
         pathPrefix: 'uploads',
       },
-      imageProcessing: {
-        enabled: true,
-      },
-      thumbnails: {
-        enabled: true,
-        sizes: [{ width: 150, height: 150, suffix: 'thumb' }],
-      },
       ...config.options,
     };
 
     beforeEach(async () => {
       repository = createMockRepository();
       s3Service = createMockS3Service();
-      imageProcessor = createMockImageProcessor();
-      thumbnailService = createMockThumbnailService();
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           config.serviceClass,
           { provide: getRepositoryToken(FileEntity), useValue: repository },
           { provide: S3Service, useValue: s3Service },
-          { provide: ImageProcessorService, useValue: imageProcessor },
-          { provide: ThumbnailService, useValue: thumbnailService },
           { provide: NEST_FILE_OPTIONS, useValue: defaultOptions },
         ],
       }).compile();

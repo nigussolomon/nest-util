@@ -1,13 +1,13 @@
 # @nest-util/nest-file
 
-S3-compatible file management library for NestJS with presigned URL uploads, image processing, and metadata tracking via TypeORM.
+S3-compatible file management library for NestJS with presigned URL uploads and metadata tracking via TypeORM.
 
 ## Installation
 
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-file sharp
+pnpm add @nest-util/nest-file
 ```
 
 Peer dependencies:
@@ -26,8 +26,6 @@ pnpm add @nest-util/nest-auth
 
 - S3-compatible presigned URL uploads (AWS S3, MinIO, DigitalOcean Spaces, etc.)
 - Secure client-side upload flow: request URL → upload directly → confirm
-- Image processing pipeline (resize, compress, format conversion, EXIF stripping)
-- Automatic thumbnail generation
 - TypeORM-based file metadata tracking
 - Auto-registered controller via `NestFileModule.forRoot()` (opt-in)
 - Controller factory via `CreateFileController()` for custom routing
@@ -80,14 +78,6 @@ Endpoints are available immediately — no controller class needed.
 | `upload.allowedMimeTypes` | `string[]` | — | Allowed MIME types (supports `image/*` wildcards) |
 | `upload.pathPrefix` | `string` | `'uploads'` | S3 key prefix |
 | `upload.presignedUrlExpiresIn` | `number` | `3600` | Presigned URL expiry in seconds |
-| `imageProcessing.enabled` | `boolean` | `true` | Enable image processing |
-| `imageProcessing.format` | `'webp' \| 'avif' \| 'jpeg' \| 'png'` | `'webp'` | Output format |
-| `imageProcessing.quality` | `number` | `80` | Output quality (1-100) |
-| `imageProcessing.maxWidth` | `number` | `2048` | Max output width |
-| `imageProcessing.maxHeight` | `number` | `2048` | Max output height |
-| `imageProcessing.stripExif` | `boolean` | `true` | Strip EXIF data |
-| `thumbnails.enabled` | `boolean` | `true` | Enable thumbnail generation |
-| `thumbnails.sizes` | `{ width, height, suffix }[]` | `[{150x150, 'thumb'}]` | Thumbnail sizes |
 | `controller.enable` | `boolean` | `true` | Auto-register controller |
 | `controller.path` | `string` | `'files'` | Controller route path |
 | `controller.permissions` | `object` | — | RBAC permissions per endpoint |
@@ -102,7 +92,7 @@ Endpoints are available immediately — no controller class needed.
 | `GET` | `/files` | List all files (paginated) |
 | `GET` | `/files/mine` | Get current user's files (paginated) |
 | `GET` | `/files/:id` | Get file metadata |
-| `DELETE` | `/files/:id` | Delete a file and its thumbnail |
+| `DELETE` | `/files/:id` | Delete a file from S3 |
 
 ## FileEntity
 
@@ -116,11 +106,6 @@ Endpoints are available immediately — no controller class needed.
 | `bucket` | `string` | S3 bucket name |
 | `key` | `string` | S3 object key |
 | `url` | `string?` | Public URL |
-| `thumbnailUrl` | `string?` | Thumbnail URL |
-| `width` | `number?` | Image width |
-| `height` | `number?` | Image height |
-| `compressedSize` | `bigint?` | Compressed size in bytes |
-| `compressionRatio` | `number?` | Compression ratio (%) |
 | `userId` | `string` | Uploader user ID |
 | `metadata` | `jsonb?` | Custom metadata |
 | `createdAt` | `Date` | Creation timestamp |
@@ -166,7 +151,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   FileService, FileEntity,
   createMockRepository, createMockS3Service,
-  createMockImageProcessor, createMockThumbnailService,
 } from '@nest-util/nest-file/testing';
 
 const module: TestingModule = await Test.createTestingModule({
@@ -174,8 +158,6 @@ const module: TestingModule = await Test.createTestingModule({
     FileService,
     { provide: getRepositoryToken(FileEntity), useValue: createMockRepository() },
     { provide: S3Service, useValue: createMockS3Service() },
-    { provide: ImageProcessorService, useValue: createMockImageProcessor() },
-    { provide: ThumbnailService, useValue: createMockThumbnailService() },
   ],
 }).compile();
 ```

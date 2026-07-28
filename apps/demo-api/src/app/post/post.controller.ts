@@ -1,6 +1,7 @@
 import { Controller, UseGuards } from '@nestjs/common';
 import {
   CreateNestedCrudController,
+  EntityName,
   IBaseController,
 } from '@nest-util/nest-crud';
 import { PostService } from './post.service';
@@ -33,6 +34,7 @@ const PostCrudControllerBase = CreateNestedCrudController(
 
 @ApiTags('post')
 @Controller('post')
+@EntityName({ singular: 'post', plural: 'posts' })
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class PostController extends PostCrudControllerBase {

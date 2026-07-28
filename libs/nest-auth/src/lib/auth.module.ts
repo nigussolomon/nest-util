@@ -7,6 +7,10 @@ import { AuthModuleOptions } from './interfaces/auth-options';
 import { AuthService } from './services/auth.service';
 import { RouteDisabledGuard } from './guards/route-disabled.guard';
 import { CreateAuthController } from './controllers/auth.controller';
+import { CreatePermissionsController } from './controllers/permissions.controller';
+import { CreateRolesController } from './controllers/roles.controller';
+import { CreateUserRolesController } from './controllers/user-roles.controller';
+import { CreateApiKeysController } from './controllers/api-keys.controller';
 import { JwtStrategy } from './guards/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
@@ -22,7 +26,13 @@ import { Reflector } from '@nestjs/core';
 @Module({})
 export class AuthModule {
   static forRoot(options: AuthModuleOptions): DynamicModule {
-    const Controller = CreateAuthController(options);
+    const Controllers = [
+      CreateAuthController(options),
+      CreatePermissionsController(options),
+      CreateRolesController(options),
+      CreateUserRolesController(options),
+      CreateApiKeysController(options),
+    ];
     const apiKeyEnabled = options.apiKey?.enabled === true;
     const apiKeyEntities = apiKeyEnabled
       ? [ApiKeyEntity, ApiKeyRoleEntity]
@@ -36,7 +46,7 @@ export class AuthModule {
 
     return {
       module: AuthModule,
-      controllers: [Controller],
+      controllers: Controllers,
       imports: [
         PassportModule.register({ defaultStrategy: 'jwt' }),
         JwtModule.register({

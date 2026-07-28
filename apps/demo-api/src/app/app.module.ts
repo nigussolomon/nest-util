@@ -25,8 +25,12 @@ import {
 import { permissionRegistry } from './auth/permission-registry';
 import {
   AuditInterceptor,
+  AuditEventModule,
+  ConsoleHandler,
   NestCrudModule,
 } from '@nest-util/nest-crud';
+import { PaymentModule } from './payment/payment.module';
+import { NestFileModule } from '@nest-util/nest-file';
 
 @Module({
   imports: [
@@ -43,6 +47,10 @@ import {
     TypeOrmModule.forFeature([Post, Comment]),
     UserModule,
     NestCrudModule,
+    AuditEventModule.forRoot({
+      handlers: [new ConsoleHandler()],
+      include: ['auth.**', 'crud.**'],
+    }),
     AuthModule.forRoot({
       userEntity: User,
       identifierField: 'email',
@@ -53,6 +61,7 @@ import {
       refreshTokenField: 'refreshToken',
       disabledRoutes: [''],
       accessTokenField: 'accessToken',
+      apiKey: { enabled: true },
       loginDto: LoginDto,
       registerDto: RegisterDto,
       refreshDto: RefreshDto,
@@ -104,6 +113,27 @@ import {
         nestedRoleKey: 'role',
       },
       permissionRegistry,
+    }),
+    PaymentModule,
+    NestFileModule.forRoot({
+      s3: {
+        endpoint: process.env.S3_ENDPOINT,
+        region: process.env.S3_REGION ?? 'us-east-1',
+        bucket: process.env.S3_BUCKET ?? 'demo-bucket',
+        accessKeyId: process.env.S3_ACCESS_KEY_ID ?? 'minioadmin',
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? 'minioadmin',
+        forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+        publicUrl: process.env.S3_PUBLIC_URL,
+      },
+      controller: {
+        path: 'files',
+        permissions: {
+          upload: 'files.create',
+          download: 'files.read',
+          list: 'files.read',
+          remove: 'files.delete',
+        },
+      },
     }),
   ],
   controllers: [AppController, PostController, CommentController],

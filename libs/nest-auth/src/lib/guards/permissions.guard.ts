@@ -60,6 +60,11 @@ export class PermissionsGuard implements CanActivate {
 
     const resolvedPermissions = resolvePermissions(user, this.options.rbac);
 
+    const superAdmin = this.options.rbac?.superAdminPermission;
+    if (superAdmin && resolvedPermissions.includes(superAdmin)) {
+      return true;
+    }
+
     if (this.options.rbac?.permissionEvaluator) {
       const isAllowed = await this.options.rbac.permissionEvaluator({
         user,

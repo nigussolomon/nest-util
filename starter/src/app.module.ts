@@ -42,7 +42,7 @@ import { permissionRegistry } from './auth/permission-registry';
     NestCrudModule,
     AuditEventModule.forRoot({
       handlers: [new ConsoleHandler()],
-      include: ['auth.*', 'crud.*'],
+      include: ['auth.**', 'crud.**'],
     }),
     AuthModule.forRoot({
       userEntity: User,

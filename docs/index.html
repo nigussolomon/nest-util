@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nest-Util — Production-Ready NestJS Toolkit</title>
-  <meta name="description" content="Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, notifications, audit logging, lifecycle hooks, and cursor pagination for NestJS.">
+  <meta name="description" content="Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, provider-agnostic payments, notifications, audit logging, lifecycle hooks, and cursor pagination for NestJS.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -45,16 +45,18 @@
      ═══════════════════════════════════════════════════════ -->
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">
-      <span class="dot"></span>
-      v1.0.7 / v1.1.0
+    <div class="hero-badges">
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-crud v1.0.7</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-auth v1.1.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-file v1.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-payment v1.0.0</span>
     </div>
     <h1>
-      NestJS CRUD, Auth, Files &amp; Notifications<br>
+      NestJS CRUD, Auth, Files, Payments &amp; Notifications<br>
       <span class="accent">That Just Works</span>
     </h1>
     <p>
-      Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, notifications, audit events, lifecycle hooks, and cursor pagination. Four packages, zero boilerplate.
+      Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, provider-agnostic payments, notifications, audit events, lifecycle hooks, and cursor pagination. Five packages, zero boilerplate.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn btn-primary">
@@ -73,8 +75,8 @@
      STATS
      ═══════════════════════════════════════════════════════ -->
 <div class="stats container">
-  <div class="stat">
-    <div class="stat-value">4</div>
+    <div class="stat">
+    <div class="stat-value">5</div>
     <div class="stat-label">Packages</div>
   </div>
   <div class="stat">
@@ -106,7 +108,7 @@
   <div class="container">
     <div class="section-header">
       <h2>What You Get</h2>
-      <p>Four packages that replace hours of boilerplate.</p>
+      <p>Five packages that replace hours of boilerplate.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card">
@@ -170,7 +172,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </div>
         <h3>S3 File Management</h3>
-        <p>Presigned URL uploads, image processing (resize, compress, convert), thumbnails, and TypeORM metadata tracking.</p>
+        <p>Presigned URL uploads, S3 storage, and TypeORM metadata tracking.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3>Provider-Agnostic Payments</h3>
+        <p>Checkout sessions, subscriptions, refunds, webhook handling, reconciliation, and idempotency. No SDK bundled.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon purple">
@@ -240,13 +249,11 @@
       <div class="package-card">
         <div class="package-header">
           <div class="package-name">@nest-util/nest-file</div>
-          <div class="package-desc">S3 uploads, image processing, thumbnails</div>
+          <div class="package-desc">S3 uploads with presigned URLs</div>
         </div>
         <div class="package-body">
           <ul>
             <li>S3-compatible presigned URL uploads</li>
-            <li>Image processing (resize, compress, convert, EXIF strip)</li>
-            <li>Automatic thumbnail generation</li>
             <li>TypeORM file metadata tracking</li>
             <li>Controller factory via <code>CreateFileController()</code></li>
             <li>Optional RBAC with <code>@nest-util/nest-auth</code></li>
@@ -256,6 +263,28 @@
         </div>
         <div class="package-footer">
           <a href="nest-file/index.html">Docs &rarr;</a>
+        </div>
+      </div>
+      <div class="package-card">
+        <div class="package-header">
+          <div class="package-name">@nest-util/nest-payment</div>
+          <div class="package-desc">Checkout, subscriptions, refunds, webhooks</div>
+        </div>
+        <div class="package-body">
+          <ul>
+            <li>Provider-agnostic <code>PaymentProvider</code> interface</li>
+            <li>Checkout sessions with redirect &amp; webhook flows</li>
+            <li>Subscription lifecycle management</li>
+            <li>Full &amp; partial refund support</li>
+            <li>In-memory webhook event deduplication</li>
+            <li>Stale payment reconciliation</li>
+            <li>Forward-only status transitions</li>
+            <li>DB-level idempotency constraints</li>
+            <li>Testing factory with mock providers</li>
+          </ul>
+        </div>
+        <div class="package-footer">
+          <a href="nest-payment/index.html">Docs &rarr;</a>
         </div>
       </div>
       <div class="package-card coming-soon">
@@ -671,8 +700,8 @@
         <div class="label">install</div>
       </div>
       <div class="terminal-body">
-        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file sharp typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file sharp typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
     </div>
 
@@ -690,7 +719,7 @@
       <div class="step">
         <div class="step-number">3</div>
         <h3>Wire Up AppModule</h3>
-        <p>Import <code>NestCrudModule</code>, <code>AuthModule</code>, and <code>NestFileModule</code>. Register interceptors, deploy.</p>
+        <p>Import <code>NestCrudModule</code>, <code>AuthModule</code>, <code>NestFileModule</code>, and <code>NestPaymentModule</code>. Register interceptors, deploy.</p>
       </div>
     </div>
 
@@ -721,6 +750,11 @@
         accessKeyId: process.env.<span class="typ">AWS_ACCESS_KEY_ID</span>,
         secretAccessKey: process.env.<span class="typ">AWS_SECRET_ACCESS_KEY</span>,
       },
+    }),
+    <span class="typ">NestPaymentModule</span>.<span class="fn">forRoot</span>({
+      provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
+      entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
+      webhookSecret: process.env.<span class="typ">WEBHOOK_SECRET</span>,
     }),
   ],
   providers: [
