@@ -28,6 +28,7 @@ import {
   NestCrudModule,
 } from '@nest-util/nest-crud';
 import { PaymentModule } from './payment/payment.module';
+import { NestFileModule } from '@nest-util/nest-file';
 
 @Module({
   imports: [
