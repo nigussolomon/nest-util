@@ -32,6 +32,7 @@ Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates
 | Tracking entity-level mutations | Built-in audit logging via `@Audit()` decorator |
 | Inconsistent API responses | Built-in response interceptors and transformers |
 | Manual Swagger documentation | Automatic OpenAPI documentation with proper decorators |
+| Integrating payment providers | `@nest-util/nest-payment` — Provider-agnostic checkout, subscriptions, refunds |
 
 ---
 
@@ -43,6 +44,7 @@ Nest-Util is composed of focused modules that integrate into the same NestJS app
 
 - `@nest-util/nest-crud`: provides reusable CRUD service/controller building blocks, audit logging, lifecycle hooks, cursor pagination, and findMine
 - `@nest-util/nest-auth`: handles JWT auth, refresh tokens, permissions, and API key authentication
+- `@nest-util/nest-payment`: provider-agnostic checkout sessions, subscriptions, refunds, webhook handling, reconciliation
 - `TypeORM + Database`: persistence layer used by all runtime modules
 
 ### Integration Flow
@@ -121,7 +123,7 @@ A dynamic and flexible authentication library:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-payment typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
@@ -314,6 +316,87 @@ import { ApiKeyGuard, JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-aut
 export class DataController {
   // API keys and JWT tokens work on the same endpoint
 }
+```
+
+---
+
+## Adding Payment Integration
+
+### Step 1: Implement a Payment Provider
+
+```typescript
+import { PaymentProvider, PaymentCheckoutResult } from '@nest-util/nest-payment';
+
+export class ChapaProvider implements PaymentProvider {
+  readonly name = 'chapa';
+  readonly supportsSubscriptions = false;
+  readonly supportsRefunds = false;
+
+  async createCheckout(input) {
+    // Call Chapa API — use callback_url, not webhooks
+    const response = await chapa.initialize({
+      amount: input.amount,
+      currency: input.currency,
+      callback_url: input.callbackUrl,
+      tx_ref: input.idempotencyKey,
+    });
+    return {
+      providerPaymentId: response.tx_ref,
+      checkoutUrl: response.checkout_url,
+      status: 'pending',
+    };
+  }
+
+  async getPaymentStatus(providerPaymentId) {
+    const result = await chapa.verify(providerPaymentId);
+    return { status: result.status === 'success' ? 'succeeded' : 'pending' };
+  }
+
+  async refund(providerPaymentId, amount) {
+    throw new Error('Chapa does not support refunds');
+  }
+}
+```
+
+### Step 2: Register NestPaymentModule
+
+```typescript
+import { NestPaymentModule } from '@nest-util/nest-payment';
+import { ChapaProvider } from './chapa.provider';
+
+@Module({
+  imports: [
+    NestPaymentModule.forRoot({
+      provider: new ChapaProvider(),
+      entities: [Payment, Subscription, Refund],
+      webhookSecret: process.env.WEBHOOK_SECRET,
+      webhookTtlMs: 300_000, // 5 min dedup window
+      controller: {
+        path: 'payments',
+        permissions: { checkout: 'payments.create', refund: 'payments.refund' },
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Step 3: Create Checkout & Handle Callbacks
+
+```typescript
+// Server: create checkout session
+const result = await paymentService.createCheckout({
+  amount: 100,
+  currency: 'ETB',
+  userId: user.id,
+});
+return { checkoutUrl: result.checkoutUrl };
+
+// Callback endpoint (provider redirects user back)
+app.use('/payments/callback', async (req, res) => {
+  await paymentService.handleCallback({ providerPaymentId: req.query.tx_ref });
+  res.redirect('/success');
+});
 ```
 
 ---
@@ -528,6 +611,8 @@ refreshToken?: string;
 - **demo-api setup**: [docs/demo-api/README.md](./docs/demo-api/README.md)
 - **nest-auth guide**: [docs/nest-auth/README.md](./docs/nest-auth/README.md)
 - **nest-crud guide**: [docs/nest-crud/README.md](./docs/nest-crud/README.md)
+- **nest-file guide**: [docs/nest-file/README.md](./docs/nest-file/README.md)
+- **nest-payment guide**: [docs/nest-payment/README.md](./docs/nest-payment/README.md)
 - **Migration Guide**: [MIGRATION-GUIDE.md](./MIGRATION-GUIDE.md)
 
 ---

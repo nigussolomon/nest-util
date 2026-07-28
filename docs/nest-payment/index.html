@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@nest-util/nest-payment — Provider-Agnostic Payments for NestJS</title>
+  <meta name="description" content="Provider-agnostic payment library for NestJS with checkout sessions, subscriptions, refunds, webhook handling, reconciliation, and idempotency.">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════════════════════ -->
+<nav>
+  <div class="container">
+    <a href="../index.html" class="nav-brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E0234E"/>
+        <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      Nest-Util
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#module">Module</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#provider">Provider</a></li>
+      <li><a href="#webhooks">Webhooks</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="#quickstart" class="nav-cta">Get Started</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     DOC LAYOUT: SIDEBAR + CONTENT
+     ═══════════════════════════════════════════════════════ -->
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <ul>
+      <li class="sidebar-section">Getting Started</li>
+      <li><a href="#quickstart">Install</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li class="sidebar-section">Core</li>
+      <li><a href="#module">Module</a></li>
+      <li><a href="#provider">Provider Interface</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li class="sidebar-section">Features</li>
+      <li><a href="#webhooks">Webhooks & Callbacks</a></li>
+      <li><a href="#reconciliation">Reconciliation</a></li>
+      <li><a href="#idempotency">Idempotency</a></li>
+      <li><a href="#status-transitions">Status Transitions</a></li>
+      <li class="sidebar-section">Testing</li>
+      <li><a href="#testing">Testing</a></li>
+    </ul>
+  </aside>
+
+  <main class="doc-content">
+
+    <!-- ═══════════════════════════════════════════════════
+         HERO
+         ═══════════════════════════════════════════════════ -->
+    <h1 id="features">nest-payment</h1>
+    <p class="subtitle">Provider-agnostic payment library with checkout sessions, subscriptions, refunds, webhook handling, reconciliation, and idempotency.</p>
+
+    <div class="features-grid" style="margin-top:32px">
+      <div class="feature-card">
+        <div class="feature-icon green">&#9889;</div>
+        <h3>Provider-Agnostic</h3>
+        <p>No SDK bundled. Implement the <code>PaymentProvider</code> interface for any gateway — Chapa, Stripe, PayPal, etc.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">&#128279;</div>
+        <h3>Webhook-First</h3>
+        <p>Webhook/callback is the source of truth for payment status. Not the API response.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon amber">&#128260;</div>
+        <h3>Reconciliation</h3>
+        <p>Stale pending/processing payments checked against provider automatically. Configurable interval.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">&#128274;</div>
+        <h3>Idempotency</h3>
+        <p>DB constraints on provider IDs, idempotency keys, and forward-only status transitions.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon red">&#128176;</div>
+        <h3>Checkout, Subscriptions, Refunds</h3>
+        <p>Full payment lifecycle. Provider reports what's supported — library adapts.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         INSTALL
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="quickstart">Install</h2>
+    <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
+    <div class="install-box">
+      <code>pnpm add @nest-util/nest-payment</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-payment').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <p>Peer dependencies:</p>
+    <div class="install-box">
+      <code>pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator class-transformer typeorm</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator class-transformer typeorm').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <p>Optional — for <code>@CurrentUser()</code> integration:</p>
+    <div class="install-box">
+      <code>pnpm add @nest-util/nest-auth</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         MODULE
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="module">Module</h2>
+    <p>Register <code>NestPaymentModule.forRoot()</code> with your provider and entities.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">app.module.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">NestPaymentModule</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-payment'</span>;
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">NestPaymentModule</span>.<span class="fn">forRoot</span>({
+      provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
+      entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
+      webhookSecret: process.env.<span class="typ">WEBHOOK_SECRET</span>,
+      webhookTtlMs: <span class="num">300_000</span>,
+      controller: {
+        path: <span class="str">'payments'</span>,
+        permissions: {
+          checkout: <span class="str">'payments.create'</span>,
+          refund: <span class="str">'payments.refund'</span>,
+        },
+      },
+    }),
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+    </div>
+
+    <h3>Async Configuration</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">app.module.ts (async)</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">NestPaymentModule</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-payment'</span>;
+<span class="kw">import</span> { <span class="typ">ConfigService</span> } <span class="kw">from</span> <span class="str">'@nestjs/config'</span>;
+
+<span class="typ">NestPaymentModule</span>.<span class="fn">forRootAsync</span>({
+  useFactory: (config: <span class="typ">ConfigService</span>) =&gt; ({
+    provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
+    entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
+    webhookSecret: config.<span class="fn">getOrThrow</span>(<span class="str">'WEBHOOK_SECRET'</span>),
+  }),
+  inject: [<span class="typ">ConfigService</span>],
+})</pre>
+    </div>
+
+    <h3>Configuration Options</h3>
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>provider</code></td>
+            <td><code>PaymentProvider</code></td>
+            <td>Your payment gateway implementation</td>
+          </tr>
+          <tr>
+            <td><code>entities</code></td>
+            <td><code>Entity[]</code></td>
+            <td>TypeORM entities for Payment, Subscription, Refund</td>
+          </tr>
+          <tr>
+            <td><code>webhookSecret</code></td>
+            <td><code>string</code></td>
+            <td>Secret for verifying webhook signatures</td>
+          </tr>
+          <tr>
+            <td><code>webhookTtlMs</code></td>
+            <td><code>number</code></td>
+            <td>In-memory dedup window (default: <code>300_000</code>)</td>
+          </tr>
+          <tr>
+            <td><code>enableReconciliation</code></td>
+            <td><code>boolean</code></td>
+            <td>Enable stale payment reconciliation (default: <code>true</code>)</td>
+          </tr>
+          <tr>
+            <td><code>reconciliationIntervalMs</code></td>
+            <td><code>number</code></td>
+            <td>Reconciliation check interval (default: <code>600_000</code>)</td>
+          </tr>
+          <tr>
+            <td><code>controller.path</code></td>
+            <td><code>string</code></td>
+            <td>Controller route path (default: <code>'payments'</code>)</td>
+          </tr>
+          <tr>
+            <td><code>controller.permissions</code></td>
+            <td><code>object</code></td>
+            <td>RBAC permissions for checkout, refund, subscription</td>
+          </tr>
+          <tr>
+            <td><code>controller.enable</code></td>
+            <td><code>boolean</code></td>
+            <td>Auto-register controller (default: <code>true</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         PROVIDER INTERFACE
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="provider">Provider Interface</h2>
+    <p>Implement <code>PaymentProvider</code> for your gateway. The library calls your methods — no SDK is bundled.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">chapa.provider.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">PaymentProvider</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-payment'</span>;
+
+<span class="kw">export class</span> <span class="typ">ChapaProvider</span> <span class="kw">implements</span> <span class="typ">PaymentProvider</span> {
+  <span class="kw">readonly</span> name = <span class="str">'chapa'</span>;
+  <span class="kw">readonly</span> supportsSubscriptions = <span class="num">false</span>;
+  <span class="kw">readonly</span> supportsRefunds = <span class="num">false</span>;
+
+  <span class="kw">async</span> <span class="fn">createCheckout</span>(input) {
+    <span class="kw">const</span> response = <span class="kw">await</span> chapa.<span class="fn">initialize</span>({
+      amount: input.amount,
+      currency: input.currency,
+      callback_url: input.callbackUrl,
+      tx_ref: input.idempotencyKey,
+    });
+    <span class="kw">return</span> {
+      providerPaymentId: response.tx_ref,
+      checkoutUrl: response.checkout_url,
+      status: <span class="str">'pending'</span>,
+    };
+  }
+
+  <span class="kw">async</span> <span class="fn">getPaymentStatus</span>(providerPaymentId) {
+    <span class="kw">const</span> result = <span class="kw">await</span> chapa.<span class="fn">verify</span>(providerPaymentId);
+    <span class="kw">return</span> {
+      status: result.status === <span class="str">'success'</span> ? <span class="str">'succeeded'</span> : <span class="str">'pending'</span>,
+    };
+  }
+
+  <span class="kw">async</span> <span class="fn">refund</span>(providerPaymentId, amount) {
+    <span class="kw">throw new</span> <span class="typ">Error</span>(<span class="str">'Chapa does not support refunds'</span>);
+  }
+}</pre>
+    </div>
+
+    <h3>Interface Methods</h3>
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Required</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>createCheckout(input)</code></td>
+            <td>Yes</td>
+            <td>Create a checkout session and return a checkout URL</td>
+          </tr>
+          <tr>
+            <td><code>getPaymentStatus(id)</code></td>
+            <td>Yes</td>
+            <td>Check current payment status from the provider</td>
+          </tr>
+          <tr>
+            <td><code>refund(id, amount)</code></td>
+            <td>If <code>supportsRefunds</code></td>
+            <td>Issue a full or partial refund</td>
+          </tr>
+          <tr>
+            <td><code>createSubscription(input)</code></td>
+            <td>If <code>supportsSubscriptions</code></td>
+            <td>Create a recurring subscription</td>
+          </tr>
+          <tr>
+            <td><code>cancelSubscription(id)</code></td>
+            <td>If <code>supportsSubscriptions</code></td>
+            <td>Cancel an active subscription</td>
+          </tr>
+          <tr>
+            <td><code>getSubscriptionStatus(id)</code></td>
+            <td>If <code>supportsSubscriptions</code></td>
+            <td>Check current subscription status</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ENDPOINTS
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="endpoints">Endpoints</h2>
+    <p>The controller factory produces a complete REST API.</p>
+
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Description</th>
+            <th>Auth</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/checkout</code></td>
+            <td>Create a checkout session</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/callback</code></td>
+            <td>Handle provider callback/redirect</td>
+            <td>Public</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/webhook</code></td>
+            <td>Handle provider webhook</td>
+            <td>Public (verified)</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/payments/:id</code></td>
+            <td>Get payment status</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/:id/refund</code></td>
+            <td>Issue a refund</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/payments/subscriptions</code></td>
+            <td>Create a subscription</td>
+            <td>Required</td>
+          </tr>
+          <tr>
+            <td><span class="method patch">PATCH</span></td>
+            <td><code>/payments/subscriptions/:id</code></td>
+            <td>Cancel a subscription</td>
+            <td>Required</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         WEBHOOKS & CALLBACKS
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="webhooks">Webhooks & Callbacks</h2>
+    <p>The webhook/callback is the <strong>source of truth</strong> for payment status — not the API response.</p>
+
+    <h3>Callback Flow (Chapa-style)</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">callback-handler.ts</div>
+      </div>
+      <pre><span class="cm">// Provider redirects user back to your app</span>
+app.<span class="fn">use</span>(<span class="str">'/payments/callback'</span>, <span class="kw">async</span> (req, res) =&gt; {
+  <span class="kw">await</span> paymentService.<span class="fn">handleCallback</span>({
+    providerPaymentId: req.query.tx_ref,
+  });
+  res.<span class="fn">redirect</span>(<span class="str">'/success'</span>);
+});</pre>
+    </div>
+
+    <h3>Webhook Flow (Stripe-style)</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">webhook-handler.ts</div>
+      </div>
+      <pre><span class="cm">// Provider sends signed webhook to your server</span>
+app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <span class="kw">async</span> (req, res) =&gt; {
+  <span class="kw">const</span> sig = req.headers[<span class="str">'stripe-signature'</span>];
+  <span class="kw">const</span> event = stripe.webhooks.<span class="fn">constructEvent</span>(
+    req.body, sig, secret
+  );
+  <span class="kw">await</span> paymentService.<span class="fn">handleWebhook</span>({
+    providerPaymentId: event.data.object.id,
+  });
+  res.<span class="fn">sendStatus</span>(<span class="num">200</span>);
+});</pre>
+    </div>
+
+    <h3>In-Memory Deduplication</h3>
+    <p>Webhook events are deduplicated in-memory within the configurable TTL window (default 5 min). This prevents duplicate processing from retried webhooks.</p>
+
+    <!-- ═══════════════════════════════════════════════════
+         RECONCILIATION
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="reconciliation">Reconciliation</h2>
+    <p>Stale payments in <code>pending</code> or <code>processing</code> status are automatically checked against the provider via <code>getPaymentStatus()</code>.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">reconciliation config</div>
+      </div>
+      <pre>NestPaymentModule.<span class="fn">forRoot</span>({
+  <span class="cm">// ...</span>
+  enableReconciliation: <span class="num">true</span>,
+  reconciliationIntervalMs: <span class="num">600_000</span>, <span class="cm">// every 10 min</span>
+})</pre>
+    </div>
+
+    <p>When a stale payment is found, the library calls <code>provider.getPaymentStatus()</code> and updates the entity if the status has changed.</p>
+
+    <!-- ═══════════════════════════════════════════════════
+         IDEMPOTENCY
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="idempotency">Idempotency</h2>
+    <p>Three layers prevent duplicate charges and inconsistent state:</p>
+    <ul>
+      <li><strong>DB constraints</strong> — unique index on <code>(provider, providerPaymentId)</code></li>
+      <li><strong>Idempotency key</strong> — <code>idempotencyKey</code> field stored with each payment</li>
+      <li><strong>Status guards</strong> — forward-only transitions (backward transitions silently ignored)</li>
+    </ul>
+
+    <!-- ═══════════════════════════════════════════════════
+         STATUS TRANSITIONS
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="status-transitions">Status Transitions</h2>
+    <p>Status transitions are validated in the service layer. Backward transitions are ignored (idempotent).</p>
+
+    <div class="hooks-flow">
+      <div class="hook-item">
+        <div class="hook-name">pending</div>
+        <div class="hook-timing">initial</div>
+        <div class="hook-arrow">&rarr; processing</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">processing</div>
+        <div class="hook-timing">checkout sent</div>
+        <div class="hook-arrow">&rarr; succeeded | failed</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">succeeded</div>
+        <div class="hook-timing">payment confirmed</div>
+        <div class="hook-arrow">&rarr; refunded</div>
+      </div>
+    </div>
+
+    <div class="hooks-flow" style="margin-top:16px">
+      <div class="hook-item">
+        <div class="hook-name">active</div>
+        <div class="hook-timing">subscription</div>
+        <div class="hook-arrow">&rarr; canceled | past_due</div>
+      </div>
+      <div class="hook-item">
+        <div class="hook-name">trialing</div>
+        <div class="hook-timing">trial period</div>
+        <div class="hook-arrow">&rarr; active | past_due</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         TESTING
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="testing">Testing</h2>
+    <p>Use the testing entry point for mock factories and reusable test suites.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">payment.service.spec.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">Test</span>, <span class="typ">TestingModule</span> } <span class="kw">from</span> <span class="str">'@nestjs/testing'</span>;
+<span class="kw">import</span> {
+  <span class="typ">PaymentService</span>,
+  <span class="fn">createMockPaymentProvider</span>,
+  <span class="fn">createMockRepository</span>,
+} <span class="kw">from</span> <span class="str">'@nest-util/nest-payment/testing'</span>;
+
+<span class="kw">const</span> module: <span class="typ">TestingModule</span> = <span class="kw">await</span> <span class="typ">Test</span>.<span class="fn">createTestingModule</span>({
+  providers: [
+    <span class="typ">PaymentService</span>,
+    { provide: <span class="typ">PAYMENT_OPTIONS</span>, useValue: { provider: <span class="fn">createMockPaymentProvider</span>() } },
+    { provide: <span class="fn">getRepositoryToken</span>(<span class="typ">PaymentEntity</span>), useValue: <span class="fn">createMockRepository</span>() },
+  ],
+}).<span class="fn">compile</span>();</pre>
+    </div>
+
+    <h3>Mock Utilities</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Utility</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>createMockPaymentProvider()</code></td><td>Mock provider with all methods stubbed</td></tr>
+        <tr><td><code>createMockPaymentEntity()</code></td><td>Default mock payment entity with all fields</td></tr>
+        <tr><td><code>createMockSubscriptionEntity()</code></td><td>Default mock subscription entity</td></tr>
+        <tr><td><code>createMockRefundEntity()</code></td><td>Default mock refund entity</td></tr>
+        <tr><td><code>createMockRepository()</code></td><td>Mock TypeORM repository with default implementations</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <p style="margin-bottom:12px">
+      <a href="../index.html">Back to Nest-Util</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a>
+    </p>
+    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+  </div>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateToggleIcon(next);
+}
+function updateToggleIcon(theme) {
+  document.querySelector('.icon-sun').style.display = theme === 'light' ? 'none' : 'block';
+  document.querySelector('.icon-moon').style.display = theme === 'light' ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateToggleIcon(saved);
+  }
+})();
+</script>
+
+</body>
+</html>
