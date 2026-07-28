@@ -14,18 +14,6 @@ export interface NestFileOptions {
     pathPrefix?: string;
     presignedUrlExpiresIn?: number;
   };
-  imageProcessing?: {
-    enabled?: boolean;
-    maxWidth?: number;
-    maxHeight?: number;
-    quality?: number;
-    format?: 'webp' | 'avif' | 'jpeg' | 'png';
-    stripExif?: boolean;
-  };
-  thumbnails?: {
-    enabled?: boolean;
-    sizes: ThumbnailSize[];
-  };
   controller?: {
     enable?: boolean;
     path?: string;
@@ -38,12 +26,6 @@ export interface NestFileOptions {
   };
 }
 
-export interface ThumbnailSize {
-  width: number;
-  height: number;
-  suffix: string;
-}
-
 export interface PresignedUploadResult {
   uploadUrl: string;
   key: string;
@@ -54,17 +36,4 @@ export interface PresignedDownloadResult {
   downloadUrl: string;
 }
 
-export interface ImageProcessResult {
-  buffer: Buffer;
-  width: number;
-  height: number;
-  format: string;
-  size: number;
-}
 
-export interface ThumbnailResult {
-  suffix: string;
-  buffer: Buffer;
-  width: number;
-  height: number;
-}

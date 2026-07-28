@@ -78,7 +78,6 @@ export function CreateAuthController(
       [key: string]: unknown;
     };
 
-  @ApiTags('Authentication')
   @Controller('auth')
   class AuthController {
     constructor(
@@ -86,6 +85,7 @@ export function CreateAuthController(
       @Inject(AUTH_OPTIONS) protected readonly options: AuthModuleOptions,
       @Optional() protected readonly apiKeyService?: ApiKeyService
     ) {}
+    @ApiTags('Authentication')
     @Post('register')
     @ApiOperation({ summary: 'Register a new user' })
     @ApiBody({ type: registerDto })
@@ -96,6 +96,7 @@ export function CreateAuthController(
       return await this.authService.register(data);
     }
 
+    @ApiTags('Authentication')
     @Post('login')
     @ApiOperation({ summary: 'Login user and get tokens' })
     @ApiBody({ type: loginDto })
@@ -108,6 +109,7 @@ export function CreateAuthController(
       return await this.authService.login(credentials);
     }
 
+    @ApiTags('Authentication')
     @Post('otp/request')
     @ApiOperation({ summary: 'Request one-time code for OTP login' })
     @ApiBody({ type: otpRequestDto })
@@ -118,6 +120,7 @@ export function CreateAuthController(
       return await this.authService.requestOtp(data);
     }
 
+    @ApiTags('Authentication')
     @Post('otp/login')
     @ApiOperation({ summary: 'Login using one-time code' })
     @ApiBody({ type: otpLoginDto })
@@ -131,6 +134,7 @@ export function CreateAuthController(
       return await this.authService.loginWithOtp(credentials);
     }
 
+    @ApiTags('Authentication')
     @Post('refresh')
     @ApiOperation({ summary: 'Refresh access token using refresh token' })
     @ApiBody({
@@ -153,6 +157,7 @@ export function CreateAuthController(
       return await this.authService.refresh(refreshToken);
     }
 
+    @ApiTags('Authentication')
     @UseGuards(JwtAuthGuard)
     @Get('me')
     @ApiBearerAuth()
@@ -163,6 +168,7 @@ export function CreateAuthController(
       return user;
     }
 
+    @ApiTags('Authentication')
     @UseGuards(JwtAuthGuard)
     @Post('update-password')
     @ApiBearerAuth()
@@ -194,6 +200,7 @@ export function CreateAuthController(
       return user;
     }
 
+    @ApiTags('Authentication')
     @Post('password-reset/request')
     @ApiOperation({ summary: 'Request password reset token' })
     @ApiBody({ type: passwordResetRequestDto })
@@ -213,6 +220,7 @@ export function CreateAuthController(
       return await this.authService.requestPasswordReset(data);
     }
 
+    @ApiTags('Authentication')
     @Post('password-reset/reset')
     @ApiOperation({ summary: 'Reset password using reset token' })
     @ApiBody({ type: passwordResetDto })
@@ -240,6 +248,7 @@ export function CreateAuthController(
       );
     }
 
+    @ApiTags('Permissions')
     @UseGuards(JwtAuthGuard)
     @Get('me/permissions')
     @ApiBearerAuth()
@@ -253,6 +262,7 @@ export function CreateAuthController(
       return resolvePermissions(user, this.options.rbac);
     }
 
+    @ApiTags('Authentication')
     @UseGuards(JwtAuthGuard)
     @Post('logout')
     @ApiBearerAuth()
@@ -263,6 +273,7 @@ export function CreateAuthController(
       return await this.authService.logout(user.id);
     }
 
+    @ApiTags('Permissions')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Get('permissions')
@@ -276,6 +287,7 @@ export function CreateAuthController(
       return resolvePermissionRegistry(this.options.permissionRegistry);
     }
 
+    @ApiTags('Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('roles')
@@ -289,6 +301,7 @@ export function CreateAuthController(
       return await this.authService.createRole(data);
     }
 
+    @ApiTags('Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Get('roles')
@@ -299,6 +312,7 @@ export function CreateAuthController(
       return await this.authService.getAllRoles();
     }
 
+    @ApiTags('User Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('users/:userId/roles/:roleId')
@@ -316,6 +330,7 @@ export function CreateAuthController(
       return await this.authService.assignRoleToUser(userId, roleId);
     }
 
+    @ApiTags('Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('roles/:roleId/permissions')
@@ -338,6 +353,7 @@ export function CreateAuthController(
       );
     }
 
+    @ApiTags('Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Delete('roles/:roleId/permissions')
@@ -360,6 +376,7 @@ export function CreateAuthController(
       );
     }
 
+    @ApiTags('User Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Delete('users/:userId/roles/:roleId')
@@ -377,6 +394,7 @@ export function CreateAuthController(
       return await this.authService.removeRoleFromUser(userId, roleId);
     }
 
+    @ApiTags('User Roles')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Get('users/:userId/roles')
@@ -393,6 +411,7 @@ export function CreateAuthController(
 
     // --- API Key Management ---
 
+    @ApiTags('API Keys')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('api-keys')
@@ -409,6 +428,7 @@ export function CreateAuthController(
       return await this.apiKeyService!.create(user.id as number, data);
     }
 
+    @ApiTags('API Keys')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Get('api-keys')
@@ -420,6 +440,7 @@ export function CreateAuthController(
       return await this.apiKeyService!.list(user.id as number);
     }
 
+    @ApiTags('API Keys')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Delete('api-keys/:id')
@@ -435,6 +456,7 @@ export function CreateAuthController(
       return await this.apiKeyService!.revoke(user.id as number, id);
     }
 
+    @ApiTags('API Keys')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Post('api-keys/:id/roles/:roleId')
@@ -452,6 +474,7 @@ export function CreateAuthController(
       return await this.apiKeyService!.assignRole(user.id as number, id, roleId);
     }
 
+    @ApiTags('API Keys')
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(ADMIN_ROUTE_PERMISSION)
     @Delete('api-keys/:id/roles/:roleId')

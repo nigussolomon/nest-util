@@ -3,21 +3,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { FileService } from './file.service';
 import { S3Service } from './s3.service';
-import { ImageProcessorService } from './image-processor.service';
-import { ThumbnailService } from './thumbnail.service';
 import { FileEntity } from '../entities/file.entity';
 import { NEST_FILE_OPTIONS } from '../constants';
-
-global.fetch = jest.fn().mockResolvedValue({
-  arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(0)),
-});
 
 describe('FileService', () => {
   let service: FileService;
   let repository: any;
   let s3Service: any;
-  let imageProcessor: any;
-  let thumbnailService: any;
 
   const mockFileEntity = (): FileEntity => {
     const entity = new FileEntity();
@@ -46,13 +38,6 @@ describe('FileService', () => {
     upload: {
       pathPrefix: 'uploads',
       allowedMimeTypes: ['image/*', 'application/pdf'],
-    },
-    imageProcessing: {
-      enabled: true,
-    },
-    thumbnails: {
-      enabled: true,
-      sizes: [{ width: 150, height: 150, suffix: 'thumb' }],
     },
   };
 
@@ -87,36 +72,11 @@ describe('FileService', () => {
       getBucket: jest.fn().mockReturnValue('test-bucket'),
     };
 
-    imageProcessor = {
-      processImage: jest.fn().mockResolvedValue({
-        buffer: Buffer.from('processed'),
-        width: 800,
-        height: 600,
-        format: 'webp',
-        size: 512,
-      }),
-      isProcessingEnabled: jest.fn().mockReturnValue(true),
-    };
-
-    thumbnailService = {
-      generateThumbnails: jest.fn().mockResolvedValue([
-        {
-          suffix: 'thumb',
-          buffer: Buffer.from('thumbnail'),
-          width: 150,
-          height: 150,
-        },
-      ]),
-      isThumbnailEnabled: jest.fn().mockReturnValue(true),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FileService,
         { provide: getRepositoryToken(FileEntity), useValue: repository },
         { provide: S3Service, useValue: s3Service },
-        { provide: ImageProcessorService, useValue: imageProcessor },
-        { provide: ThumbnailService, useValue: thumbnailService },
         { provide: NEST_FILE_OPTIONS, useValue: mockOptions },
       ],
     }).compile();

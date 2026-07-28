@@ -1,9 +1,3 @@
-import { ThumbnailSize } from '../interfaces/nest-file-options.interface';
-
-export const DEFAULT_THUMBNAIL_SIZES: ThumbnailSize[] = [
-  { width: 150, height: 150, suffix: 'thumb' },
-];
-
 export const IMAGE_MIME_PREFIXES = ['image/'];
 
 export const isImageMime = (mimeType: string): boolean => {

@@ -200,11 +200,13 @@ export class ApiKeyService {
       permissions: role.permissions,
     }));
 
+    const rolesKey = this.options.rbac?.rolesKey ?? 'roles';
+
     const user: AuthUser = {
       id: matchedKey.userId,
-      roles: roleLikeObjects,
+      [rolesKey]: roleLikeObjects,
       permissions: resolvePermissions(
-        { id: matchedKey.userId, roles: roleLikeObjects } as AuthUser,
+        { id: matchedKey.userId, [rolesKey]: roleLikeObjects } as unknown as AuthUser,
         this.options.rbac
       ),
       apiKeyId: matchedKey.id,

@@ -2,8 +2,6 @@ export * from './lib/nest-file.module';
 export * from './lib/constants';
 export * from './lib/services/s3.service';
 export * from './lib/services/file.service';
-export * from './lib/services/image-processor.service';
-export * from './lib/services/thumbnail.service';
 export * from './lib/controllers/file.controller';
 export * from './lib/entities/file.entity';
 export * from './lib/dtos/request-upload.dto';

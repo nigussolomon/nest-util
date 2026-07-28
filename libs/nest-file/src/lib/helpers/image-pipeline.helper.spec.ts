@@ -1,7 +1,6 @@
 import {
   isImageMime,
   getMimeTypeExtension,
-  DEFAULT_THUMBNAIL_SIZES,
   IMAGE_MIME_PREFIXES,
 } from './image-pipeline.helper';
 
@@ -31,17 +30,6 @@ describe('image-pipeline.helper', () => {
 
     it('should return "bin" for unknown types', () => {
       expect(getMimeTypeExtension('unknown/type')).toBe('bin');
-    });
-  });
-
-  describe('DEFAULT_THUMBNAIL_SIZES', () => {
-    it('should have default thumb size', () => {
-      expect(DEFAULT_THUMBNAIL_SIZES).toHaveLength(1);
-      expect(DEFAULT_THUMBNAIL_SIZES[0]).toEqual({
-        width: 150,
-        height: 150,
-        suffix: 'thumb',
-      });
     });
   });
 

@@ -2,8 +2,6 @@ import type { Repository } from 'typeorm';
 import { FileEntity } from '../entities/file.entity';
 import { S3Service } from '../services/s3.service';
 import { FileService } from '../services/file.service';
-import { ImageProcessorService } from '../services/image-processor.service';
-import { ThumbnailService } from '../services/thumbnail.service';
 import type { NestFileOptions } from '../interfaces/nest-file-options.interface';
 
 export interface FileServiceTestConfig {
@@ -41,8 +39,6 @@ export interface FileTestContext {
   service: FileService;
   repository: jest.Mocked<Repository<FileEntity>>;
   s3Service: jest.Mocked<S3Service>;
-  imageProcessor: jest.Mocked<ImageProcessorService>;
-  thumbnailService: jest.Mocked<ThumbnailService>;
 }
 
 export function createMockFileEntity(overrides?: Partial<FileEntity>): FileEntity {
@@ -55,11 +51,6 @@ export function createMockFileEntity(overrides?: Partial<FileEntity>): FileEntit
   entity.bucket = 'test-bucket';
   entity.key = 'uploads/1234567890-test-file.jpg';
   entity.url = 'https://test-bucket.s3.amazonaws.com/uploads/1234567890-test-file.jpg';
-  entity.thumbnailUrl = undefined;
-  entity.width = undefined;
-  entity.height = undefined;
-  entity.compressedSize = undefined;
-  entity.compressionRatio = undefined;
   entity.userId = 'user-1';
   entity.metadata = undefined;
   entity.createdAt = new Date();
@@ -90,33 +81,6 @@ export function createMockS3Service(): jest.Mocked<S3Service> {
     getClient: jest.fn(),
     getBucket: jest.fn().mockReturnValue('test-bucket'),
   } as unknown as jest.Mocked<S3Service>;
-}
-
-export function createMockImageProcessor(): jest.Mocked<ImageProcessorService> {
-  return {
-    processImage: jest.fn().mockResolvedValue({
-      buffer: Buffer.from('processed'),
-      width: 800,
-      height: 600,
-      format: 'webp',
-      size: 512,
-    }),
-    isProcessingEnabled: jest.fn().mockReturnValue(true),
-  } as unknown as jest.Mocked<ImageProcessorService>;
-}
-
-export function createMockThumbnailService(): jest.Mocked<ThumbnailService> {
-  return {
-    generateThumbnails: jest.fn().mockResolvedValue([
-      {
-        suffix: 'thumb',
-        buffer: Buffer.from('thumbnail'),
-        width: 150,
-        height: 150,
-      },
-    ]),
-    isThumbnailEnabled: jest.fn().mockReturnValue(true),
-  } as unknown as jest.Mocked<ThumbnailService>;
 }
 
 export function createMockRepository(): jest.Mocked<Repository<FileEntity>> {
