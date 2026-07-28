@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   Delete,
   ParseUUIDPipe,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -83,7 +84,7 @@ export function CreateAuthController(
     constructor(
       protected readonly authService: AuthService,
       @Inject(AUTH_OPTIONS) protected readonly options: AuthModuleOptions,
-      protected readonly apiKeyService?: ApiKeyService
+      @Optional() protected readonly apiKeyService?: ApiKeyService
     ) {}
     @Post('register')
     @ApiOperation({ summary: 'Register a new user' })
