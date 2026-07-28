@@ -15,6 +15,7 @@ async function bootstrap() {
     })
   );
   app.setGlobalPrefix(globalPrefix);
+  app.enableCors();
 
   const config = new DocumentBuilder()
     .setTitle('Demo API')

@@ -4,10 +4,12 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
   Index,
 } from 'typeorm';
 
 @Entity('payments')
+@Unique('UQ_payments_provider_payment', ['provider', 'providerPaymentId'])
 export class PaymentEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -17,9 +19,8 @@ export class PaymentEntity {
   provider!: string;
 
   /** Provider's unique payment/transaction reference */
-  @Column()
-  @Index('IDX_payments_provider_payment_id', { unique: true })
-  providerPaymentId!: string;
+  @Column({ nullable: true })
+  providerPaymentId?: string;
 
   /** Consumer's internal order ID (optional) */
   @Column({ nullable: true })

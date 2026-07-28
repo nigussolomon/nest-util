@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nest-util demo-api Test Client</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
+h1 { color: #58a6ff; margin-bottom: 20px; font-size: 20px; }
+h2 { color: #58a6ff; font-size: 14px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
+h3 { font-size: 13px; margin-bottom: 6px; color: #8b949e; }
+.layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; min-height: calc(100vh - 80px); }
+.sidebar { background: #161b22; border-radius: 8px; padding: 12px; border: 1px solid #30363d; }
+.sidebar button { display: block; width: 100%; text-align: left; padding: 8px 10px; margin-bottom: 2px; background: none; border: none; color: #c9d1d9; cursor: pointer; border-radius: 4px; font-size: 13px; }
+.sidebar button:hover { background: #21262d; color: #58a6ff; }
+.sidebar button.active { background: #1f6feb33; color: #58a6ff; border-left: 2px solid #58a6ff; }
+.sidebar .sep { height: 1px; background: #30363d; margin: 8px 0; }
+.main { background: #161b22; border-radius: 8px; padding: 16px; border: 1px solid #30363d; overflow-x: auto; }
+.section { display: none; }
+.section.active { display: block; }
+.form-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: flex-end; }
+.form-row label { font-size: 11px; color: #8b949e; display: flex; flex-direction: column; gap: 2px; }
+.form-row input, .form-row select { padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 13px; min-width: 100px; }
+.form-row input:focus { outline: none; border-color: #58a6ff; }
+.form-row button { padding: 6px 14px; background: #1f6feb; border: none; border-radius: 4px; color: #fff; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.form-row button:hover { background: #388bfd; }
+.form-row button.danger { background: #da3633; }
+.form-row button.danger:hover { background: #f85149; }
+.form-row button.secondary { background: #21262d; border: 1px solid #30363d; }
+.form-row button.secondary:hover { background: #30363d; }
+.response { margin-top: 12px; }
+.response pre { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 12px; font-size: 12px; overflow-x: auto; max-height: 400px; white-space: pre-wrap; word-break: break-all; }
+.response .meta { display: flex; gap: 12px; margin-bottom: 4px; font-size: 11px; }
+.response .meta .status { font-weight: 600; }
+.response .meta .status.ok { color: #3fb950; }
+.response .meta .status.err { color: #f85149; }
+.token-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; font-size: 12px; }
+.token-bar .label { color: #8b949e; white-space: nowrap; }
+.token-bar .value { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7ee787; }
+.token-bar button { padding: 4px 10px; font-size: 11px; }
+.toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; border-radius: 6px; font-size: 13px; z-index: 100; opacity: 0; transition: opacity .3s; }
+.toast.show { opacity: 1; }
+.toast.ok { background: #1f6feb; color: #fff; }
+.toast.err { background: #da3633; color: #fff; }
+.url-prefix { margin-bottom: 12px; }
+.url-prefix input { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; padding: 4px 8px; font-size: 12px; width: 100%; }
+</style>
+</head>
+<body>
+
+<h1>🧪 nest-util demo-api Test Client</h1>
+
+<div class="token-bar">
+  <span class="label">Access:</span>
+  <span class="value" id="jwtDisplay" style="min-width:200px" title="Click to copy">&lt;not logged in&gt;</span>
+  <span class="label" style="margin-left:12px">Refresh:</span>
+  <span class="value" id="refreshDisplay" style="min-width:120px">&lt;none&gt;</span>
+  <button class="secondary" onclick="refreshToken()" id="refreshBtn" style="display:none">Refresh</button>
+  <button class="secondary" onclick="clearToken()">Clear</button>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <h2>Resources</h2>
+    <button class="active" onclick="showSection('auth')">🔐 Auth</button>
+    <button onclick="showSection('users')">👤 Users</button>
+    <button onclick="showSection('posts')">📝 Posts</button>
+    <button onclick="showSection('comments')">💬 Comments</button>
+    <button onclick="showSection('apikeys')">🔑 API Keys</button>
+    <div class="sep"></div>
+    <h2>Storage</h2>
+    <button onclick="showSection('files')">📁 Files</button>
+    <div class="sep"></div>
+    <h2>Payments</h2>
+    <button onclick="showSection('payments')">💳 Checkout / List</button>
+    <button onclick="showSection('subscriptions')">🔄 Subscriptions</button>
+    <button onclick="showSection('reconcile')">🔁 Reconciliation</button>
+  </div>
+
+  <div class="main">
+    <div class="url-prefix">
+      <input id="baseUrl" value="http://localhost:3000/api" placeholder="API base URL">
+    </div>
+
+    <!-- ─── AUTH ─── -->
+    <div id="section-auth" class="section active">
+      <h2>Auth</h2>
+
+      <h3>Register</h3>
+      <div class="form-row">
+        <label>Email <input id="regEmail" value="test-${Date.now()}@example.com"></label>
+        <label>Password <input id="regPass" value="password123"></label>
+        <label>Name <input id="regName" value="Test User"></label>
+        <button onclick="register()">Register</button>
+      </div>
+
+      <h3>Login</h3>
+      <div class="form-row">
+        <label>Email <input id="loginEmail" value="test@example.com"></label>
+        <label>Password <input id="loginPass" value="password123"></label>
+        <button onclick="login()">Login</button>
+      </div>
+
+      <h3>Get my profile</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/auth/me')">GET /auth/me</button>
+      </div>
+
+      <h3>Get my permissions</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/auth/me/permissions')">GET /auth/me/permissions</button>
+      </div>
+
+      <h3>Admin — All permissions / roles</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/auth/permissions')">GET /auth/permissions</button>
+        <button onclick="api('GET','/auth/roles')">GET /auth/roles</button>
+      </div>
+    </div>
+
+    <!-- ─── USERS ─── -->
+    <div id="section-users" class="section">
+      <h2>Users</h2>
+
+      <h3>Create user</h3>
+      <div class="form-row">
+        <label>Email <input id="userEmail" value="newuser@example.com"></label>
+        <label>Name <input id="userName" value="New User"></label>
+        <button onclick="createUser()">POST /users</button>
+      </div>
+
+      <h3>List / Get</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/users')">GET /users</button>
+        <label>ID <input id="userId" placeholder="user id" style="width:80px"></label>
+        <button onclick="api('GET','/users/'+get('userId'))">GET /users/:id</button>
+        <button onclick="api('GET','/users/me/rbac-example')">GET /users/me/rbac-example</button>
+      </div>
+
+      <h3>Delete</h3>
+      <div class="form-row">
+        <label>ID <input id="delUserId" placeholder="user id" style="width:80px"></label>
+        <button class="danger" onclick="api('DELETE','/users/'+get('delUserId'))">DELETE /users/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── POSTS ─── -->
+    <div id="section-posts" class="section">
+      <h2>Posts</h2>
+
+      <h3>Create post</h3>
+      <div class="form-row">
+        <label>Title <input id="postTitle" value="My Post"></label>
+        <label>Content <input id="postContent" value="Hello world" style="min-width:200px"></label>
+        <button onclick="createPost()">POST /post</button>
+      </div>
+
+      <h3>List / Get</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/post')">GET /post</button>
+        <button onclick="api('GET','/post/mine')">GET /post/mine</button>
+        <label>ID <input id="postId" placeholder="post id" style="width:80px"></label>
+        <button onclick="api('GET','/post/'+get('postId'))">GET /post/:id</button>
+      </div>
+
+      <h3>Update / Delete</h3>
+      <div class="form-row">
+        <label>ID <input id="updPostId" placeholder="post id" style="width:80px"></label>
+        <label>Title <input id="updPostTitle" placeholder="new title"></label>
+        <button onclick="api('PATCH','/post/'+get('updPostId'),{title:get('updPostTitle')})">PATCH /post/:id</button>
+        <button class="danger" onclick="api('DELETE','/post/'+get('updPostId'))">DELETE /post/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── COMMENTS ─── -->
+    <div id="section-comments" class="section">
+      <h2>Comments (public — no auth required)</h2>
+
+      <h3>Create comment</h3>
+      <div class="form-row">
+        <label>Text <input id="commentText" value="Nice post!"></label>
+        <label>User ID <input id="commentUserId" placeholder="user id" style="width:70px"></label>
+        <button onclick="createComment()">POST /comment</button>
+      </div>
+
+      <h3>List / Get</h3>
+      <div class="form-row">
+        <button onclick="apiNoAuth('GET','/comment')">GET /comment</button>
+        <label>ID <input id="commentId" placeholder="id" style="width:70px"></label>
+        <button onclick="apiNoAuth('GET','/comment/'+get('commentId'))">GET /comment/:id</button>
+      </div>
+
+      <h3>Update / Delete</h3>
+      <div class="form-row">
+        <label>ID <input id="updCId" placeholder="id" style="width:70px"></label>
+        <label>Text <input id="updCText" placeholder="new text"></label>
+        <button onclick="apiNoAuth('PATCH','/comment/'+get('updCId'),{text:get('updCText')})">PATCH /comment/:id</button>
+        <button class="danger" onclick="apiNoAuth('DELETE','/comment/'+get('updCId'))">DELETE /comment/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── API KEYS ─── -->
+    <div id="section-apikeys" class="section">
+      <h2>API Keys</h2>
+      <p style="font-size:12px;color:#8b949e;margin-bottom:8px">Requires <code>admin.access</code> permission.</p>
+
+      <h3>Create</h3>
+      <div class="form-row">
+        <label>Name <input id="akName" value="test-key" style="width:200px"></label>
+        <label>Role IDs (comma) <input id="akRoles" placeholder="1,2" style="width:140px"></label>
+        <label>Expires <input id="akExpires" placeholder="2027-01-01T00:00:00.000Z" style="width:200px"></label>
+        <button onclick="createApiKey()">POST /auth/api-keys</button>
+      </div>
+      <div style="font-size:11px;color:#8b949e;margin:-4px 0 10px">API key value is shown <strong>only once</strong> on creation.</div>
+
+      <h3>List</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/auth/api-keys')">GET /auth/api-keys</button>
+      </div>
+
+      <h3>Assign / Remove role</h3>
+      <div class="form-row">
+        <label>API Key ID <input id="akId" placeholder="api key id" style="width:240px"></label>
+        <label>Role ID <input id="akRoleId" placeholder="role id" style="width:70px"></label>
+        <button onclick="api('POST','/auth/api-keys/'+get('akId')+'/roles/'+get('akRoleId'))">POST .../roles/:roleId</button>
+        <button class="danger" onclick="api('DELETE','/auth/api-keys/'+get('akId')+'/roles/'+get('akRoleId'))">DELETE .../roles/:roleId</button>
+      </div>
+
+      <h3>Revoke</h3>
+      <div class="form-row">
+        <label>API Key ID <input id="akRevokeId" placeholder="api key id" style="width:240px"></label>
+        <button class="danger" onclick="api('DELETE','/auth/api-keys/'+get('akRevokeId'))">DELETE /auth/api-keys/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── PAYMENTS ─── -->
+    <div id="section-payments" class="section">
+      <h2>Payments</h2>
+
+      <h3>Create checkout</h3>
+      <div class="form-row">
+        <label>Amount <input id="payAmount" value="100" type="number" style="width:80px"></label>
+        <label>Currency <input id="payCurrency" value="ETB" style="width:60px"></label>
+        <label>Email <input id="payEmail" value="test@gmail.com"></label>
+        <label>Description <input id="payDesc" value="Test payment"></label>
+        <button onclick="createCheckout()">POST /payments/checkout</button>
+      </div>
+
+      <h3>List payments</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/payments')">GET /payments</button>
+        <button onclick="api('GET','/payments/mine')">GET /payments/mine</button>
+      </div>
+    </div>
+
+    <!-- ─── SUBSCRIPTIONS ─── -->
+    <div id="section-subscriptions" class="section">
+      <h2>Subscriptions</h2>
+
+      <h3>Create subscription</h3>
+      <div class="form-row">
+        <label>Amount <input id="subAmount" value="200" type="number" style="width:70px"></label>
+        <label>Currency <input id="subCurrency" value="ETB" style="width:60px"></label>
+        <label>Email <input id="subEmail" value="test@gmail.com"></label>
+        <label>Name <input id="subName" value="Test"></label>
+        <label>Interval <select id="subInterval"><option>daily</option><option>weekly</option><option>monthly</option><option>yearly</option></select></label>
+        <button onclick="createSubscription()">POST /payments/subscriptions</button>
+      </div>
+
+      <h3>List / Cancel</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/payments/subscriptions')">GET /payments/subscriptions</button>
+        <label>ID <input id="cancelSubId" placeholder="sub id" style="width:80px"></label>
+        <button class="danger" onclick="api('DELETE','/payments/subscriptions/'+get('cancelSubId'))">DELETE /payments/subscriptions/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── RECONCILE ─── -->
+    <div id="section-reconcile" class="section">
+      <h2>Reconciliation</h2>
+
+      <h3>Bulk — stale payments</h3>
+      <div class="form-row">
+        <label>Stale after (ms) <input id="staleMs" value="600000" style="width:100px"></label>
+        <button onclick="reconcile()">POST /payments/reconcile</button>
+      </div>
+
+      <h3>Single payment by ID</h3>
+      <div class="form-row">
+        <label>Payment UUID <input id="reconcileId" placeholder="payment id" style="width:280px"></label>
+        <button onclick="reconcileOne()">POST /payments/reconcile/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── FILES ─── -->
+    <div id="section-files" class="section">
+      <h2>Files</h2>
+      <p style="font-size:12px;color:#8b949e;margin-bottom:8px">S3/MinIO file upload via presigned URLs. Pick a file &rarr; upload &rarr; confirm.</p>
+
+      <h3>Upload flow</h3>
+      <div class="form-row" style="background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:10px;margin-bottom:8px">
+        <label>Pick file <input id="fileInput" type="file"></label>
+        <label>Folder <input id="fileFolder" value="uploads" style="width:100px" placeholder="folder"></label>
+        <button onclick="uploadFileFlow()">📤 Upload File</button>
+      </div>
+      <div style="font-size:11px;color:#8b949e;margin:-4px 0 10px">This does all 3 steps: request presigned URL &rarr; PUT file to S3 &rarr; confirm.</div>
+
+      <h3>List / Get / Download / Delete</h3>
+      <div class="form-row">
+        <button onclick="api('GET','/files')">GET /files</button>
+        <button onclick="api('GET','/files/mine')">GET /files/mine</button>
+        <label>ID <input id="fileGetId" placeholder="file id" style="width:200px"></label>
+        <button onclick="api('GET','/files/'+get('fileGetId'))">GET /files/:id</button>
+      </div>
+      <div class="form-row">
+        <label>ID <input id="fileDlId" placeholder="file id" style="width:200px"></label>
+        <button onclick="getDownloadUrl()">GET /files/:id/download</button>
+        <label>ID <input id="fileDelId" placeholder="file id" style="width:200px"></label>
+        <button class="danger" onclick="api('DELETE','/files/'+get('fileDelId'))">DELETE /files/:id</button>
+      </div>
+    </div>
+
+    <!-- ─── RESPONSE ─── -->
+    <div class="response" id="response" style="display:none">
+      <div class="meta">
+        <span id="respMethod"></span>
+        <span id="respUrl"></span>
+        <span class="status" id="respStatus"></span>
+      </div>
+      <pre id="respBody"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE = () => document.getElementById('baseUrl').value.replace(/\/+$/, '');
+const get = id => document.getElementById(id).value;
+const set = (id, v) => document.getElementById(id).value = v;
+const escapeHtml = str => {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+};
+
+// ─── Token management ───
+function getToken() {
+  const at = localStorage.getItem('jwt_token');
+  const rt = localStorage.getItem('refresh_token');
+  document.getElementById('jwtDisplay').textContent = at ? at.substring(0,40)+'...' : '<not logged in>';
+  document.getElementById('jwtDisplay').style.color = at ? '#7ee787' : '#8b949e';
+  document.getElementById('refreshDisplay').textContent = rt ? rt.substring(0,30)+'...' : '<none>';
+  document.getElementById('refreshDisplay').style.color = rt ? '#7ee787' : '#8b949e';
+  document.getElementById('refreshBtn').style.display = at ? '' : 'none';
+  return at;
+}
+function setToken(at, rt) {
+  if (at) localStorage.setItem('jwt_token', at);
+  if (rt !== undefined) localStorage.setItem('refresh_token', rt);
+  getToken();
+}
+function clearToken() {
+  localStorage.removeItem('jwt_token');
+  localStorage.removeItem('refresh_token');
+  getToken();
+  toast('Token cleared', 'ok');
+}
+getToken();
+
+// ─── Click to copy token ───
+document.getElementById('jwtDisplay').addEventListener('click', function() {
+  const token = localStorage.getItem('jwt_token');
+  if (!token) return;
+  navigator.clipboard.writeText(token).then(() => toast('Token copied!', 'ok'));
+});
+
+// ─── Section switching ───
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('section-'+name).classList.add('active');
+  document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+  const sidebarBtns = document.querySelectorAll('.sidebar button');
+  sidebarBtns.forEach(b => {
+    const text = b.textContent.trim();
+    const btnSection = text.replace(/^[^\w]+/, '').toLowerCase();
+    if (btnSection === name || btnSection.startsWith(name) || name.startsWith(btnSection))
+      b.classList.add('active');
+  });
+  hideResponse();
+}
+
+// ─── Toast ───
+let toastTimer;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast '+type;
+  clearTimeout(toastTimer);
+  requestAnimationFrame(() => { el.classList.add('show'); });
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── Response display ───
+function showResponse(method, url, status, data) {
+  const el = document.getElementById('response');
+  document.getElementById('respMethod').textContent = method;
+  document.getElementById('respUrl').textContent = url;
+  const st = document.getElementById('respStatus');
+  st.textContent = status;
+  st.className = 'status ' + (status < 400 ? 'ok' : 'err');
+  const pretty = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  document.getElementById('respBody').innerHTML = escapeHtml(pretty);
+  el.style.display = 'block';
+}
+function hideResponse() { document.getElementById('response').style.display = 'none'; }
+
+// ─── Core API calls ───
+async function api(method, path, body) {
+  const token = getToken();
+  if (!token) { toast('Login first!', 'err'); return; }
+  const url = BASE() + path;
+  const opts = {
+    method,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => res.statusText);
+    showResponse(method, url, res.status, data);
+    if (res.ok) toast('Success', 'ok'); else toast('Error ' + res.status, 'err');
+    return { status: res.status, data };
+  } catch(e) {
+    showResponse(method, url, 'ERR', e.message);
+    toast('Network error', 'err');
+  }
+}
+
+async function apiNoAuth(method, path, body) {
+  const url = BASE() + path;
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => res.statusText);
+    showResponse(method, url, res.status, data);
+    if (res.ok) toast('Success', 'ok'); else toast('Error ' + res.status, 'err');
+    return { status: res.status, data };
+  } catch(e) {
+    showResponse(method, url, 'ERR', e.message);
+    toast('Network error', 'err');
+  }
+}
+
+// ─── Files ───
+async function uploadFileFlow() {
+  const input = document.getElementById('fileInput');
+  const file = input.files?.[0];
+  if (!file) { toast('Select a file first', 'err'); return; }
+
+  // Step 1 — request presigned URL
+  const folder = get('fileFolder') || 'uploads';
+  const step1 = await rawApi('POST', '/files/upload-url', {
+    fileName: file.name,
+    mimeType: file.type || 'application/octet-stream',
+    folder,
+  });
+  if (!step1.ok) return;
+  const { fileId, uploadUrl, key } = step1.data.data;
+
+  showResponse('POST', '/files/upload-url (presigned URL)', 200, step1.data);
+  toast('Presigned URL acquired, uploading…', 'ok');
+
+  // Step 2 — PUT file directly to S3/MinIO
+  try {
+    const putRes = await fetch(uploadUrl, { method: 'PUT', body: file });
+    if (!putRes.ok) {
+      toast('Upload to S3 failed: ' + putRes.status, 'err');
+      showResponse('PUT', uploadUrl, putRes.status, 'Upload failed');
+      return;
+    }
+    toast('File uploaded to S3, confirming…', 'ok');
+  } catch (e) {
+    toast('Upload network error', 'err');
+    showResponse('PUT', uploadUrl, 'ERR', e.message);
+    return;
+  }
+
+  // Step 3 — confirm upload
+  const step3 = await rawApi('POST', '/files/confirm', { fileId, key });
+  if (!step3.ok) return;
+
+  set('fileGetId', fileId);
+  toast('Upload complete!', 'ok');
+}
+
+async function rawApi(method, path, body) {
+  const token = getToken();
+  const url = BASE() + path;
+  const opts = {
+    method,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => res.statusText);
+    showResponse(method, url, res.status, data);
+    return { ok: res.ok, status: res.status, data };
+  } catch(e) {
+    showResponse(method, url, 'ERR', e.message);
+    toast('Network error', 'err');
+    return { ok: false };
+  }
+}
+
+async function getDownloadUrl() {
+  const id = get('fileDlId');
+  if (!id) { toast('Enter a file ID', 'err'); return; }
+  await api('GET', '/files/' + id + '/download');
+}
+
+// ─── Auth ───
+async function register() {
+  const body = { email: get('regEmail'), password: get('regPass'), name: get('regName') };
+  await apiNoAuth('POST', '/auth/register', body);
+}
+
+async function login() {
+  const body = { email: get('loginEmail'), password: get('loginPass') };
+  const res = await apiNoAuth('POST', '/auth/login', body);
+  if (res && res.status === 201 && res.data?.data?.access_token) {
+    setToken(res.data.data.access_token, res.data.data.refresh_token);
+    toast('Logged in', 'ok');
+  }
+}
+
+// ─── Token Refresh ───
+async function refreshToken() {
+  const rt = localStorage.getItem('refresh_token');
+  if (!rt) { toast('No refresh token', 'err'); return; }
+  const res = await apiNoAuth('POST', '/auth/refresh', { refreshToken: rt });
+  if (res && res.status === 201 && res.data?.data?.access_token) {
+    setToken(res.data.data.access_token, res.data.data.refresh_token ?? rt);
+    toast('Token refreshed', 'ok');
+  }
+}
+
+// ─── Users ───
+async function createUser() {
+  const body = { email: get('userEmail'), name: get('userName') };
+  await api('POST', '/users', body);
+}
+
+// ─── Posts ───
+async function createPost() {
+  await api('POST', '/post', { title: get('postTitle'), content: get('postContent') });
+}
+
+// ─── Comments ───
+async function createComment() {
+  await apiNoAuth('POST', '/comment', { text: get('commentText'), userId: Number(get('commentUserId')) || undefined });
+}
+
+// ─── Payments ───
+async function createCheckout() {
+  const body = {
+    amount: Number(get('payAmount')),
+    currency: get('payCurrency'),
+    customerEmail: get('payEmail'),
+    description: get('payDesc'),
+  };
+  await api('POST', '/payments/checkout', body);
+}
+
+async function reconcile() {
+  const ms = get('staleMs');
+  await api('POST', '/payments/reconcile' + (ms ? '?staleAfterMs='+ms : ''));
+}
+
+async function reconcileOne() {
+  const id = get('reconcileId');
+  if (!id) { toast('Enter a payment UUID', 'err'); return; }
+  await api('POST', '/payments/reconcile/' + id);
+}
+
+// ─── API Keys ───
+async function createApiKey() {
+  const body = { name: get('akName') };
+  const roles = get('akRoles');
+  if (roles) body.roleIds = roles.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+  const exp = get('akExpires');
+  if (exp) body.expiresAt = exp;
+  await api('POST', '/auth/api-keys', body);
+}
+
+// ─── Subscriptions ───
+async function createSubscription() {
+  const body = {
+    amount: Number(get('subAmount')),
+    currency: get('subCurrency'),
+    customerEmail: get('subEmail'),
+    customerName: get('subName'),
+    interval: get('subInterval'),
+  };
+  await api('POST', '/payments/subscriptions', body);
+}
+
+// Init: set default login to the seeded user
+set('loginEmail', 'test@example.com');
+set('loginPass', 'password123');
+</script>
+</body>
+</html>

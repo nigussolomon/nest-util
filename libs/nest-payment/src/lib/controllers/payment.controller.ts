@@ -16,7 +16,7 @@ import {
   ApiQuery,
   ApiParam,
 } from '@nestjs/swagger';
-import { CurrentUser } from '@nest-util/nest-auth';
+import { CurrentUser, Public } from '@nest-util/nest-auth';
 import { PaymentService } from '../services/payment.service';
 import { SubscriptionService } from '../services/subscription.service';
 import { RefundService } from '../services/refund.service';
@@ -51,6 +51,7 @@ export function CreatePaymentController(
     // ─── Webhook (PUBLIC — no auth) ──────────────────────────
 
     @Post('webhook/:provider')
+    @Public()
     @ApiOperation({ summary: 'Payment provider webhook/callback endpoint' })
     @ApiParam({
       name: 'provider',
@@ -196,6 +197,13 @@ export function CreatePaymentController(
     async reconcile(@Query('staleAfterMs') staleAfterMs?: number) {
       return this.paymentService.reconcileStalePayments({ staleAfterMs });
     }
+
+    @Post('reconcile/:id')
+    @ApiOperation({ summary: 'Reconcile a single payment by ID' })
+    @ApiParam({ name: 'id', description: 'Payment UUID' })
+    async reconcileOne(@Param('id', ParseUUIDPipe) id: string) {
+      return this.paymentService.reconcilePayment(id);
+    }
   }
 
   // Apply permissions metadata
@@ -244,11 +252,17 @@ export function CreatePaymentController(
       }
     }
     if (perm.reconcile) {
-      Reflect.defineMetadata(
-        AUTH_PERMISSIONS_METADATA_KEY,
-        [perm.reconcile],
-        PaymentControllerBase.prototype.reconcile
-      );
+      const reconcileMethods = [
+        PaymentControllerBase.prototype.reconcile,
+        PaymentControllerBase.prototype.reconcileOne,
+      ];
+      for (const method of reconcileMethods) {
+        Reflect.defineMetadata(
+          AUTH_PERMISSIONS_METADATA_KEY,
+          [perm.reconcile],
+          method
+        );
+      }
     }
   }
 

@@ -62,7 +62,7 @@ export class SubscriptionService {
     // Create DB record first
     const entity = this.subscriptionRepository.create({
       provider: dto.provider ?? this.options.providers[0]?.id ?? 'unknown',
-      providerSubscriptionId: '',
+      providerSubscriptionId: undefined,
       userId,
       amount: dto.amount,
       currency: dto.currency,
@@ -191,6 +191,9 @@ export class SubscriptionService {
       );
     }
 
+    if (!entity.providerSubscriptionId) {
+      throw new BadRequestException('Subscription has no provider reference');
+    }
     await provider.cancelSubscription(entity.providerSubscriptionId);
 
     entity.status = 'canceled';

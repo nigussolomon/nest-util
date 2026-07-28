@@ -18,9 +18,9 @@ export class ChapaProvider implements PaymentProvider {
   async createCheckoutSession(
     params: CreateCheckoutParams
   ): Promise<CheckoutSessionResult> {
-    const txRef = params.idempotencyKey ?? `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const txRef = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const body = {
+    const body: Record<string, unknown> = {
       amount: String(params.amount),
       currency: params.currency,
       email: params.customerEmail,
@@ -29,10 +29,12 @@ export class ChapaProvider implements PaymentProvider {
       tx_ref: txRef,
       callback_url: params.callbackUrl,
       return_url: params.returnUrl,
-      customization: params.description
-        ? { title: params.description, description: params.description }
-        : undefined,
     };
+
+    if (params.description) {
+      body['customization[title]'] = params.description;
+      body['customization[description]'] = params.description;
+    }
 
     this.logger.log(`Initializing Chapa checkout: tx_ref=${txRef}`);
 
@@ -52,8 +54,9 @@ export class ChapaProvider implements PaymentProvider {
     };
 
     if (data.status !== 'success' || !data.data?.checkout_url) {
+      this.logger.error(`Chapa response: ${JSON.stringify(data)}`);
       throw new Error(
-        `Chapa initialization failed: ${data.message ?? response.statusText}`
+        `Chapa initialization failed: ${JSON.stringify(data.message) ?? response.statusText}`
       );
     }
 

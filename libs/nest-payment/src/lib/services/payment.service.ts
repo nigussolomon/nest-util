@@ -23,6 +23,8 @@ const VALID_PAYMENT_TRANSITIONS: Record<string, string[]> = {
   canceled: [],
 };
 
+const RECONCILABLE_STATUSES = ['pending', 'processing', 'succeeded'];
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -60,7 +62,7 @@ export class PaymentService {
     // Create DB record first (status: pending)
     const entity = this.paymentRepository.create({
       provider: dto.provider ?? this.options.providers[0]?.id ?? 'unknown',
-      providerPaymentId: '',
+      providerPaymentId: undefined,
       orderId: dto.orderId,
       userId,
       amount: dto.amount,
@@ -246,6 +248,58 @@ export class PaymentService {
 
   // ─── Reconciliation ─────────────────────────────────────────
 
+  async reconcilePayment(id: string): Promise<PaymentEntity> {
+    if (this.options.reconciliation?.enable === false) {
+      throw new BadRequestException('Reconciliation is disabled');
+    }
+
+    const payment = await this.paymentRepository.findOneBy({ id });
+    if (!payment) {
+      throw new NotFoundException(`Payment not found: ${id}`);
+    }
+
+    if (!RECONCILABLE_STATUSES.includes(payment.status)) {
+      throw new BadRequestException(
+        `Cannot reconcile payment in '${payment.status}' status`
+      );
+    }
+
+    if (!payment.providerPaymentId) {
+      payment.status = 'failed';
+      payment.metadata = { ...payment.metadata, orphanedReason: 'Payment never reached provider', reconciledAt: new Date().toISOString() };
+      await this.paymentRepository.save(payment);
+      this.logger.log(`Orphaned payment ${id} marked as failed`);
+      return payment;
+    }
+
+    const provider = this.getProvider(payment.provider);
+    if (!provider.getPaymentStatus) {
+      throw new BadRequestException(`Provider '${provider.id}' does not support status checks`);
+    }
+
+    const providerStatus = await provider.getPaymentStatus(payment.providerPaymentId);
+    if (!providerStatus) {
+      throw new BadRequestException(`Could not retrieve status from provider for payment ${id}`);
+    }
+
+    if (providerStatus !== payment.status) {
+      if (!this.isValidForwardTransition(payment.status, providerStatus)) {
+        throw new BadRequestException(`Cannot transition from ${payment.status} to ${providerStatus}`);
+      }
+      payment.status = providerStatus;
+      payment.metadata = { ...payment.metadata, reconciledAt: new Date().toISOString() };
+      await this.paymentRepository.save(payment);
+
+      if (this.options.onReconciliationMismatch) {
+        await this.options.onReconciliationMismatch(payment, providerStatus);
+      }
+
+      this.logger.log(`Reconciled payment ${id}: → ${providerStatus}`);
+    }
+
+    return payment;
+  }
+
   async reconcileStalePayments(queryOptions?: {
     staleAfterMs?: number;
   }): Promise<{ checked: number; updated: number; failed: number }> {
@@ -262,7 +316,7 @@ export class PaymentService {
 
     const stalePayments = await this.paymentRepository.find({
       where: {
-        status: In(['pending', 'processing'] as any),
+        status: In(RECONCILABLE_STATUSES as any),
         createdAt: LessThanOrEqual(staleThreshold),
       },
     });
@@ -275,6 +329,7 @@ export class PaymentService {
         const provider = this.getProvider(payment.provider);
         if (!provider.getPaymentStatus) continue;
 
+        if (!payment.providerPaymentId) continue;
         const providerStatus = await provider.getPaymentStatus(
           payment.providerPaymentId
         );

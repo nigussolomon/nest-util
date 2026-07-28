@@ -27,6 +27,7 @@ import {
   AuditInterceptor,
   NestCrudModule,
 } from '@nest-util/nest-crud';
+import { NestFileModule } from '@nest-util/nest-file';
 import { PaymentModule } from './payment/payment.module';
 
 @Module({
@@ -54,6 +55,7 @@ import { PaymentModule } from './payment/payment.module';
       refreshTokenField: 'refreshToken',
       disabledRoutes: [''],
       accessTokenField: 'accessToken',
+      apiKey: { enabled: true },
       loginDto: LoginDto,
       registerDto: RegisterDto,
       refreshDto: RefreshDto,
@@ -107,6 +109,26 @@ import { PaymentModule } from './payment/payment.module';
       permissionRegistry,
     }),
     PaymentModule,
+    NestFileModule.forRoot({
+      s3: {
+        endpoint: process.env.S3_ENDPOINT,
+        region: process.env.S3_REGION ?? 'us-east-1',
+        bucket: process.env.S3_BUCKET ?? 'demo-bucket',
+        accessKeyId: process.env.S3_ACCESS_KEY_ID ?? 'minioadmin',
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? 'minioadmin',
+        forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+        publicUrl: process.env.S3_PUBLIC_URL,
+      },
+      controller: {
+        path: 'files',
+        permissions: {
+          upload: 'files.create',
+          download: 'files.read',
+          list: 'files.read',
+          remove: 'files.delete',
+        },
+      },
+    }),
   ],
   controllers: [AppController, PostController, CommentController],
   providers: [

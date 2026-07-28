@@ -198,6 +198,9 @@ importers:
       '@nest-util/nest-crud':
         specifier: workspace:*
         version: link:../../libs/nest-crud
+      '@nest-util/nest-file':
+        specifier: workspace:*
+        version: link:../../libs/nest-file
       '@nest-util/nest-payment':
         specifier: workspace:*
         version: link:../../libs/nest-payment
@@ -219,6 +222,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      sharp:
+        specifier: ^0.33.2
+        version: 0.33.5
       tslib:
         specifier: ^2.8.1
         version: 2.8.1

@@ -103,8 +103,8 @@ NestPaymentModule.forRootAsync({
 | `entities` | `Entity[]` | TypeORM entities for Payment, Subscription, Refund |
 | `webhookSecret` | `string` | Secret for verifying webhook signatures |
 | `webhookTtlMs` | `number` | In-memory dedup window (default: `300_000` = 5 min) |
-| `enableReconciliation` | `boolean` | Enable stale payment reconciliation (default: `true`) |
-| `reconciliationIntervalMs` | `number` | How often to check stale payments (default: `600_000`) |
+| `reconciliation.enable` | `boolean` | Enable stale payment reconciliation (default: `true`) |
+| `reconciliation.staleAfterMs` | `number` | Stale threshold in ms (default: `600_000` = 10 min) |
 | `controller.path` | `string` | Controller route path (default: `'payments'`) |
 | `controller.permissions` | `object` | RBAC permissions for checkout, refund, subscription |
 | `controller.enable` | `boolean` | Auto-register controller (default: `true`) |
@@ -140,7 +140,7 @@ Status transitions are validated in the service layer. Backward transitions are 
 
 ### Reconciliation
 
-Stale payments in `pending` or `processing` status are checked against the provider via `getPaymentStatus()`. Configurable interval and TTL.
+Stale payments in `pending`, `processing`, or `succeeded` status are checked against the provider via `getPaymentStatus()`. A per-ID endpoint is also available for targeted reconciliation. Payments in `failed`, `refunded`, or `canceled` are skipped.
 
 ### Idempotency
 
@@ -151,14 +151,18 @@ Stale payments in `pending` or `processing` status are checked against the provi
 ## Endpoints
 
 | Method | Endpoint | Description | Auth |
-|---|---|---|---|
+|---|---|---|---|---|
 | `POST` | `/payments/checkout` | Create a checkout session | Required |
-| `POST` | `/payments/callback` | Handle provider callback/redirect | Public |
-| `POST` | `/payments/webhook` | Handle provider webhook | Public (verified) |
-| `GET` | `/payments/:id` | Get payment status | Required |
+| `POST` | `/payments/webhook/:provider` | Handle provider webhook/callback | Public |
+| `GET` | `/payments` | List all payments | Required |
+| `GET` | `/payments/mine` | Get current user's payments | Required |
+| `GET` | `/payments/:id` | Get payment by ID | Required |
 | `POST` | `/payments/:id/refund` | Issue a refund | Required |
+| `GET` | `/payments/subscriptions` | List subscriptions | Required |
 | `POST` | `/payments/subscriptions` | Create a subscription | Required |
-| `PATCH` | `/payments/subscriptions/:id` | Cancel a subscription | Required |
+| `DELETE` | `/payments/subscriptions/:id` | Cancel a subscription | Required |
+| `POST` | `/payments/reconcile` | Bulk reconcile stale payments | Required |
+| `POST` | `/payments/reconcile/:id` | Reconcile a single payment | Required |
 
 ## Testing
 

@@ -1,4 +1,4 @@
-import { DynamicModule, Module, Controller, type Type } from '@nestjs/common';
+import { DynamicModule, Module, Controller, UseGuards, type Type } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PaymentEntity } from './entities/payment.entity';
 import { SubscriptionEntity } from './entities/subscription.entity';
@@ -9,6 +9,7 @@ import { PaymentService } from './services/payment.service';
 import { SubscriptionService } from './services/subscription.service';
 import { RefundService } from './services/refund.service';
 import { CreatePaymentController } from './controllers/payment.controller';
+import { JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
 
 function buildPaymentController(
   options: NestPaymentOptions
@@ -22,6 +23,7 @@ function buildPaymentController(
   });
 
   @Controller(path)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
   class AutoPaymentController extends ControllerBase {
     constructor(
       paymentService: PaymentService,

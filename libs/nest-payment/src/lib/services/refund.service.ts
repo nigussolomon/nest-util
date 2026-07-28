@@ -80,7 +80,7 @@ export class RefundService {
       provider: dto.provider ?? payment.provider,
       providerRefundId: '',
       paymentId: dto.paymentId,
-      providerPaymentId: payment.providerPaymentId,
+      providerPaymentId: payment.providerPaymentId!,
       amount: refundAmount,
       currency: payment.currency,
       reason: dto.reason,
@@ -100,7 +100,7 @@ export class RefundService {
 
     try {
       const result = await provider.createRefund({
-        providerPaymentId: payment.providerPaymentId,
+        providerPaymentId: payment.providerPaymentId!,
         amount: refundAmount,
         reason: dto.reason,
         idempotencyKey: dto.idempotencyKey,

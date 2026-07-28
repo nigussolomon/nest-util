@@ -18,5 +18,9 @@ export const permissionRegistry: PermissionRegistryConfig = {
       resource: 'payments',
       permissions: ['create', 'read', 'refund', 'subscribe', 'reconcile'],
     },
+    {
+      resource: 'files',
+      permissions: ['create', 'read', 'delete'],
+    },
   ],
 };

@@ -206,14 +206,14 @@
             <td>In-memory dedup window (default: <code>300_000</code>)</td>
           </tr>
           <tr>
-            <td><code>enableReconciliation</code></td>
+            <td><code>reconciliation.enable</code></td>
             <td><code>boolean</code></td>
             <td>Enable stale payment reconciliation (default: <code>true</code>)</td>
           </tr>
           <tr>
-            <td><code>reconciliationIntervalMs</code></td>
+            <td><code>reconciliation.staleAfterMs</code></td>
             <td><code>number</code></td>
-            <td>Reconciliation check interval (default: <code>600_000</code>)</td>
+            <td>Stale threshold in ms (default: <code>600_000</code> = 10 min)</td>
           </tr>
           <tr>
             <td><code>controller.path</code></td>
@@ -434,7 +434,7 @@ app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <s
          RECONCILIATION
          ═══════════════════════════════════════════════════ -->
     <h2 id="reconciliation">Reconciliation</h2>
-    <p>Stale payments in <code>pending</code> or <code>processing</code> status are automatically checked against the provider via <code>getPaymentStatus()</code>.</p>
+    <p>Stale payments in <code>pending</code>, <code>processing</code>, or <code>succeeded</code> status are automatically checked against the provider via <code>getPaymentStatus()</code>. Payments in <code>failed</code>, <code>refunded</code>, or <code>canceled</code> are skipped.</p>
 
     <div class="code-block">
       <div class="code-block-header">
@@ -443,12 +443,14 @@ app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <s
       </div>
       <pre>NestPaymentModule.<span class="fn">forRoot</span>({
   <span class="cm">// ...</span>
-  enableReconciliation: <span class="num">true</span>,
-  reconciliationIntervalMs: <span class="num">600_000</span>, <span class="cm">// every 10 min</span>
+  reconciliation: {
+    enable: <span class="num">true</span>,
+    staleAfterMs: <span class="num">600_000</span>, <span class="cm">// 10 min</span>
+  },
 })</pre>
     </div>
 
-    <p>When a stale payment is found, the library calls <code>provider.getPaymentStatus()</code> and updates the entity if the status has changed.</p>
+    <p>A per-ID endpoint (<code>POST /payments/reconcile/:id</code>) is also available for targeted reconciliation of a single payment. Orphaned payments (never reached the provider) are automatically marked as <code>failed</code>.</p>
 
     <!-- ═══════════════════════════════════════════════════
          IDEMPOTENCY

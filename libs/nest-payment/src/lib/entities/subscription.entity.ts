@@ -4,10 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  Index,
+  Unique,
 } from 'typeorm';
 
 @Entity('subscriptions')
+@Unique('UQ_subscriptions_provider_sub', ['provider', 'providerSubscriptionId'])
 export class SubscriptionEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -15,9 +16,8 @@ export class SubscriptionEntity {
   @Column()
   provider!: string;
 
-  @Column()
-  @Index('IDX_subscriptions_provider_sub_id', { unique: true })
-  providerSubscriptionId!: string;
+  @Column({ nullable: true })
+  providerSubscriptionId?: string;
 
   /** Provider's payment reference for the initial/subscription checkout */
   @Column({ nullable: true })

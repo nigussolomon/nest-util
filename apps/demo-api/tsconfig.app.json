@@ -22,6 +22,9 @@
   ],
   "references": [
     {
+      "path": "../../libs/nest-file/tsconfig.lib.json"
+    },
+    {
       "path": "../../libs/nest-payment/tsconfig.lib.json"
     },
     {
