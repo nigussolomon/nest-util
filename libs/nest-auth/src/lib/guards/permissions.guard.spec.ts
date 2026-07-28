@@ -88,6 +88,86 @@ describe('PermissionsGuard', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+  it('allows access when user has superAdminPermission even without required permissions', async () => {
+    (reflector.getAllAndOverride as jest.Mock)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(['admin.access']);
+
+    guard = new PermissionsGuard(reflector, {
+      userEntity: class User {},
+      identifierField: 'email',
+      passkeyField: 'password',
+      jwtSecret: 'secret',
+      rbac: {
+        superAdminPermission: 'admin.access',
+      },
+    });
+
+    await expect(
+      guard.canActivate(
+        createContext({
+          id: 1,
+          permissions: ['admin.access'],
+        })
+      )
+    ).resolves.toBe(true);
+  });
+
+  it('does not bypass when superAdminPermission is set but user lacks it', async () => {
+    (reflector.getAllAndOverride as jest.Mock)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(['admin.access']);
+
+    guard = new PermissionsGuard(reflector, {
+      userEntity: class User {},
+      identifierField: 'email',
+      passkeyField: 'password',
+      jwtSecret: 'secret',
+      rbac: {
+        superAdminPermission: 'admin.access',
+      },
+    });
+
+    await expect(
+      guard.canActivate(
+        createContext({
+          id: 1,
+          permissions: ['posts.read'],
+        })
+      )
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('bypasses custom evaluator when user has superAdminPermission', async () => {
+    (reflector.getAllAndOverride as jest.Mock)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(['some.deep.permission']);
+
+    const permissionEvaluator = jest.fn();
+
+    guard = new PermissionsGuard(reflector, {
+      userEntity: class User {},
+      identifierField: 'email',
+      passkeyField: 'password',
+      jwtSecret: 'secret',
+      rbac: {
+        superAdminPermission: 'root',
+        permissionEvaluator,
+      },
+    });
+
+    await expect(
+      guard.canActivate(
+        createContext({
+          id: 1,
+          permissions: ['root'],
+        })
+      )
+    ).resolves.toBe(true);
+
+    expect(permissionEvaluator).not.toHaveBeenCalled();
+  });
+
   it('delegates to a custom evaluator when configured', async () => {
     (reflector.getAllAndOverride as jest.Mock)
       .mockReturnValueOnce(false)

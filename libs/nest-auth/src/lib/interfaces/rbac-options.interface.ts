@@ -51,4 +51,12 @@ export interface AuthRbacOptions {
   permissionEvaluator?: (
     context: PermissionEvaluationContext
   ) => boolean | Promise<boolean>;
+
+  /**
+   * A permission string that grants access to all guarded routes.
+   * When set, any user whose resolved permissions include this string
+   * bypasses all @Permissions() checks.
+   * Example: 'admin.access'
+   */
+  superAdminPermission?: string;
 }
