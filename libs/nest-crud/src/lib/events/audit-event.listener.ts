@@ -1,16 +1,24 @@
 import type { AuditEvent, AuditEventHandler, AuditEventModuleOptions } from './audit-event.interface';
 
+const RE_SPECIAL = /[.+?^${}()|[\]\\]/g;
+
 function matchesGlob(pattern: string, value: string): boolean {
-  const regex = new RegExp(
-    '^' +
-      pattern
-        .replace(/\./g, '\\.')
-        .replace(/\*\*/g, '\x00')
-        .replace(/\*/g, '[^.]*')
-        .replace(/\x00/g, '.*') +
-      '$'
-  );
-  return regex.test(value);
+  let regexStr = '^';
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === '*') {
+      if (i + 1 < pattern.length && pattern[i + 1] === '*') {
+        regexStr += '.*';
+        i++;
+      } else {
+        regexStr += '[^.]*';
+      }
+    } else {
+      regexStr += ch.replace(RE_SPECIAL, '\\$&');
+    }
+  }
+  regexStr += '$';
+  return new RegExp(regexStr).test(value);
 }
 
 function shouldDispatch(event: AuditEvent, options: AuditEventModuleOptions): boolean {
