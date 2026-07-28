@@ -1,4 +1,4 @@
-import { DynamicModule, Module, Controller, type Type } from '@nestjs/common';
+import { DynamicModule, Module, Controller, UseGuards, type Type } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileEntity } from './entities/file.entity';
 import { NEST_FILE_OPTIONS } from './constants';
@@ -8,6 +8,7 @@ import { FileService } from './services/file.service';
 import { ImageProcessorService } from './services/image-processor.service';
 import { ThumbnailService } from './services/thumbnail.service';
 import { CreateFileController } from './controllers/file.controller';
+import { JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
 
 function buildFileController(
   options: NestFileOptions
@@ -21,6 +22,7 @@ function buildFileController(
   const ControllerBase = CreateFileController({ permissions: ctrl?.permissions });
 
   @Controller(path)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
   class AutoFileController extends ControllerBase {
     constructor(fileService: FileService) {
       super(fileService);
