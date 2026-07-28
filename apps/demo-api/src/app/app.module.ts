@@ -27,6 +27,7 @@ import {
   AuditInterceptor,
   NestCrudModule,
 } from '@nest-util/nest-crud';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import {
       },
       permissionRegistry,
     }),
+    PaymentModule,
   ],
   controllers: [AppController, PostController, CommentController],
   providers: [

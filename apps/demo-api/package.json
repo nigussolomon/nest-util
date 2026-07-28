@@ -97,6 +97,7 @@
   "dependencies": {
     "@nest-util/nest-auth": "workspace:*",
     "@nest-util/nest-crud": "workspace:*",
+    "@nest-util/nest-payment": "workspace:*",
     "@nestjs/common": "^11.1.18",
     "@nestjs/core": "^11.1.18",
     "@nestjs/platform-express": "^11.1.18",

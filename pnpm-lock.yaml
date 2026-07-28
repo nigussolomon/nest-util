@@ -198,6 +198,9 @@ importers:
       '@nest-util/nest-crud':
         specifier: workspace:*
         version: link:../../libs/nest-crud
+      '@nest-util/nest-payment':
+        specifier: workspace:*
+        version: link:../../libs/nest-payment
       '@nestjs/common':
         specifier: ^11.1.18
         version: 11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2)
@@ -348,6 +351,34 @@ importers:
       sharp:
         specifier: ^0.33.0
         version: 0.33.5
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      typeorm:
+        specifier: ^1.1.0
+        version: 1.1.0(babel-plugin-macros@3.1.0)(pg@8.20.0)(ts-node@10.9.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(@types/node@20.19.9)(typescript@5.9.3))
+    devDependencies:
+      '@nest-util/nest-auth':
+        specifier: workspace:*
+        version: link:../nest-auth
+
+  libs/nest-payment:
+    dependencies:
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2)
+      '@nestjs/swagger':
+        specifier: ^11.2.6
+        version: 11.2.7(@nestjs/common@11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/core@11.1.18)(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)
+      '@nestjs/testing':
+        specifier: ^11.0.0
+        version: 11.1.18(@nestjs/common@11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/core@11.1.18)(@nestjs/platform-express@11.1.18)
+      '@nestjs/typeorm':
+        specifier: ^11.0.1
+        version: 11.0.1(@nestjs/common@11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/core@11.1.18)(reflect-metadata@0.1.14)(rxjs@7.8.2)(typeorm@1.1.0(babel-plugin-macros@3.1.0)(pg@8.20.0)(ts-node@10.9.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(@types/node@20.19.9)(typescript@5.9.3)))
+      class-validator:
+        specifier: ^0.14.3
+        version: 0.14.4
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
