@@ -46,7 +46,7 @@ export class NestFileModule {
         ThumbnailService,
         FileService,
       ],
-      exports: [S3Service, FileService, FileEntity, NEST_FILE_OPTIONS],
+      exports: [S3Service, FileService, NEST_FILE_OPTIONS],
       global: true,
     };
   }
@@ -71,7 +71,7 @@ export class NestFileModule {
         ThumbnailService,
         FileService,
       ],
-      exports: [S3Service, FileService, FileEntity, NEST_FILE_OPTIONS],
+      exports: [S3Service, FileService, NEST_FILE_OPTIONS],
       global: true,
     };
   }
