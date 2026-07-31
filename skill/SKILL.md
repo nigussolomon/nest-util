@@ -1,24 +1,26 @@
 ---
 name: nest-util
-description: Complete guide for using @nest-util/nest-crud and @nest-util/nest-auth in any NestJS project. Covers CRUD scaffolding, JWT auth with RBAC, audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory. Use when working with these packages.
+description: Complete guide for using @nest-util/nest-crud, @nest-util/nest-auth, @nest-util/nest-file, and @nest-util/nest-payment in any NestJS project. Covers CRUD scaffolding, JWT auth with RBAC and API keys, audit logging, lifecycle hooks, cursor pagination, findMine, S3 file uploads, payments with webhooks and reconciliation, and a testing factory. Use when working with these packages.
 ---
 
 # Nest-Util Consumer Guide
 
-Complete reference for consuming `@nest-util/nest-crud` v1.0.6 and `@nest-util/nest-auth` v1.0.2 in any NestJS project.
+Complete reference for consuming `@nest-util/nest-crud` v1.0.8, `@nest-util/nest-auth` v1.1.1, `@nest-util/nest-file` v1.0.1, and `@nest-util/nest-payment` v1.0.1 in any NestJS project.
 
 ## Overview
 
-Two packages that eliminate NestJS boilerplate:
+Four packages that eliminate NestJS boilerplate:
 
 | Package | Version | Purpose |
 |---|---|---|
-| `@nest-util/nest-crud` | 1.0.7 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
-| `@nest-util/nest-auth` | 1.1.0 | JWT auth with RBAC, OTP login, password reset, API key auth |
+| `@nest-util/nest-crud` | 1.0.8 | CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, testing factory |
+| `@nest-util/nest-auth` | 1.1.1 | JWT auth with RBAC, API key auth, OTP login, password reset |
+| `@nest-util/nest-file` | 1.0.1 | S3/MinIO file uploads with presigned URLs and metadata tracking |
+| `@nest-util/nest-payment` | 1.0.1 | Provider-agnostic payments: checkout, subscriptions, refunds, webhooks, reconciliation |
 
-**Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. No separate packages needed.
+**Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. `nest-file` and `nest-payment` both depend on `nest-auth` for guards and the `@CurrentUser()` decorator.
 
-**Integration order**: TypeORM → `AuthModule.forRoot(...)` → `NestCrudService` → `CreateNestedCrudController(...)` → global interceptors/filters.
+**Integration order**: TypeORM → `AuthModule.forRoot(...)` → `NestCrudService` → `CreateNestedCrudController(...)` → (optional) `NestFileModule.forRoot(...)` / `NestPaymentModule.forRoot(...)` → global interceptors/filters.
 
 ---
 
@@ -27,9 +29,12 @@ Two packages that eliminate NestJS boilerplate:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.8 @nest-util/nest-auth@^1.1.1 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner  # only if using nest-file
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
+
+Install only the packages you need. `nest-file` requires the AWS SDK (works with any S3-compatible endpoint such as MinIO). `nest-file` and `nest-payment` both require `@nest-util/nest-auth` to be installed for guards and the `@CurrentUser()` decorator.
 
 ### Peer Dependencies
 
@@ -48,6 +53,8 @@ These packages expect the following to be installed in your project:
 | `class-transformer` | ^0.5.1 | DTO transformation |
 | `bcrypt` | ^6.0.0 | Password hashing (auth) |
 | `passport-jwt` | ^4.0.1 | JWT strategy (auth) |
+| `@aws-sdk/client-s3` | ^3.700.0 | S3 client (file) |
+| `@aws-sdk/s3-request-presigner` | ^3.700.0 | Presigned URL generation (file) |
 
 ---
 
@@ -204,6 +211,7 @@ export class AppModule {}
 | `permissionRegistry` | `PermissionRegistryConfig` | — | No | Permission registry for CRUD |
 | `otp` | `AuthOtpOptions` | — | No | OTP login configuration |
 | `passwordReset` | `AuthPasswordResetOptions` | — | No | Password reset configuration |
+| `apiKey` | `ApiKeyModuleOptions` | — | No | API key authentication configuration |
 
 ### OTP Configuration
 
@@ -238,6 +246,69 @@ passwordReset: {
 ### Guardrail: OTP/Password Reset Callbacks
 
 **MUST** provide `deliverCode` when `otp.enabled: true` and `deliverToken` when `passwordReset.enabled: true`. The module throws at startup if these are missing.
+
+---
+
+## API Key Authentication
+
+Enable API key auth for machine-to-machine access. Keys are bcrypt-hashed, scoped to a user, and can inherit RBAC permissions via roles.
+
+### Configuration
+
+```typescript
+AuthModule.forRoot({
+  // ...
+  apiKey: {
+    enabled: true,
+    headerName: 'x-api-key',   // default: 'x-api-key'
+    keyPrefix: 'nuk_live_',    // default: 'nuk_live_'
+    hashRounds: 10,            // default: 10
+  },
+});
+```
+
+When `enabled`, the module registers `ApiKeyService`, `ApiKeyGuard`, and the `ApiKeyEntity`/`ApiKeyRoleEntity` tables. You must add these entities to your `autoLoadEntities`/migrations.
+
+### `ApiKeyGuard` Behavior
+
+- If the `x-api-key` header is **absent**, the guard passes through (JWT auth still applies — the key is an alternative, not a replacement).
+- If a valid key is present, it sets `request.user` (an `AuthUser` with permissions resolved from the key's roles) and `request.apiKey`.
+- Invalid, revoked, or expired keys throw `UnauthorizedException`.
+
+Use it together with `JwtAuthGuard` and `PermissionsGuard` on your routes:
+
+```typescript
+@UseGuards(JwtAuthGuard, PermissionsGuard, ApiKeyGuard)
+@Get('reports')
+@Permissions('reports.read')
+async getReports(@CurrentUser() user: AuthUser) { ... }
+```
+
+### Admin API Key Routes
+
+All routes require `JwtAuthGuard` + `PermissionsGuard` with `admin.access`:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `POST /auth/api-keys` | POST | Create a key (`{ name, roleIds?, expiresAt? }`) — raw key returned once |
+| `GET /auth/api-keys` | GET | List current user's keys with roles |
+| `DELETE /auth/api-keys/:id` | DELETE | Revoke a key |
+| `POST /auth/api-keys/:id/roles/:roleId` | POST | Assign a role to a key |
+| `DELETE /auth/api-keys/:id/roles/:roleId` | DELETE | Remove a role from a key |
+
+### `ApiKeyService` Methods
+
+| Method | Description |
+|---|---|
+| `create(userId, { name, roleIds?, expiresAt? })` | Generate a key (`nuk_live_` + base64url). Hash stored; raw key returned once |
+| `list(userId)` | List keys with assigned roles |
+| `revoke(userId, keyId)` | Deactivate a key |
+| `validate(rawKey)` | Resolve key → `{ user, apiKey }` with RBAC permissions |
+| `assignRole(userId, keyId, roleId)` / `removeRole(...)` | Manage key roles |
+
+### Events
+
+When `@nestjs/event-emitter` is installed, auth emits: `auth.api-key.used`, `auth.api-key.denied`, and `auth.permissions.denied` (each with `{ action, entity, timestamp, ...data }`).
 
 ---
 
@@ -409,6 +480,8 @@ export class PostController extends PostCrudControllerBase {
 
 ### Auth Endpoints
 
+The auth module auto-registers **five Swagger-tagged controllers**: Authentication, Permissions, Roles, User Roles, and API Keys.
+
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
 | `POST /auth/register` | POST | No | Register new user |
@@ -429,6 +502,11 @@ export class PostController extends PostCrudControllerBase {
 | `POST /auth/roles/:roleId/permissions` | POST | admin.access | Add permissions |
 | `DELETE /auth/roles/:roleId/permissions` | DELETE | admin.access | Remove permissions |
 | `GET /auth/users/:userId/roles` | GET | admin.access | Get user's roles |
+| `POST /auth/api-keys` | POST | admin.access | Create API key |
+| `GET /auth/api-keys` | GET | admin.access | List API keys |
+| `DELETE /auth/api-keys/:id` | DELETE | admin.access | Revoke API key |
+| `POST /auth/api-keys/:id/roles/:roleId` | POST | admin.access | Assign role to API key |
+| `DELETE /auth/api-keys/:id/roles/:roleId` | DELETE | admin.access | Remove role from API key |
 
 ---
 
@@ -833,7 +911,8 @@ const qb = createMockQb();
 | Decorator/Guard | Description |
 |---|---|
 | `JwtAuthGuard` | Validates JWT token, skips `@Public()` routes |
-| `PermissionsGuard` | Checks `@Permissions()` against user's resolved permissions |
+| `PermissionsGuard` | Checks `@Permissions()` against user's resolved permissions; honors `superAdminPermission` |
+| `ApiKeyGuard` | Authenticates via `x-api-key` header when present (passes through if absent) |
 | `@Public()` | Marks route as public (skips JWT validation) |
 | `@CurrentUser()` | Param decorator — extracts `request.user` |
 | `@Permissions(...permissions)` | Sets required permissions for the route |
@@ -955,6 +1034,28 @@ buildCrudPermissionsFromRegistry(registry, {
 })
 ```
 
+### RBAC Configuration (`rbac` option)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `directPermissionsKey` | `string` | `'permissions'` | Key on the user holding direct permissions |
+| `rolesKey` | `string` | `'roles'` | Key on the user holding role assignments |
+| `userRolesRelation` | `string` | — | Relation to eager-load (e.g. `'userRoles'`) |
+| `rolePermissionsKey` | `string` | `'permissions'` | Key on a role holding its permissions |
+| `nestedRoleKey` | `string` | `'role'` | Key on a user-role row holding the role object |
+| `requireAllPermissions` | `boolean` | `true` | `false` = any matching permission suffices |
+| `permissionEvaluator` | `(ctx) => boolean` | — | Custom permission evaluation function |
+| `superAdminPermission` | `string` | — | **Bypasses all `@Permissions()` checks** when present in the user's resolved permissions |
+
+```typescript
+rbac: {
+  superAdminPermission: 'admin.access',  // users with this permission skip all @Permissions() checks
+  requireAllPermissions: true,
+}
+```
+
+`superAdminPermission` is checked before the standard all/any matching, so a super admin passes every guarded route even if `requireAllPermissions` is set.
+
 ---
 
 ## Auth DTOs with Swagger
@@ -1033,7 +1134,8 @@ bootstrap();
 ```typescript
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule, NestCrudModule, ResponseInterceptor, AuditInterceptor } from '@nest-util/nest-crud';
+import { NestCrudModule, ResponseInterceptor, AuditInterceptor } from '@nest-util/nest-crud';
+import { AuthModule } from '@nest-util/nest-auth';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { User } from './user/user.entity';
 import { Post } from './post/post.entity';
@@ -1182,6 +1284,238 @@ export class PostController extends PostCrudControllerBase {
 
 ---
 
+## NestFileModule (S3/MinIO File Uploads)
+
+`@nest-util/nest-file` handles file uploads to any S3-compatible object store using **presigned URLs** — files stream directly from the client to S3, so nothing goes through your NestJS server.
+
+### Setup
+
+```typescript
+// app.module.ts
+import { NestFileModule } from '@nest-util/nest-file';
+
+@Module({
+  imports: [
+    AuthModule.forRoot({ /* ... */ }),   // required: guards + @CurrentUser()
+    NestFileModule.forRoot({
+      s3: {
+        endpoint: process.env.S3_ENDPOINT,       // e.g. http://localhost:9000 (MinIO)
+        region: process.env.S3_REGION ?? 'us-east-1',
+        bucket: process.env.S3_BUCKET,
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+        forcePathStyle: true,                    // REQUIRED for MinIO
+        publicUrl: process.env.S3_PUBLIC_URL,    // optional public CDN/base URL
+      },
+      upload: {
+        maxFileSize: 10 * 1024 * 1024,           // 10 MB (optional)
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/*', 'application/pdf'],
+        pathPrefix: 'uploads',                   // S3 key prefix (default 'uploads')
+        presignedUrlExpiresIn: 3600,             // seconds (default 3600)
+      },
+      controller: {
+        enable: true,                            // default: true
+        path: 'files',                           // default: 'files'
+        permissions: {                           // RBAC keys applied via PermissionsGuard
+          upload: 'files.upload',
+          download: 'files.download',
+          list: 'files.list',
+          remove: 'files.delete',
+        },
+      },
+    }),
+    // ...
+  ],
+})
+export class AppModule {}
+```
+
+`forRootAsync` is also available (`useFactory` + `inject`) for config-service-based setup. The module is `@Global()` and exports `FileService`, `S3Service`, and the options token.
+
+### Presigned Upload Flow
+
+1. **`POST /files/upload-url`** — client sends `RequestUploadDto` (`fileName`, `mimeType`, `folder?`); server returns `{ uploadUrl, key, fileId }` and creates a pending `FileEntity`.
+2. Client **PUTs the file bytes directly to `uploadUrl`** (presigned S3 URL).
+3. **`POST /files/confirm`** — client sends `ConfirmUploadDto` (`fileId`, `key`); server verifies the object exists in S3, stores the public URL, and returns the confirmed `FileEntity`.
+
+### Auto-Registered Endpoints
+
+All routes are guarded by `JwtAuthGuard` + `PermissionsGuard` (skip `permissions` config for open access):
+
+| Endpoint | Method | Permission Key | Description |
+|---|---|---|---|
+| `POST /files/upload-url` | POST | `upload` | Request presigned upload URL |
+| `POST /files/confirm` | POST | `upload` | Confirm upload completion |
+| `GET /files/:id/download` | GET | `download` | Get presigned download URL |
+| `GET /files/mine` | GET | `list` | Current user's files (paginated) |
+| `GET /files` | GET | `list` | List all files (paginated) |
+| `GET /files/:id` | GET | `list` | File metadata |
+| `DELETE /files/:id` | DELETE | `remove` | Delete file from S3 + DB |
+
+### `FileService` Methods
+
+| Method | Description |
+|---|---|
+| `requestUpload(dto, userId)` | Validate MIME, generate stored name + S3 key, return presigned upload URL |
+| `confirmUpload(dto)` | Verify object exists in S3, set public URL on the entity |
+| `getDownloadUrl(fileId)` | Return a presigned download URL |
+| `getFile(fileId)` | Return `FileEntity` metadata |
+| `deleteFile(fileId)` | Delete from S3 and remove DB record |
+| `findAll(query?)` | Paginated list of all files |
+| `findMine(userId, query?)` | Paginated list of a user's files |
+
+### `S3Service` Methods
+
+| Method | Description |
+|---|---|
+| `generatePresignedUploadUrl({ key, contentType, expiresIn? })` | Presigned PUT URL |
+| `generatePresignedDownloadUrl(key, expiresIn?)` | Presigned GET URL |
+| `uploadBuffer(key, buffer, contentType)` | Server-side upload (multipart middleware not required) |
+| `deleteObject(key)` | Delete object |
+| `objectExists(key)` | Head-object existence check |
+| `getClient()` / `getBucket()` | Raw S3 client / bucket name |
+
+### `FileEntity` Fields
+
+`id` (UUID), `originalName`, `storedName`, `mimeType`, `size`, `bucket`, `key`, `url`, `userId`, `metadata` (JSONB), `createdAt`, `updatedAt`.
+
+### File Naming Helpers
+
+`generateStoredName(name)` → `{timestamp}-{sanitized}`; `generateS3Key(storedName, pathPrefix?)` → `{prefix}/{storedName}` (default prefix `uploads`). `isImageMime(mime)` / `getMimeTypeExtension(mime)` are exported for image detection.
+
+### Guardrails
+
+1. **`autoLoadEntities: true`** must be set on `TypeOrmModule.forRoot()` for `FileEntity` to be registered.
+2. **`forcePathStyle: true`** is required for MinIO/S3-compatible local endpoints.
+3. `@nest-util/nest-auth` must be installed — the auto controller uses `JwtAuthGuard`, `PermissionsGuard`, and `@CurrentUser()`.
+4. MIME whitelist supports wildcards (`image/*`). An empty/absent whitelist allows all types.
+5. `maxFileSize` is advisory metadata only — enforce limits with the presigned PUT or an S3 bucket policy if strict.
+
+---
+
+## NestPaymentModule (Checkout, Subscriptions, Refunds)
+
+`@nest-util/nest-payment` is a **provider-agnostic** payment layer. You implement a thin `PaymentProvider` for your gateway (Stripe, Chapa, etc.); the module handles DB records, idempotency, webhooks, status transitions, and reconciliation.
+
+### Provider Interface
+
+```typescript
+import { PaymentProvider, PaymentStatus, WebhookEvent } from '@nest-util/nest-payment';
+
+export class ChapaProvider implements PaymentProvider {
+  readonly id = 'chapa';
+
+  createCheckoutSession(params) {
+    // → { providerReference, checkoutUrl, providerPaymentId?, metadata? }
+  }
+  createSubscription?(params)      { /* optional */ }
+  cancelSubscription?(id)          { /* optional */ }
+  createRefund?(params)            { /* optional */ }
+  parseWebhookEvent(rawBody, headers): Promise<WebhookEvent> {
+    // normalize provider payload → WebhookEvent
+  }
+  verifyWebhookSignature?(rawBody, headers): boolean {
+    // return true if valid
+  }
+  getPaymentStatus?(providerPaymentId): Promise<PaymentStatus | null> {
+    // used by reconciliation
+  }
+}
+```
+
+### Setup
+
+```typescript
+import { NestPaymentModule } from '@nest-util/nest-payment';
+import { ChapaProvider } from './providers/chapa.provider';
+
+@Module({
+  imports: [
+    AuthModule.forRoot({ /* ... */ }),   // required: guards + @CurrentUser()
+    NestPaymentModule.forRoot({
+      providers: [new ChapaProvider()],
+      webhook: {
+        enable: true,                    // default: true
+        path: 'webhook',                 // default: 'webhook'
+        rawBody: true,                   // default: true
+        deduplicate: true,               // in-memory dedup, default: true
+        deduplicationTtlMs: 300000,      // default 5 min
+      },
+      reconciliation: {
+        enable: true,                    // default: true
+        staleAfterMs: 600000,            // default 10 min
+      },
+      onWebhook: async (event, rawBody) => { /* notify order service */ },
+      onReconciliationMismatch: async (payment, providerStatus) => { /* alert */ },
+      controller: {
+        enable: true,                    // default: true
+        path: 'payments',                // default: 'payments'
+        permissions: {
+          checkout: 'payments.create',
+          list: 'payments.read',
+          refund: 'payments.refund',
+          subscriptions: 'payments.subscriptions',
+          reconcile: 'payments.reconcile',
+        },
+      },
+    }),
+    // ...
+  ],
+})
+export class AppModule {}
+```
+
+`forRootAsync` is also available. The module is `@Global()` and exports `PaymentService`, `SubscriptionService`, `RefundService`, and the options token.
+
+### Auto-Registered Endpoints
+
+| Endpoint | Method | Auth | Permission Key | Description |
+|---|---|---|---|---|
+| `POST /payments/webhook/:provider` | POST | `@Public()` | — | Provider webhook (signature-verified, routed by event type) |
+| `POST /payments/checkout` | POST | JWT+Perm | `checkout` | Create checkout session |
+| `GET /payments` | GET | JWT+Perm | `list` | List payments (`page`, `limit`, `provider`, `status`) |
+| `GET /payments/mine` | GET | JWT+Perm | `list` | Current user's payments |
+| `GET /payments/:id` | GET | JWT+Perm | `list` | Payment by ID |
+| `POST /payments/:id/refund` | POST | JWT+Perm | `refund` | Refund a `succeeded` payment |
+| `GET /payments/subscriptions` | GET | JWT+Perm | `list` | List subscriptions |
+| `POST /payments/subscriptions` | POST | JWT+Perm | `subscriptions` | Create subscription |
+| `DELETE /payments/subscriptions/:id` | DELETE | JWT+Perm | `subscriptions` | Cancel subscription |
+| `POST /payments/reconcile` | POST | JWT+Perm | `reconcile` | Reconcile stale payments |
+| `POST /payments/reconcile/:id` | POST | JWT+Perm | `reconcile` | Reconcile a single payment |
+
+### Status Enums
+
+| Entity | Statuses |
+|---|---|
+| `PaymentEntity` | `pending`, `processing`, `succeeded`, `failed`, `refunded`, `canceled` |
+| `SubscriptionEntity` | `pending`, `active`, `past_due`, `canceled`, `trialing` |
+| `RefundEntity` | `pending`, `succeeded`, `failed` |
+
+Only **forward transitions** are applied from webhooks (e.g. `pending → succeeded`, never `succeeded → pending`). Refunds only allowed on `succeeded` payments; fully refunded payments flip to `refunded`.
+
+### Service Methods
+
+**`PaymentService`** — `createCheckout(userId, dto)`, `handleWebhook(event)`, `findOne(id)`, `findByProviderPaymentId(provider, id)`, `findAll(query?)`, `findMine(userId, query?)`, `reconcilePayment(id)`, `reconcileStalePayments({ staleAfterMs? })`, `getProvider(id)`.
+
+**`SubscriptionService`** — `create(userId, dto)`, `handleWebhook(event)`, `cancel(id)`, `findOne(id)`, `findAll(query?)`, `findMine(userId, query?)`.
+
+**`RefundService`** — `create(dto)`, `handleWebhook(event)`, `findOne(id)`, `findByPaymentId(paymentId)`, `findAll(query?)`.
+
+### Idempotency
+
+All three services honor `idempotencyKey`: if a payment/subscription/refund with the same key already exists, the existing record is returned instead of creating a duplicate. Always pass one for retry-safe flows.
+
+### Guardrails
+
+1. **Webhook raw body**: `rawBody` handling needs Nest's raw-body capture. Create the app with `NestFactory.create(AppModule, { rawBody: true })` (or configure `bodyParser` accordingly) — the controller reads `req.rawBody`.
+2. **Provider capability checks**: `createSubscription` throws if the provider doesn't implement `createSubscription`; same for refunds and cancellation. Only implement the methods your gateway supports.
+3. The webhook route is `@Public()` — do **not** guard it, but the provider's `verifyWebhookSignature` is invoked when implemented; requests fail with 400 on invalid signatures.
+4. Reconciliation requires providers to implement `getPaymentStatus`.
+5. `autoLoadEntities: true` must be set for `PaymentEntity`, `SubscriptionEntity`, and `RefundEntity` registration.
+6. `@nest-util/nest-auth` must be installed — the auto controller uses `JwtAuthGuard`, `PermissionsGuard`, and `@CurrentUser()`.
+
+---
+
 ## Security Rules
 
 These rules are **mandatory** — violating any of them will cause data leaks, runtime errors, or security vulnerabilities.
@@ -1201,6 +1535,11 @@ These rules are **mandatory** — violating any of them will cause data leaks, r
 13. `disabledRoutes` in AuthModule accepts: `'register'`, `'login'`, `'otp/request'`, `'otp/login'`, `'password-reset/request'`, `'password-reset/reset'`
 14. **ALWAYS** ensure `@nest-util/nest-auth` is installed if using `enableFindMine` — the controller factory imports `@CurrentUser()` from it
 15. Permission registry strict mode (default) throws at startup if a CRUD permission is missing — set `strict: false` to skip
+16. **ALWAYS** set `forcePathStyle: true` when using `NestFileModule` with MinIO / local S3-compatible endpoints
+17. **ALWAYS** create the app with `NestFactory.create(AppModule, { rawBody: true })` when using `NestPaymentModule` — the webhook controller reads `req.rawBody` for signature verification
+18. **NEVER** guard the payment webhook route — it is `@Public()` and relies on the provider's `verifyWebhookSignature`
+19. **ALWAYS** pass `idempotencyKey` for retry-safe payment/subscription/refund flows
+20. API keys are only returned once at creation — hash is stored, never the raw key
 
 ---
 
@@ -1255,3 +1594,27 @@ Register `TypeOrmExceptionFilter` as a global filter. It maps Postgres code `235
 1. Ensure `@nest-util/nest-crud/testing` is imported (not the main index)
 2. The factory creates `NestCrudService` directly — your service constructor must accept `@InjectRepository`
 3. Mock repositories are provided via NestJS DI using `getRepositoryToken(entity)`
+
+### File uploads fail against MinIO (403/404)
+
+1. Set `forcePathStyle: true` in the `s3` options — MinIO does not support virtual-hosted-style buckets
+2. Verify the bucket exists and the access key has `PutObject`/`GetObject`/`DeleteObject` permissions
+3. For `confirmUpload`, confirm the exact `key` returned by `requestUpload` was used for the PUT
+
+### Payments stuck in `pending` / webhooks not arriving
+
+1. Confirm the app was created with `NestFactory.create(AppModule, { rawBody: true })`
+2. Check the provider's `parseWebhookEvent` returns `providerPaymentId` so the webhook matches the DB record
+3. Ensure the provider is registered in `options.providers` with the same `id` used to create the checkout
+4. If signature verification fails, the route returns 400 — check `verifyWebhookSignature` reads the right headers
+
+### Reconciliation says "provider does not support status checks"
+
+1. Implement `getPaymentStatus` on your `PaymentProvider`
+2. Only `pending`/`processing`/`succeeded` payments are reconcilable
+
+### API key auth not working
+
+1. Ensure `apiKey.enabled: true` in `AuthModule.forRoot` and the header name matches (`x-api-key` by default)
+2. Add `ApiKeyGuard` to the route guards you want key auth on (`JwtAuthGuard, PermissionsGuard, ApiKeyGuard`)
+3. Register `ApiKeyEntity`/`ApiKeyRoleEntity` in your TypeORM config/migrations

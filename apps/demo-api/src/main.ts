@@ -30,7 +30,7 @@ async function bootstrap() {
   app.getHttpAdapter().getInstance().set('query parser', 'extended');
   app.useGlobalFilters(new TypeOrmExceptionFilter());
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3008;
   await app.listen(port);
   Logger.log(
     `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`
