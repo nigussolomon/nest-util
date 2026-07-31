@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   echo "Usage: ./publish.sh <pkg>"
   echo
-  echo "  pkg: auth | crud | file | full (all packages)"
+  echo "  pkg: auth | crud | file | payment | full (all packages)"
   echo
   echo "  NPM_TOKEN env var must be set with a valid npm registry token."
   exit 1
@@ -19,17 +19,18 @@ if [ -z "${NPM_TOKEN:-}" ]; then
 fi
 
 if [ "$PKG" = "full" ]; then
-  for p in auth crud file; do
+  for p in auth crud file payment; do
     "$0" "$p"
   done
   exit 0
 fi
 
 case "$PKG" in
-  auth) DIR="libs/nest-auth"  NAME="nest-auth" ;;
-  crud) DIR="libs/nest-crud"  NAME="nest-crud" ;;
-  file) DIR="libs/nest-file"  NAME="nest-file" ;;
-  *)    usage ;;
+  auth)    DIR="libs/nest-auth"    NAME="nest-auth" ;;
+  crud)    DIR="libs/nest-crud"    NAME="nest-crud" ;;
+  file)    DIR="libs/nest-file"    NAME="nest-file" ;;
+  payment) DIR="libs/nest-payment" NAME="nest-payment" ;;
+  *)       usage ;;
 esac
 
 echo "=== Building $NAME ==="
