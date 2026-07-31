@@ -366,6 +366,9 @@ export class PostService extends NestCrudService<
 | `transactionConfig` | `TransactionConfig` | — | Transaction isolation level |
 | `userOwnershipField` | `keyof Entity` | — | Enable findMine with column match |
 | `findMineQuery` | `(qb, userId) => void` | — | Enable findMine with custom query |
+| `enforceOwnership` | `boolean` | `false` | Enable ownership checks on `findOne`/`update`/`remove` |
+| `ownershipBypassPermissions` | `readonly string[]` | `[]` | Permissions that bypass ownership checks |
+| `ownershipBypass` | `(user: OwnershipUser) => boolean` | — | Custom predicate for bypassing ownership |
 
 ### Service Methods
 
@@ -373,10 +376,10 @@ export class PostService extends NestCrudService<
 |---|---|---|
 | `findAll` | `(query: PaginationDto & FilterDto)` | `{ data: ResponseDto[], meta?: { page, limit, total } }` |
 | `findAllWithCursor` | `(query: CursorPaginationDto & FilterDto)` | `CursorPaginationResult<ResponseDto>` |
-| `findOne` | `(id: number)` | `ResponseDto` |
+| `findOne` | `(id: number, user?: OwnershipUser)` | `ResponseDto` |
 | `create` | `(payload: CreateDto)` | `ResponseDto` |
-| `update` | `(id: number, payload: UpdateDto)` | `ResponseDto` |
-| `remove` | `(id: number)` | `boolean` |
+| `update` | `(id: number, payload: UpdateDto, user?: OwnershipUser)` | `ResponseDto` |
+| `remove` | `(id: number, user?: OwnershipUser)` | `boolean` |
 | `findMine` | `(userId, query)` | `{ data: ResponseDto[], meta?: ... }` |
 | `findAuditLogs` | `(query: AuditLogQuery)` | `{ data: AuditLogEntity[], meta: { total, page, limit, totalPages } }` |
 
@@ -670,6 +673,30 @@ super({
 2. Service configures `userOwnershipField` or `findMineQuery`
 3. `@nest-util/nest-auth` is installed (for `@CurrentUser()` decorator)
 
+### Ownership Enforcement on findOne/update/remove
+
+When `enforceOwnership: true` is set alongside `userOwnershipField` or `findMineQuery`, the generic `findOne`, `update`, and `remove` operations are scoped to records owned by the authenticated user. Non-owned records return 404, and unauthenticated requests return 403.
+
+```typescript
+super({
+  repository,
+  userOwnershipField: 'authorId',
+  enforceOwnership: true,                          // opt-in — defaults to false
+  ownershipBypassPermissions: ['admin.access'],    // admins bypass ownership checks
+  ownershipBypass: (user) => user.email?.endsWith('@example.com'),  // custom bypass predicate
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enforceOwnership` | `boolean` | `false` | Enable ownership checks on `findOne`/`update`/`remove` |
+| `ownershipBypassPermissions` | `readonly string[]` | `[]` | Permission strings that grant full access (e.g. `['admin.access']`) |
+| `ownershipBypass` | `(user: OwnershipUser) => boolean` | — | Custom predicate for bypassing ownership |
+
+**Behavior**: When enforced and the user is authenticated, `findOne`/`update`/`remove` use a query builder scoped to the user's ownership (via `userOwnershipField` or `findMineQuery`). If no record matches the scoped query, the endpoint returns 404 — identical to a missing record, preventing existence leaks. If no user is provided but enforcement is active, a 403 is returned (fail-closed). Users with bypass permissions or matching the bypass predicate get full, unscoped access.
+
+**Backward compatibility**: `enforceOwnership` defaults to `false` — existing services continue to use their current `findOne`/`update`/`remove` paths without any change.
+
 ---
 
 ## Audit Logging
@@ -846,7 +873,7 @@ describe('PostController', () => {
     updateDto: UpdatePostDto,
     permissions: {
       findAll: 'posts.read',
-      findOne: 'posts.read',
+      findOne: 'posts.readOne',
       create: 'posts.create',
       update: 'posts.update',
       remove: 'posts.delete',

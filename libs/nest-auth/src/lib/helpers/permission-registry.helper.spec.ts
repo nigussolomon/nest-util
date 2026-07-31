@@ -33,7 +33,7 @@ describe('permission registry helper', () => {
         resources: [
           {
             resource: 'posts',
-            permissions: ['read', 'create', 'update', 'delete', 'audit'],
+            permissions: ['read', 'create', 'update', 'delete', 'audit', 'readOne'],
           },
         ],
       },
@@ -44,7 +44,7 @@ describe('permission registry helper', () => {
 
     expect(permissions).toEqual({
       findAll: 'posts.read',
-      findOne: 'posts.read',
+      findOne: 'posts.readOne',
       create: 'posts.create',
       update: 'posts.update',
       remove: 'posts.delete',
@@ -67,7 +67,7 @@ describe('permission registry helper', () => {
           resource: 'posts',
         }
       )
-    ).toThrow('Missing permission "posts.create" in auth permission registry');
+    ).toThrow('Missing permission "posts.readOne" in auth permission registry');
   });
 
   it('skips missing endpoint permissions when strict is false', () => {
@@ -88,7 +88,6 @@ describe('permission registry helper', () => {
 
     expect(permissions).toEqual({
       findAll: 'posts.read',
-      findOne: 'posts.read',
     });
   });
 });

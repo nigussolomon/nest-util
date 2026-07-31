@@ -1,6 +1,7 @@
 import { FilterDto } from '../dtos/filter.dto';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
+import { OwnershipUser } from './find-mine.interface';
 
 export type CrudEndpoint =
   | 'findAll'
@@ -41,13 +42,13 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
     query: CursorPaginationDto & FilterDto
   ): Promise<CursorPaginationResult<ResponseDto>>;
 
-  findOne(id: number): Promise<ResponseDto>;
+  findOne(id: number, user?: OwnershipUser): Promise<ResponseDto>;
 
   create(dto: CreateDto): Promise<ResponseDto>;
 
-  update(id: number, dto: UpdateDto): Promise<ResponseDto>;
+  update(id: number, dto: UpdateDto, user?: OwnershipUser): Promise<ResponseDto>;
 
-  remove(id: number): Promise<boolean>;
+  remove(id: number, user?: OwnershipUser): Promise<boolean>;
 
   findAuditLogs?(query: AuditLogQuery): Promise<unknown>;
 

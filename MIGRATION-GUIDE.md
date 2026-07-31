@@ -13,7 +13,8 @@ This guide is for **consumer projects** that use `@nest-util/nest-crud`, `@nest-
 - [Phase 2: Remove @nest-util/nest-audit](#phase-2-remove-nest-utilnest-audit)
 - [Phase 3: Adopt Lifecycle Hooks (Optional)](#phase-3-adopt-lifecycle-hooks)
 - [Phase 4: Enable findMine (Optional)](#phase-4-enable-findmine)
-- [Phase 5: Cursor Pagination (No Changes Needed)](#phase-5-cursor-pagination)
+- [Phase 5: Enable Ownership Enforcement (Optional)](#phase-5-enable-ownership-enforcement)
+- [Phase 6: Cursor Pagination (No Changes Needed)](#phase-6-cursor-pagination)
 - [Post-Migration Verification](#post-migration-verification)
 - [Troubleshooting](#troubleshooting)
 - [Agent Guardrails](#agent-guardrails)
@@ -64,6 +65,7 @@ npm run build  # or your build command
 |---|---|---|
 | Lifecycle Hooks | `beforeCreate`, `afterCreate`, `beforeUpdate`, etc. | Add `hooks` to service options |
 | findMine | `GET /mine` returns user's records | Add `userOwnershipField` + `enableFindMine: true` |
+| Ownership Enforcement | Scope `findOne`/`update`/`remove` to owned records | Add `enforceOwnership: true` alongside findMine config |
 | Cursor Pagination | `?cursor=<opaque>` on `GET /` | No changes needed — automatic |
 
 ### Package Versions
@@ -518,7 +520,55 @@ npm test  # or your test command
 
 ---
 
-## Phase 5: Cursor Pagination
+## Phase 5: Enable Ownership Enforcement
+
+**Risk Level:** Low
+**Estimated Time:** 5 minutes
+**Rollback:** Remove `enforceOwnership: true` from your service config
+
+### What's New
+
+When `enforceOwnership: true` is set alongside `userOwnershipField` or `findMineQuery`, the generic `findOne`, `update`, and `remove` operations are scoped to records owned by the authenticated user. Non-owned records return 404 (no existence leak), and unauthenticated requests return 403 (fail-closed). Admins with bypass permissions get full access.
+
+### Step 5.1: Add Enforcement to Service
+
+```typescript
+super({
+  repository,
+  userOwnershipField: 'authorId',                  // or findMineQuery
+  enforceOwnership: true,                          // opt-in — defaults to false
+  ownershipBypassPermissions: ['admin.access'],    // admins bypass checks
+  // ownershipBypass: (user) => user.email?.endsWith('@example.com'),  // custom bypass
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enforceOwnership` | `boolean` | `false` | Enable ownership checks on `findOne`/`update`/`remove` |
+| `ownershipBypassPermissions` | `readonly string[]` | `[]` | Permission strings that grant full access |
+| `ownershipBypass` | `(user: OwnershipUser) => boolean` | — | Custom predicate for bypassing ownership |
+
+### Step 5.2: No Controller Changes Needed
+
+The `@CurrentUser()` decorator is already wired into `findOne`, `update`, and `remove` in the controller factory. The `user` parameter is forwarded automatically — no controller changes are required.
+
+### Checkpoint 5: Ownership Enforcement
+
+```bash
+npm run build  # or your build command
+npm test  # or your test command
+```
+
+**Functional Tests:**
+- `GET /post/1` with owner JWT → returns record
+- `GET /post/2` with non-owner JWT → returns 404
+- `GET /post/1` unauthenticated → returns 403
+- `GET /post/1` with admin JWT (has `admin.access`) → returns record
+- `PATCH /post/1` + `DELETE /post/1` follow same ownership rules
+
+---
+
+## Phase 6: Cursor Pagination
 
 **Risk Level:** Low
 **Estimated Time:** 0 minutes (already working)
@@ -749,6 +799,13 @@ async function bootstrap() {
 2. **ALWAYS** use parameterized queries in `findMineQuery` (never string concatenation)
 3. **ALWAYS** set `enableFindMine: true` in controller factory to enable the endpoint
 4. **NEVER** expose `findMine` without authentication guards
+
+### Ownership Enforcement
+
+1. **ALWAYS** set `enforceOwnership: true` only when `userOwnershipField` or `findMineQuery` is configured
+2. **ALWAYS** configure bypass permissions for admin roles (e.g. `ownershipBypassPermissions: ['admin.access']`)
+3. **ALWAYS** verify endpoints return 404 for non-owned records and 403 for unauthenticated requests
+4. **NEVER** enable enforcement without authentication guards on the controller
 
 ### Testing
 

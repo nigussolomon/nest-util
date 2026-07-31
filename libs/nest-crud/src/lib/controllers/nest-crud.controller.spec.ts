@@ -135,7 +135,7 @@ describe('NestedCrudController Factory', () => {
 
       const result = await controller.findOne(id);
 
-      expect(service.findOne).toHaveBeenCalledWith(id);
+      expect(service.findOne).toHaveBeenCalledWith(id, undefined);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -162,7 +162,7 @@ describe('NestedCrudController Factory', () => {
 
       const result = await controller.update(id, dto);
 
-      expect(service.update).toHaveBeenCalledWith(id, dto);
+      expect(service.update).toHaveBeenCalledWith(id, dto, undefined);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -174,7 +174,7 @@ describe('NestedCrudController Factory', () => {
 
       const result = await controller.remove(id);
 
-      expect(service.remove).toHaveBeenCalledWith(id);
+      expect(service.remove).toHaveBeenCalledWith(id, undefined);
       expect(result).toBe(true);
     });
   });

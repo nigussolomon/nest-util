@@ -1,4 +1,2 @@
-# Taste (Continuously Learned by [CommandCode][cmd])
-
-[cmd]: https://commandcode.ai/
-
+# General Preferences
+See [general-preferences/taste.md](general-preferences/taste.md)

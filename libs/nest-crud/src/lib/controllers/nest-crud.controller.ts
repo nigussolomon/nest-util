@@ -19,6 +19,7 @@ import { FilterDto } from '../dtos/filter.dto';
 import { Audit } from '../decorators/audit-log.decorator';
 import { ListAuditLogsDto } from '../dtos/list-audit-logs.dto';
 import { CurrentUser } from '@nest-util/nest-auth';
+import type { OwnershipUser } from '../interfaces/find-mine.interface';
 
 export const AUTH_PERMISSIONS_METADATA_KEY = 'auth:permissions';
 
@@ -38,10 +39,10 @@ export interface IBaseController<CD, UD, RD> {
   findAll(
     query: PaginationDto & FilterDto
   ): Promise<{ data: RD[]; meta?: unknown } | RD[]>;
-  findOne(id: number): Promise<RD>;
+  findOne(id: number, user?: OwnershipUser): Promise<RD>;
   create(dto: CD): Promise<RD>;
-  update(id: number, dto: UD): Promise<RD>;
-  remove(id: number): Promise<boolean>;
+  update(id: number, dto: UD, user?: OwnershipUser): Promise<RD>;
+  remove(id: number, user?: OwnershipUser): Promise<boolean>;
   findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
 }
 
@@ -194,17 +195,24 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @Audit({ action: 'UPDATE' })
     @ApiBody({ type: updateDto })
     @ApiResponse({ type: responseDto })
-    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UD) {
+    update(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: UD,
+      @CurrentUser() user?: OwnershipUser
+    ) {
       this.ensureEndpointEnabled('update');
-      return this.service.update(id, dto);
+      return this.service.update(id, dto, user);
     }
 
     @Delete(':id')
     @Message('deleted')
     @Audit({ action: 'DELETE' })
-    remove(@Param('id', ParseIntPipe) id: number) {
+    remove(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
       this.ensureEndpointEnabled('remove');
-      return this.service.remove(id);
+      return this.service.remove(id, user);
     }
 
     @Get('auditlogs')
@@ -222,9 +230,12 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @Get(':id')
     @Message('fetched')
     @ApiResponse({ type: responseDto })
-    findOne(@Param('id', ParseIntPipe) id: number) {
+    findOne(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
       this.ensureEndpointEnabled('findOne');
-      return this.service.findOne(id);
+      return this.service.findOne(id, user);
     }
   }
 

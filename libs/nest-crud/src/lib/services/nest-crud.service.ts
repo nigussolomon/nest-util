@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Type } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Type } from '@nestjs/common';
 import { DeepPartial, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 import { AuditLogEntity } from '../entities/audit-log.entity';
 import { applyFilters } from '../helpers/filter.helper';
@@ -9,7 +9,7 @@ import { applyPagination } from '../helpers/pagination.helper';
 import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
 import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
 import { CrudHookConfig, CrudHooks, TransactionConfig } from '../interfaces/hooks.interface';
-import { FindMineConfig } from '../interfaces/find-mine.interface';
+import { FindMineConfig, OwnershipUser } from '../interfaces/find-mine.interface';
 import {
   applyCursorFilter,
   buildNextCursor,
@@ -65,6 +65,9 @@ export class NestCrudService<
   protected readonly transactionConfig: TransactionConfig;
   protected readonly userOwnershipField?: keyof Entity;
   protected readonly findMineQuery?: (qb: SelectQueryBuilder<Entity>, userId: string | number) => void;
+  protected readonly enforceOwnership: boolean;
+  protected readonly ownershipBypassPermissions: readonly string[];
+  protected readonly ownershipBypass?: (user: OwnershipUser) => boolean;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -82,6 +85,9 @@ export class NestCrudService<
     this.transactionConfig = options.transactionConfig ?? {};
     this.userOwnershipField = options.userOwnershipField;
     this.findMineQuery = options.findMineQuery;
+    this.enforceOwnership = options.enforceOwnership ?? false;
+    this.ownershipBypassPermissions = options.ownershipBypassPermissions ?? [];
+    this.ownershipBypass = options.ownershipBypass;
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
@@ -170,22 +176,89 @@ export class NestCrudService<
     return result;
   }
 
+  private applyIncludeJoins(qb: SelectQueryBuilder<Entity>): void {
+    if (this.include.length === 0) return;
+
+    this.include.forEach((relation) => {
+      const parts = relation.split('.');
+      if (parts.length === 1) {
+        qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
+      } else {
+        const parentAlias = parts.slice(0, -1).join('_');
+        const field = parts[parts.length - 1];
+        const alias = parts.join('_');
+        qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
+      }
+    });
+  }
+
+  private isOwnershipConfigured(): boolean {
+    return Boolean(this.userOwnershipField || this.findMineQuery);
+  }
+
+  private canBypassOwnership(user?: OwnershipUser): boolean {
+    if (!user) return false;
+
+    if (this.ownershipBypass && this.ownershipBypass(user)) {
+      return true;
+    }
+
+    if (this.ownershipBypassPermissions.length > 0) {
+      const userPermissions = Array.isArray(user.permissions)
+        ? user.permissions
+        : [];
+      return this.ownershipBypassPermissions.some((permission) =>
+        userPermissions.includes(permission)
+      );
+    }
+
+    return false;
+  }
+
+  private enforceOwnershipFor(user?: OwnershipUser): boolean {
+    return Boolean(
+      this.enforceOwnership &&
+        this.isOwnershipConfigured() &&
+        !this.canBypassOwnership(user)
+    );
+  }
+
+  private applyOwnershipCondition(
+    qb: SelectQueryBuilder<Entity>,
+    userId: string | number
+  ): void {
+    if (this.findMineQuery) {
+      this.findMineQuery(qb, userId);
+    } else if (this.userOwnershipField) {
+      qb.where(`e.${String(this.userOwnershipField)} = :userId`, { userId });
+    }
+  }
+
+  private async findOwnedEntity(
+    id: number,
+    user: OwnershipUser
+  ): Promise<Entity | null> {
+    const userId = user?.id;
+
+    if (userId === undefined || userId === null) {
+      throw new ForbiddenException(
+        'Authentication required to access this resource'
+      );
+    }
+
+    const qb = this.repo.createQueryBuilder('e');
+    this.applyOwnershipCondition(qb, userId);
+    qb.andWhere('e.id = :id', { id });
+    this.applyIncludeJoins(qb);
+
+    const rows = await qb.getMany();
+    return rows[0] ?? null;
+  }
+
   async findAll(query: PaginationDto & FilterDto) {
     const qb = this.repo.createQueryBuilder('e');
 
-    if (this.include.length > 0) {
-      this.include.forEach((relation) => {
-        const parts = relation.split('.');
-        if (parts.length === 1) {
-          qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
-        } else {
-          const parentAlias = parts.slice(0, -1).join('_');
-          const field = parts[parts.length - 1];
-          const alias = parts.join('_');
-          qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
-        }
-      });
-    }
+    this.applyIncludeJoins(qb);
 
     applyFilters(qb, query.filter, this.allowedFilters);
 
@@ -222,25 +295,9 @@ export class NestCrudService<
 
     const qb = this.repo.createQueryBuilder('e');
 
-    if (this.findMineQuery) {
-      this.findMineQuery(qb, userId);
-    } else if (this.userOwnershipField) {
-      qb.where(`e.${String(this.userOwnershipField)} = :userId`, { userId });
-    }
+    this.applyOwnershipCondition(qb, userId);
 
-    if (this.include.length > 0) {
-      this.include.forEach((relation) => {
-        const parts = relation.split('.');
-        if (parts.length === 1) {
-          qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
-        } else {
-          const parentAlias = parts.slice(0, -1).join('_');
-          const field = parts[parts.length - 1];
-          const alias = parts.join('_');
-          qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
-        }
-      });
-    }
+    this.applyIncludeJoins(qb);
 
     applyFilters(qb, query.filter, this.allowedFilters);
 
@@ -277,19 +334,7 @@ export class NestCrudService<
     const qb = this.repo.createQueryBuilder('e');
 
     // Join relations
-    if (this.include.length > 0) {
-      this.include.forEach((relation) => {
-        const parts = relation.split('.');
-        if (parts.length === 1) {
-          qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
-        } else {
-          const parentAlias = parts.slice(0, -1).join('_');
-          const field = parts[parts.length - 1];
-          const alias = parts.join('_');
-          qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
-        }
-      });
-    }
+    this.applyIncludeJoins(qb);
 
     // Apply filters
     applyFilters(qb, query.filter, this.allowedFilters);
@@ -345,17 +390,23 @@ export class NestCrudService<
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, user?: OwnershipUser) {
     await this.executeHook(this.hooks.beforeFindOne, { id });
 
-    const relationsObj = this.include.length > 0
-      ? this.buildRelationsObject(this.include)
-      : undefined;
+    let entity: Entity | null;
 
-    const entity = await this.repo.findOne({
-      where: { id } as unknown as Partial<Entity>,
-      relations: relationsObj as any,
-    });
+    if (this.enforceOwnershipFor(user)) {
+      entity = await this.findOwnedEntity(id, user as OwnershipUser);
+    } else {
+      const relationsObj = this.include.length > 0
+        ? this.buildRelationsObject(this.include)
+        : undefined;
+
+      entity = await this.repo.findOne({
+        where: { id } as unknown as Partial<Entity>,
+        relations: relationsObj as any,
+      });
+    }
 
     if (!entity) {
       throw new NotFoundException('Resource not found');
@@ -389,10 +440,16 @@ export class NestCrudService<
     return result;
   }
 
-  async update(id: number, payload: UpdateDto) {
-    const existing = await this.repo.findOneBy({
-      id,
-    } as unknown as Partial<Entity>);
+  async update(id: number, payload: UpdateDto, user?: OwnershipUser) {
+    let existing: Entity | null;
+
+    if (this.enforceOwnershipFor(user)) {
+      existing = await this.findOwnedEntity(id, user as OwnershipUser);
+    } else {
+      existing = await this.repo.findOneBy({
+        id,
+      } as unknown as Partial<Entity>);
+    }
 
     if (!existing) {
       throw new NotFoundException('Resource not found');
@@ -408,17 +465,23 @@ export class NestCrudService<
     this.repo.merge(existing, resolved as DeepPartial<Entity>);
     await this.repo.save(existing);
 
-    const result = await this.findOne(id);
+    const result = await this.findOne(id, user);
 
     await this.executeHook(this.hooks.afterUpdate, { entity: result as any, payload: payloadSnapshot, id });
 
     return result;
   }
 
-  async remove(id: number) {
-    const existing = await this.repo.findOneBy({
-      id,
-    } as unknown as Partial<Entity>);
+  async remove(id: number, user?: OwnershipUser) {
+    let existing: Entity | null;
+
+    if (this.enforceOwnershipFor(user)) {
+      existing = await this.findOwnedEntity(id, user as OwnershipUser);
+    } else {
+      existing = await this.repo.findOneBy({
+        id,
+      } as unknown as Partial<Entity>);
+    }
 
     if (!existing) {
       throw new NotFoundException('Resource not found');

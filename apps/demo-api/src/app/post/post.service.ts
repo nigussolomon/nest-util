@@ -20,6 +20,8 @@ export class PostService extends NestCrudService<
       repository,
       allowedFilters: [],
       userOwnershipField: 'authorId',
+      enforceOwnership: true,
+      ownershipBypassPermissions: ['admin.access'],
     });
   }
 }

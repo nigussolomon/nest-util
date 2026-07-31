@@ -495,7 +495,7 @@ interface PermissionRegistryResource {
 ```
 
 `buildCrudPermissionsFromRegistry(registry, options)` generates a permissions map for CRUD endpoints. Default endpoint actions:
-- `findAll` → `read`, `findOne` → `read`, `create` → `create`, `update` → `update`, `remove` → `delete`, `findAuditLogs` → `audit`, `findMine` → `read`
+- `findAll` → `read`, `findOne` → `readOne`, `create` → `create`, `update` → `update`, `remove` → `delete`, `findAuditLogs` → `audit`, `findMine` → `read`
 
 Permission keys are built as `{resource}.{action}` (e.g. `posts.create`). If `strict` is not false and a permission is missing from the registry, an error is thrown at startup.
 

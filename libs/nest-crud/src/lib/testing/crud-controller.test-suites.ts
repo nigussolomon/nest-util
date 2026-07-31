@@ -106,7 +106,7 @@ export function crudControllerTests<
 
       const result = await controller.findOne(1);
 
-      expect(service.findOne).toHaveBeenCalledWith(1);
+      expect(service.findOne).toHaveBeenCalledWith(1, undefined);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -132,7 +132,7 @@ export function crudControllerTests<
 
       const result = await controller.update(1, dto);
 
-      expect(service.update).toHaveBeenCalledWith(1, dto);
+      expect(service.update).toHaveBeenCalledWith(1, dto, undefined);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -143,7 +143,7 @@ export function crudControllerTests<
 
       const result = await controller.remove(1);
 
-      expect(service.remove).toHaveBeenCalledWith(1);
+      expect(service.remove).toHaveBeenCalledWith(1, undefined);
       expect(result).toBe(true);
     });
   });

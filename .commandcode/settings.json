@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npx nx run-many -t typecheck 2 >& 1)",
+      "Shell(npx nx test @nest-util/nest-crud --testPathPattern=ownership 2 >& 1)",
+      "Shell(pnpm:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

@@ -9,7 +9,7 @@ import {
 
 const DEFAULT_CRUD_ENDPOINT_ACTIONS: Record<CrudRegistryEndpoint, string> = {
   findAll: 'read',
-  findOne: 'read',
+  findOne: 'readOne',
   create: 'create',
   update: 'update',
   remove: 'delete',
