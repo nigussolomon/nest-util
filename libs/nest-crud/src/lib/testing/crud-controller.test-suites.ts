@@ -119,7 +119,7 @@ export function crudControllerTests<
 
       const result = await controller.create(dto);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
+      expect(service.create).toHaveBeenCalledWith(dto, undefined);
       expect(result).toEqual(expectedResult);
     });
   });

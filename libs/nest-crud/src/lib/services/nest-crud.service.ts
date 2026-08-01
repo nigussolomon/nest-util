@@ -421,7 +421,43 @@ export class NestCrudService<
     return result;
   }
 
-  async create(payload: CreateDto) {
+  async create(payload: CreateDto, user?: OwnershipUser) {
+    if (
+      this.enforceOwnership &&
+      this.userOwnershipField &&
+      !this.canBypassOwnership(user)
+    ) {
+      if (!user || user.id === undefined || user.id === null) {
+        throw new ForbiddenException(
+          'Authentication required to access this resource'
+        );
+      }
+      const field = String(this.userOwnershipField);
+      const matchingRelation = this.relations.find(
+        (r) => String(r.property) === field
+      );
+
+      // Determine which payload key holds the user-controlled value
+      const targetKey = matchingRelation
+        ? (matchingRelation.idField ?? `${field}Id`)
+        : field;
+
+      const payloadValue = (payload as Record<string, unknown>)[targetKey];
+
+      if (payloadValue !== undefined && payloadValue !== null) {
+        // Value present — must match the authenticated user
+        if (String(payloadValue) !== String(user.id)) {
+          throw new NotFoundException('Resource not found');
+        }
+      } else {
+        // Value absent — auto-set to the authenticated user
+        (payload as Record<string, unknown>)[targetKey] = user.id;
+        if (matchingRelation) {
+          (payload as Record<string, unknown>)[field] = user.id;
+        }
+      }
+    }
+
     await this.executeHook(this.hooks.beforeCreate, { payload });
 
     const payloadSnapshot = { ...payload };

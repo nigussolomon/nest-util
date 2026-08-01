@@ -126,6 +126,135 @@ describe('NestCrudService - ownership enforcement', () => {
     });
   });
 
+  describe('create', () => {
+    it('auto-sets userOwnershipField to the authenticated user id', async () => {
+      const service = buildService();
+
+      const result = await service.create({ name: 'new post' } as any, ownUser);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ authorId: 7, name: 'new post' })
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('allows the plain ownership column when it matches the user id', async () => {
+      const service = buildService();
+
+      await service.create({ name: 'ok', authorId: 7 } as any, ownUser);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ authorId: 7, name: 'ok' })
+      );
+    });
+
+    it('throws 404 when plain ownership column does not match user id', async () => {
+      const service = buildService();
+
+      await expect(
+        service.create({ name: 'bad', authorId: 99 } as any, ownUser)
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when enforced but user is missing', async () => {
+      const service = buildService();
+
+      await expect(
+        service.create({ name: 'orphan' } as any)
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows admin bypass to set any owner id', async () => {
+      const service = buildService({
+        ownershipBypassPermissions: ['admin.access'],
+      });
+
+      await service.create({ name: 'admin post', authorId: 99 } as any, adminUser);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ authorId: 99, name: 'admin post' })
+      );
+    });
+
+    it('also sets the FK column when ownership field matches a relation', async () => {
+      const userEntity = { id: 7, name: 'user7' };
+      const userRepo = {
+        findOneBy: jest.fn().mockResolvedValue(userEntity),
+      } as any;
+
+      const service = buildService({
+        userOwnershipField: 'author',
+        relations: [
+          { property: 'author', repo: userRepo, idField: 'authorId' },
+        ],
+      });
+
+      // No authorId in payload → auto-set
+      await service.create({ name: 'post' } as any, ownUser);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'post',
+          author: userEntity,
+        })
+      );
+    });
+
+    it('allows matching FK when ownership field maps to a relation', async () => {
+      const userEntity = { id: 7, name: 'user7' };
+      const userRepo = {
+        findOneBy: jest.fn().mockResolvedValue(userEntity),
+      } as any;
+
+      const service = buildService({
+        userOwnershipField: 'author',
+        relations: [
+          { property: 'author', repo: userRepo, idField: 'authorId' },
+        ],
+      });
+
+      await service.create({ name: 'post', authorId: 7 } as any, ownUser);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          author: userEntity,
+        })
+      );
+    });
+
+    it('throws 404 when FK field does not match user id in relation case', async () => {
+      const userRepo = {
+        findOneBy: jest.fn(),
+      } as any;
+
+      const service = buildService({
+        userOwnershipField: 'author',
+        relations: [
+          { property: 'author', repo: userRepo, idField: 'authorId' },
+        ],
+      });
+
+      await expect(
+        service.create({ name: 'post', authorId: 99 } as any, ownUser)
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when ownership is not configured', async () => {
+      const service = buildService({
+        userOwnershipField: undefined,
+        findMineQuery: undefined,
+      });
+
+      await service.create({ name: 'plain' } as any, ownUser);
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'plain' })
+      );
+    });
+  });
+
   describe('update', () => {
     it('updates the record when the user owns it', async () => {
       const qb = repo.createQueryBuilder() as any;

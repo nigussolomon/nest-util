@@ -61,6 +61,27 @@ export interface AuthPasswordResetOptions {
   }) => Promise<void>;
 }
 
+export interface AuthVerificationOptions {
+  enabled?: boolean;
+  codeLength?: number;
+  ttlSeconds?: number;
+  cooldownSeconds?: number;
+  maxAttempts?: number;
+  lockSeconds?: number;
+  channel?: string;
+  verifiedField?: string;
+  verifiedAtField?: string;
+  codeHashField?: string;
+  expiresAtField?: string;
+  attemptsField?: string;
+  lastSentAtField?: string;
+  lockUntilField?: string;
+  inputCodeField?: string;
+  requestDto?: Type<unknown>;
+  verifyDto?: Type<unknown>;
+  deliverCode?: OtpDeliveryCallback;
+}
+
 export interface AuthModuleOptions {
   /**
    * The TypeORM entity for users.
@@ -150,4 +171,6 @@ export interface AuthModuleOptions {
   passwordReset?: AuthPasswordResetOptions;
 
   apiKey?: ApiKeyModuleOptions;
+
+  verification?: AuthVerificationOptions;
 }

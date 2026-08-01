@@ -63,6 +63,18 @@ export function CreateAuthController(
       [key: string]: unknown;
     };
 
+  const verificationRequestDto =
+    options.verification?.requestDto ||
+    class VerificationRequestDto {
+      [key: string]: unknown;
+    };
+
+  const verificationVerifyDto =
+    options.verification?.verifyDto ||
+    class VerificationVerifyDto {
+      [key: string]: unknown;
+    };
+
   @ApiTags('Authentication')
   @Controller('auth')
   class AuthController {
@@ -114,6 +126,31 @@ export function CreateAuthController(
     ): Promise<AuthTokens> {
       this.checkIfRouteDisabled('otp/login');
       return await this.authService.loginWithOtp(credentials);
+    }
+
+    @Post('verify')
+    @ApiOperation({ summary: 'Verify account with OTP code' })
+    @ApiBody({ type: verificationVerifyDto })
+    @ApiResponse({ status: 200, description: 'Account verified, tokens returned' })
+    @ApiResponse({ status: 401, description: 'Invalid or expired verification code' })
+    @ApiResponse({ status: 403, description: 'Verification route is disabled' })
+    async verifyAccount(
+      @Body() data: Record<string, unknown>
+    ): Promise<AuthTokens> {
+      this.checkIfRouteDisabled('verify');
+      return await this.authService.verifyAccount(data);
+    }
+
+    @Post('verify/resend')
+    @ApiOperation({ summary: 'Resend verification OTP code' })
+    @ApiBody({ type: verificationRequestDto })
+    @ApiResponse({ status: 200, description: 'Verification code sent' })
+    @ApiResponse({ status: 403, description: 'Verification route is disabled' })
+    async resendVerificationCode(
+      @Body() data: Record<string, unknown>
+    ): Promise<{ success: boolean; message?: string }> {
+      this.checkIfRouteDisabled('verify/resend');
+      return await this.authService.resendVerificationCode(data);
     }
 
     @Post('refresh')

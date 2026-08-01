@@ -40,7 +40,7 @@ export interface IBaseController<CD, UD, RD> {
     query: PaginationDto & FilterDto
   ): Promise<{ data: RD[]; meta?: unknown } | RD[]>;
   findOne(id: number, user?: OwnershipUser): Promise<RD>;
-  create(dto: CD): Promise<RD>;
+  create(dto: CD, user?: OwnershipUser): Promise<RD>;
   update(id: number, dto: UD, user?: OwnershipUser): Promise<RD>;
   remove(id: number, user?: OwnershipUser): Promise<boolean>;
   findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
@@ -185,9 +185,9 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @Audit({ action: 'CREATE' })
     @ApiBody({ type: createDto })
     @ApiResponse({ type: responseDto })
-    create(@Body() dto: CD) {
+    create(@Body() dto: CD, @CurrentUser() user?: OwnershipUser) {
       this.ensureEndpointEnabled('create');
-      return this.service.create(dto);
+      return this.service.create(dto, user);
     }
 
     @Patch(':id')

@@ -202,7 +202,7 @@ export class AppModule {}
 | `refreshTokenField` | `string` | `'refreshToken'` | No | DB field for hashed refresh nonce |
 | `accessTokenField` | `string` | `'accessToken'` | No | DB field for hashed access nonce |
 | `refreshTokenHeaderName` | `string` | `'x-refresh-token'` | No | Header name for refresh token |
-| `disabledRoutes` | `string[]` | `[]` | No | Routes to disable (e.g. `['register']`) |
+| `disabledRoutes` | `string[]` | `[]` | No | Routes to disable (e.g. `['register']`, `['verify']`) |
 | `loginDto` | `Type<unknown>` | — | No | Custom login DTO class |
 | `registerDto` | `Type<unknown>` | — | No | Custom register DTO class |
 | `refreshDto` | `Type<unknown>` | — | No | Custom refresh DTO class |
@@ -212,6 +212,7 @@ export class AppModule {}
 | `otp` | `AuthOtpOptions` | — | No | OTP login configuration |
 | `passwordReset` | `AuthPasswordResetOptions` | — | No | Password reset configuration |
 | `apiKey` | `ApiKeyModuleOptions` | — | No | API key authentication configuration |
+| `verification` | `AuthVerificationOptions` | — | No | Registration OTP verification |
 
 ### OTP Configuration
 
@@ -246,6 +247,83 @@ passwordReset: {
 ### Guardrail: OTP/Password Reset Callbacks
 
 **MUST** provide `deliverCode` when `otp.enabled: true` and `deliverToken` when `passwordReset.enabled: true`. The module throws at startup if these are missing.
+
+### Account Verification Configuration
+
+When enabled, `POST /auth/register` creates the user with `isVerified: false` and automatically sends an OTP code. The user must call `POST /auth/verify` with the code to activate their account. Login, refresh, and JWT validation are blocked until verified.
+
+```typescript
+verification: {
+  enabled: true,
+  codeLength: 6,            // 4-10, default: 6
+  ttlSeconds: 600,          // Code validity, default: 600 (10 min)
+  cooldownSeconds: 60,      // Min time between resends, default: 60
+  maxAttempts: 5,           // Max failed attempts before user is deleted, default: 5
+  lockSeconds: 300,         // Lockout duration, default: 300
+  channel: 'email',         // Delivery channel, default: 'email'
+  deliverCode: async ({ identifier, code, expiresAt }) => {
+    // REQUIRED callback — send the code to the user
+  },
+}
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | — | Enable registration verification |
+| `codeLength` | `number` | `6` | OTP code length (4-10) |
+| `ttlSeconds` | `number` | `600` | Code validity in seconds |
+| `cooldownSeconds` | `number` | `60` | Min time between resends |
+| `maxAttempts` | `number` | `5` | Max failed attempts (user deleted on exceed) |
+| `lockSeconds` | `number` | `300` | Lockout after too many attempts |
+| `channel` | `string` | `'email'` | Delivery channel passed to callback |
+| `verifiedField` | `string` | `'isVerified'` | Boolean column on user entity |
+| `verifiedAtField` | `string` | `'verifiedAt'` | Timestamp column on user entity |
+| `codeHashField` | `string` | `'verificationCodeHash'` | Stores bcrypt-hashed OTP |
+| `expiresAtField` | `string` | `'verificationCodeExpiresAt'` | OTP expiry timestamp |
+| `attemptsField` | `string` | `'verificationAttempts'` | Failed attempt counter |
+| `lastSentAtField` | `string` | `'verificationLastSentAt'` | Cooldown timestamp |
+| `lockUntilField` | `string` | `'verificationLockedUntil'` | Lockout timestamp |
+| `inputCodeField` | `string` | `'code'` | Field name in verify request body |
+| `requestDto` | `Type<unknown>` | — | Swagger DTO for resend endpoint |
+| `verifyDto` | `Type<unknown>` | — | Swagger DTO for verify endpoint |
+| `deliverCode` | `OtpDeliveryCallback` | — | **Required** — callback to send the code |
+
+**Required user entity columns** (with default names):
+
+```typescript
+@Column({ default: false })
+isVerified!: boolean;
+
+@Column({ type: 'timestamptz', nullable: true })
+verifiedAt?: Date;
+
+@Column({ select: false, nullable: true })
+verificationCodeHash?: string;
+
+@Column({ type: 'timestamptz', nullable: true, select: false })
+verificationCodeExpiresAt?: Date;
+
+@Column({ default: 0, select: false })
+verificationAttempts!: number;
+
+@Column({ type: 'timestamptz', nullable: true, select: false })
+verificationLastSentAt?: Date;
+
+@Column({ type: 'timestamptz', nullable: true, select: false })
+verificationLockedUntil?: Date;
+```
+
+**Endpoints**:
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `POST /auth/register` | POST | No | Creates unverified user + sends OTP (no tokens) |
+| `POST /auth/verify` | POST | No | Validates code → marks verified + issues tokens |
+| `POST /auth/verify/resend` | POST | No | Sends a fresh verification code |
+
+**Flow**: On wrong code, attempts are tracked. After max attempts or code expiry, the user is deleted (must register again). `POST /auth/login`, `POST /auth/refresh`, and JWT validation all reject unverified users with 401.
+
+**Guardrail**: `deliverCode` **MUST** be provided when `verification.enabled: true`. The module throws at startup if it's missing.
 
 ---
 
@@ -377,7 +455,7 @@ export class PostService extends NestCrudService<
 | `findAll` | `(query: PaginationDto & FilterDto)` | `{ data: ResponseDto[], meta?: { page, limit, total } }` |
 | `findAllWithCursor` | `(query: CursorPaginationDto & FilterDto)` | `CursorPaginationResult<ResponseDto>` |
 | `findOne` | `(id: number, user?: OwnershipUser)` | `ResponseDto` |
-| `create` | `(payload: CreateDto)` | `ResponseDto` |
+| `create` | `(payload: CreateDto, user?: OwnershipUser)` | `ResponseDto` |
 | `update` | `(id: number, payload: UpdateDto, user?: OwnershipUser)` | `ResponseDto` |
 | `remove` | `(id: number, user?: OwnershipUser)` | `boolean` |
 | `findMine` | `(userId, query)` | `{ data: ResponseDto[], meta?: ... }` |
@@ -487,7 +565,7 @@ The auth module auto-registers **five Swagger-tagged controllers**: Authenticati
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| `POST /auth/register` | POST | No | Register new user |
+| `POST /auth/register` | POST | No | Register new user (unverified if `verification.enabled`) |
 | `POST /auth/login` | POST | No | Login with credentials |
 | `POST /auth/refresh` | POST | No | Refresh access token |
 | `POST /auth/logout` | POST | JwtAuthGuard | Invalidate tokens |
@@ -498,6 +576,8 @@ The auth module auto-registers **five Swagger-tagged controllers**: Authenticati
 | `POST /auth/password-reset/reset` | POST | No | Reset password with token |
 | `POST /auth/otp/request` | POST | No | Request OTP code |
 | `POST /auth/otp/login` | POST | No | Login with OTP |
+| `POST /auth/verify` | POST | No | Verify account with OTP code |
+| `POST /auth/verify/resend` | POST | No | Resend verification OTP code |
 | `POST /auth/roles` | POST | admin.access | Create role |
 | `GET /auth/roles` | GET | admin.access | List all roles |
 | `POST /auth/users/:userId/roles/:roleId` | POST | admin.access | Assign role |
@@ -693,7 +773,12 @@ super({
 | `ownershipBypassPermissions` | `readonly string[]` | `[]` | Permission strings that grant full access (e.g. `['admin.access']`) |
 | `ownershipBypass` | `(user: OwnershipUser) => boolean` | — | Custom predicate for bypassing ownership |
 
-**Behavior**: When enforced and the user is authenticated, `findOne`/`update`/`remove` use a query builder scoped to the user's ownership (via `userOwnershipField` or `findMineQuery`). If no record matches the scoped query, the endpoint returns 404 — identical to a missing record, preventing existence leaks. If no user is provided but enforcement is active, a 403 is returned (fail-closed). Users with bypass permissions or matching the bypass predicate get full, unscoped access.
+**Behavior**: When enforced and the user is authenticated:
+
+- **`create`**: When `userOwnershipField` is configured and the ownership value is present in the payload, it must match the authenticated user's ID — otherwise a 404 is thrown (impersonation attempt). If the value is absent, it's auto-set to `user.id`. Bypass users (admin) can set any value.
+- **`findOne` / `update` / `remove`**: Use a query builder scoped to the user's ownership (via `userOwnershipField` or `findMineQuery`). Non-owned records return 404, preventing existence leaks. Unauthenticated requests return 403 (fail-closed). Bypass users get full, unscoped access.
+
+**`findMineQuery` and create**: `create` enforcement only applies when `userOwnershipField` is set. Ownership configured via `findMineQuery` (complex queries, joins) is a read-time concept and does not auto-enforce on create — use the `beforeCreate` hook for create-time checks in that scenario.
 
 **Backward compatibility**: `enforceOwnership` defaults to `false` — existing services continue to use their current `findOne`/`update`/`remove` paths without any change.
 

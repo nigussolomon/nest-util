@@ -44,7 +44,7 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
 
   findOne(id: number, user?: OwnershipUser): Promise<ResponseDto>;
 
-  create(dto: CreateDto): Promise<ResponseDto>;
+  create(dto: CreateDto, user?: OwnershipUser): Promise<ResponseDto>;
 
   update(id: number, dto: UpdateDto, user?: OwnershipUser): Promise<ResponseDto>;
 

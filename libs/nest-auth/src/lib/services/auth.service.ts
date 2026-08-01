@@ -18,6 +18,7 @@ import { AUTH_OPTIONS } from '../constants';
 import type {
   AuthModuleOptions,
   AuthPasswordResetOptions,
+  AuthVerificationOptions,
 } from '../interfaces/auth-options';
 import type { AuthOtpOptions } from '../interfaces/auth-options';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
@@ -57,6 +58,23 @@ interface ResolvedPasswordResetOptions {
   tokenTtlSeconds: number;
   tokenField: string;
   expiresAtField: string;
+}
+
+interface ResolvedVerificationOptions {
+  codeLength: number;
+  ttlSeconds: number;
+  cooldownSeconds: number;
+  maxAttempts: number;
+  lockSeconds: number;
+  channel: string;
+  verifiedField: string;
+  verifiedAtField: string;
+  codeHashField: string;
+  expiresAtField: string;
+  attemptsField: string;
+  lastSentAtField: string;
+  lockUntilField: string;
+  inputCodeField: string;
 }
 
 @Injectable()
@@ -104,9 +122,14 @@ export class AuthService {
     const hashedPassword = password
       ? await bcrypt.hash(password, 10)
       : undefined;
+
+    const verificationEnabled = this.options.verification?.enabled;
+    const verifiedField = this.options.verification?.verifiedField ?? 'isVerified';
+
     const newUser = this.userRepository.create({
       ...data,
       [this.options.passkeyField]: hashedPassword,
+      ...(verificationEnabled ? { [verifiedField]: false } : {}),
     });
 
     const savedUser = await this.userRepository.save(newUser);
@@ -115,6 +138,21 @@ export class AuthService {
       userId: (savedUser as any).id,
       metadata: { identifier },
     });
+
+    if (verificationEnabled) {
+      try {
+        await this.generateAndSendVerificationOtp(
+          (savedUser as any).id as string | number,
+          identifier
+        );
+      } catch {
+        await this.userRepository.delete((savedUser as any).id);
+        throw new InternalServerErrorException(
+          'Failed to send verification code'
+        );
+      }
+    }
+
     return this.removeSensitiveData(savedUser);
   }
 
@@ -131,6 +169,18 @@ export class AuthService {
     if (!user) {
       this.emitAuthEvent('auth.user.login.failed.user_not_found', { metadata: { identifier } });
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (this.options.verification?.enabled) {
+      const verifiedField = this.options.verification.verifiedField ?? 'isVerified';
+      if (!user[verifiedField]) {
+        this.emitAuthEvent('auth.user.login.failed.unverified', {
+          entityId: user.id,
+          userId: user.id,
+          metadata: { identifier },
+        });
+        throw new UnauthorizedException('Account not verified');
+      }
     }
 
     const isPasswordValid = user[this.options.passkeyField]
@@ -422,6 +472,14 @@ export class AuthService {
       if (!user) {
         this.emitAuthEvent('auth.token.refresh.failed', { metadata: { reason: 'Invalid refresh token' } });
         throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      if (this.options.verification?.enabled) {
+        const verifiedField = this.options.verification.verifiedField ?? 'isVerified';
+        if (!user[verifiedField]) {
+          this.emitAuthEvent('auth.token.refresh.failed', { userId: payload.sub, metadata: { reason: 'Account not verified' } });
+          throw new UnauthorizedException('Account not verified');
+        }
       }
 
       const storedHash = user[refreshTokenField] as string;
@@ -992,6 +1050,292 @@ export class AuthService {
     };
   }
 
+  // ── Verification Helpers ──────────────────────────────────────
+
+  private getVerificationOptions(): AuthVerificationOptions {
+    if (!this.options.verification?.enabled) {
+      throw new BadRequestException('Account verification is not enabled');
+    }
+
+    if (!this.options.verification.deliverCode) {
+      throw new BadRequestException(
+        'Verification delivery callback is not configured'
+      );
+    }
+
+    return this.options.verification;
+  }
+
+  private resolveVerificationOptions(
+    verif: AuthVerificationOptions
+  ): ResolvedVerificationOptions {
+    const codeLength = verif.codeLength ?? 6;
+    if (codeLength < 4 || codeLength > 10) {
+      throw new BadRequestException(
+        'Verification code length must be between 4 and 10'
+      );
+    }
+
+    return {
+      codeLength,
+      ttlSeconds: verif.ttlSeconds ?? 600,
+      cooldownSeconds: verif.cooldownSeconds ?? 60,
+      maxAttempts: verif.maxAttempts ?? 5,
+      lockSeconds: verif.lockSeconds ?? 300,
+      channel: verif.channel ?? 'email',
+      verifiedField: verif.verifiedField ?? 'isVerified',
+      verifiedAtField: verif.verifiedAtField ?? 'verifiedAt',
+      codeHashField: verif.codeHashField ?? 'verificationCodeHash',
+      expiresAtField: verif.expiresAtField ?? 'verificationCodeExpiresAt',
+      attemptsField: verif.attemptsField ?? 'verificationAttempts',
+      lastSentAtField: verif.lastSentAtField ?? 'verificationLastSentAt',
+      lockUntilField: verif.lockUntilField ?? 'verificationLockedUntil',
+      inputCodeField: verif.inputCodeField ?? 'code',
+    };
+  }
+
+  private async generateAndSendVerificationOtp(
+    userId: string | number,
+    identifier: string
+  ): Promise<void> {
+    const verifOptions = this.getVerificationOptions();
+    const verif = this.resolveVerificationOptions(verifOptions);
+
+    const code = this.generateOtpCode(verif.codeLength);
+    const hashedCode = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + verif.ttlSeconds * 1000);
+
+    await this.updateVerificationState(userId, verif, {
+      [verif.codeHashField]: hashedCode,
+      [verif.expiresAtField]: expiresAt,
+      [verif.attemptsField]: 0,
+      [verif.lastSentAtField]: new Date(),
+      [verif.lockUntilField]: null,
+    });
+
+    await verifOptions.deliverCode!({
+      identifier,
+      code,
+      channel: verifOptions.channel ?? verif.channel,
+      expiresAt,
+    });
+  }
+
+  private async updateVerificationState(
+    userId: string | number,
+    verif: ResolvedVerificationOptions,
+    state: Record<string, unknown>
+  ): Promise<void> {
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set(state)
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new InternalServerErrorException('Failed to update verification state');
+    }
+  }
+
+  async verifyAccount(data: Record<string, unknown>): Promise<AuthTokens> {
+    const verifOptions = this.getVerificationOptions();
+    const verif = this.resolveVerificationOptions(verifOptions);
+
+    const identifier = data[this.options.identifierField];
+    const code = data[verif.inputCodeField];
+
+    if (typeof identifier !== 'string' || !identifier.trim()) {
+      throw new BadRequestException(
+        `${this.options.identifierField} is required`
+      );
+    }
+
+    if (typeof code !== 'string' || !code.trim()) {
+      throw new BadRequestException(`${verif.inputCodeField} is required`);
+    }
+
+    const normalizedIdentifier = identifier.trim();
+
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${this.options.passkeyField}`)
+      .addSelect(`user.${verif.codeHashField}`)
+      .addSelect(`user.${verif.expiresAtField}`)
+      .addSelect(`user.${verif.attemptsField}`)
+      .addSelect(`user.${verif.lockUntilField}`)
+      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .getOne();
+
+    if (!user) {
+      this.emitAuthEvent('auth.verification.verify.failed.user_not_found', {
+        metadata: { identifier: normalizedIdentifier },
+      });
+      throw new UnauthorizedException('Invalid verification code');
+    }
+
+    const now = new Date();
+
+    // Check lock
+    const lockUntil = this.toDate(user[verif.lockUntilField]);
+    if (lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.verification.verify.failed.locked', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
+      throw new BadRequestException('Too many verification attempts');
+    }
+
+    const storedHash = user[verif.codeHashField] as string | null;
+    const expiresAt = this.toDate(user[verif.expiresAtField]);
+
+    if (!storedHash || !expiresAt) {
+      this.emitAuthEvent('auth.verification.verify.failed.not_requested', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
+      throw new UnauthorizedException('No verification code has been sent');
+    }
+
+    // Check expiry → delete user
+    if (expiresAt <= now) {
+      await this.userRepository.delete(user.id as string | number);
+      this.emitAuthEvent('auth.verification.verify.failed.expired', {
+        metadata: { identifier: normalizedIdentifier },
+      });
+      throw new UnauthorizedException(
+        'Verification code has expired. Please register again.'
+      );
+    }
+
+    const isCodeValid = await bcrypt.compare(code.trim(), storedHash);
+
+    if (!isCodeValid) {
+      const currentAttempts = this.toNumber(user[verif.attemptsField]);
+      const nextAttempts = currentAttempts + 1;
+
+      const updatePayload: Record<string, unknown> = {
+        [verif.attemptsField]: nextAttempts,
+      };
+
+      if (nextAttempts >= verif.maxAttempts) {
+        // Max attempts reached → delete user
+        await this.userRepository.delete(user.id as string | number);
+        this.emitAuthEvent('auth.verification.verify.failed.max_attempts', {
+          metadata: { identifier: normalizedIdentifier },
+        });
+        throw new UnauthorizedException(
+          'Maximum verification attempts reached. Please register again.'
+        );
+      }
+
+      await this.updateVerificationState(user.id as string | number, verif, updatePayload);
+
+      this.emitAuthEvent('auth.verification.verify.failed.invalid', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier, attemptsRemaining: verif.maxAttempts - nextAttempts },
+      });
+      throw new UnauthorizedException({
+        code: 'VERIFICATION_INVALID',
+        message: 'Invalid verification code',
+        attemptsRemaining: verif.maxAttempts - nextAttempts,
+      });
+    }
+
+    // Success — clear verification state, mark verified, issue tokens
+    await this.updateVerificationState(user.id as string | number, verif, {
+      [verif.codeHashField]: null,
+      [verif.expiresAtField]: null,
+      [verif.attemptsField]: 0,
+      [verif.lastSentAtField]: null,
+      [verif.lockUntilField]: null,
+      [verif.verifiedField]: true,
+      [verif.verifiedAtField]: new Date(),
+    });
+
+    this.emitAuthEvent('auth.verification.verify.success', {
+      entityId: user.id,
+      userId: user.id,
+      metadata: { identifier: normalizedIdentifier },
+    });
+
+    return this.generateTokens(user);
+  }
+
+  async resendVerificationCode(
+    data: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string }> {
+    const verifOptions = this.getVerificationOptions();
+    const verif = this.resolveVerificationOptions(verifOptions);
+
+    const identifier = data[this.options.identifierField];
+
+    if (typeof identifier !== 'string' || !identifier.trim()) {
+      throw new BadRequestException(
+        `${this.options.identifierField} is required`
+      );
+    }
+
+    const normalizedIdentifier = identifier.trim();
+
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(`user.${verif.lastSentAtField}`)
+      .addSelect(`user.${verif.lockUntilField}`)
+      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .getOne();
+
+    if (!user) {
+      this.emitAuthEvent('auth.verification.resend.failed.user_not_found', {
+        metadata: { identifier: normalizedIdentifier },
+      });
+      return {
+        success: true,
+        message: 'Verification code has been sent if the account exists',
+      };
+    }
+
+    const now = new Date();
+
+    // Cooldown
+    const lastSentAt = this.toDate(user[verif.lastSentAtField]);
+    if (
+      lastSentAt &&
+      now.getTime() - lastSentAt.getTime() < verif.cooldownSeconds * 1000
+    ) {
+      this.emitAuthEvent('auth.verification.resend.failed.cooldown', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
+      return { success: false, message: 'Resend request is on cooldown' };
+    }
+
+    try {
+      await this.generateAndSendVerificationOtp(
+        user.id as string | number,
+        normalizedIdentifier
+      );
+    } catch {
+      this.emitAuthEvent('auth.verification.resend.failed.delivery', {
+        entityId: user.id,
+        userId: user.id,
+      });
+      throw new InternalServerErrorException('Failed to deliver verification code');
+    }
+
+    this.emitAuthEvent('auth.verification.resend.success', {
+      entityId: user.id,
+      userId: user.id,
+      metadata: { identifier: normalizedIdentifier },
+    });
+
+    return { success: true };
+  }
+
   private async clearPasswordResetState(
     userId: string | number,
     config: ResolvedPasswordResetOptions
@@ -1092,6 +1436,15 @@ export class AuthService {
       delete userData[otpConfig.lockUntilField];
     }
 
+    if (this.options.verification?.enabled) {
+      const verif = this.resolveVerificationOptions(this.options.verification);
+      delete userData[verif.codeHashField];
+      delete userData[verif.expiresAtField];
+      delete userData[verif.attemptsField];
+      delete userData[verif.lastSentAtField];
+      delete userData[verif.lockUntilField];
+    }
+
     return userData as AuthUser;
   }
 
@@ -1145,6 +1498,13 @@ export class AuthService {
     );
     if (!isAccessTokenValid) {
       throw new UnauthorizedException('Access token reused or invalid');
+    }
+
+    if (this.options.verification?.enabled) {
+      const verifiedField = this.options.verification.verifiedField ?? 'isVerified';
+      if (!user[verifiedField]) {
+        throw new UnauthorizedException('Account not verified');
+      }
     }
 
     return this.removeSensitiveData(user);

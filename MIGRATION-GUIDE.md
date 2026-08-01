@@ -65,8 +65,9 @@ npm run build  # or your build command
 |---|---|---|
 | Lifecycle Hooks | `beforeCreate`, `afterCreate`, `beforeUpdate`, etc. | Add `hooks` to service options |
 | findMine | `GET /mine` returns user's records | Add `userOwnershipField` + `enableFindMine: true` |
-| Ownership Enforcement | Scope `findOne`/`update`/`remove` to owned records | Add `enforceOwnership: true` alongside findMine config |
+| Ownership Enforcement | Scope `findOne`/`update`/`remove`/`create` to owned records | Add `enforceOwnership: true` alongside findMine config |
 | Cursor Pagination | `?cursor=<opaque>` on `GET /` | No changes needed — automatic |
+| Registration Verification | OTP verification during registration | Add `verification: { enabled: true, deliverCode: ... }` |
 
 ### Package Versions
 
@@ -528,7 +529,7 @@ npm test  # or your test command
 
 ### What's New
 
-When `enforceOwnership: true` is set alongside `userOwnershipField` or `findMineQuery`, the generic `findOne`, `update`, and `remove` operations are scoped to records owned by the authenticated user. Non-owned records return 404 (no existence leak), and unauthenticated requests return 403 (fail-closed). Admins with bypass permissions get full access.
+When `enforceOwnership: true` is set alongside `userOwnershipField` or `findMineQuery`, the generic `findOne`, `update`, and `remove` operations are scoped to records owned by the authenticated user. Non-owned records return 404 (no existence leak), and unauthenticated requests return 403 (fail-closed). `create` auto-overwrites the ownership field with the authenticated user's ID — users can only create records for themselves. Admins with bypass permissions get full access.
 
 ### Step 5.1: Add Enforcement to Service
 
@@ -563,7 +564,9 @@ npm test  # or your test command
 - `GET /post/1` with owner JWT → returns record
 - `GET /post/2` with non-owner JWT → returns 404
 - `GET /post/1` unauthenticated → returns 403
-- `GET /post/1` with admin JWT (has `admin.access`) → returns record
+- `POST /post` with owner JWT → auto-sets `authorId` to current user
+- `POST /post` with admin JWT → can set any `authorId`
+- `POST /post` unauthenticated → returns 403
 - `PATCH /post/1` + `DELETE /post/1` follow same ownership rules
 
 ---
