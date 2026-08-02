@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   Type,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -38,7 +39,7 @@ export function CreateApiKeysController(
   class ApiKeysController {
     constructor(
       @Inject(AUTH_OPTIONS) protected readonly options: AuthModuleOptions,
-      protected readonly apiKeyService?: ApiKeyService
+      @Optional() protected readonly apiKeyService?: ApiKeyService
     ) {}
 
     @UseGuards(JwtAuthGuard, PermissionsGuard)

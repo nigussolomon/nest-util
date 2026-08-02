@@ -26,14 +26,14 @@ import { Reflector } from '@nestjs/core';
 @Module({})
 export class AuthModule {
   static forRoot(options: AuthModuleOptions): DynamicModule {
+    const apiKeyEnabled = options.apiKey?.enabled === true;
     const Controllers = [
       CreateAuthController(options),
       CreatePermissionsController(options),
       CreateRolesController(options),
       CreateUserRolesController(options),
-      CreateApiKeysController(options),
+      ...(apiKeyEnabled ? [CreateApiKeysController(options)] : []),
     ];
-    const apiKeyEnabled = options.apiKey?.enabled === true;
     const apiKeyEntities = apiKeyEnabled
       ? [ApiKeyEntity, ApiKeyRoleEntity]
       : [];
