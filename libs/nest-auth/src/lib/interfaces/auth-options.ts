@@ -2,6 +2,7 @@ import { Type } from '@nestjs/common';
 import { AuthRbacOptions } from './rbac-options.interface';
 import { PermissionRegistryConfig } from './permission-registry.interface';
 import { ApiKeyModuleOptions } from './api-key-options';
+import { AuthRegisterHooks } from './register-hooks.interface';
 
 export interface OtpDeliveryPayload {
   identifier: string;
@@ -80,6 +81,12 @@ export interface AuthVerificationOptions {
   requestDto?: Type<unknown>;
   verifyDto?: Type<unknown>;
   deliverCode?: OtpDeliveryCallback;
+
+  /**
+   * Which identifier field to deliver the post-register verification code to.
+   * Defaults to the first identifier field present in the registration payload.
+   */
+  identifierField?: string;
 }
 
 export interface AuthModuleOptions {
@@ -93,6 +100,13 @@ export interface AuthModuleOptions {
    * @default 'email'
    */
   identifierField: string;
+
+  /**
+   * Optional list of login identifier fields (e.g., ['email', 'phone']).
+   * Takes precedence over `identifierField` when both are provided. Lookups
+   * match any of these fields, so a user can log in with either value.
+   */
+  identifierFields?: string[];
 
   /**
    * Field for password (e.g., 'password').
@@ -173,4 +187,10 @@ export interface AuthModuleOptions {
   apiKey?: ApiKeyModuleOptions;
 
   verification?: AuthVerificationOptions;
+
+  /**
+   * Optional before/after registration hooks. Runs atomically with the user
+   * creation inside a transaction — a throwing hook fails the registration.
+   */
+  registerHooks?: AuthRegisterHooks;
 }

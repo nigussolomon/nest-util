@@ -78,6 +78,57 @@ export function crudServiceTests<
       expect(lastQb.andWhere).toHaveBeenCalled();
     });
 
+    it('should apply nested filters via joined aliases', async () => {
+      const nestedFilters = (config.allowedFilters ?? []).filter((field) =>
+        String(field).includes('.')
+      );
+      if (nestedFilters.length === 0) return;
+
+      lastQb = createMockQb();
+      lastQb.getManyAndCount.mockResolvedValue([[], 0]);
+      repository.createQueryBuilder.mockReturnValue(lastQb as any);
+
+      const nestedField = String(nestedFilters[0]);
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        filter: { [`${nestedField}_cont`]: 'test' },
+      });
+
+      const [sql] = lastQb.andWhere.mock.calls[0] as [string];
+      const parts = nestedField.split('.');
+      const alias = parts.slice(0, -1).join('_');
+      const column = parts[parts.length - 1];
+      expect(sql).toContain(`${alias}.${column} ILIKE`);
+    });
+
+    it('should sort by nested fields via joined aliases', async () => {
+      const nestedSorts = (config.allowedSortFields ?? []).filter((field) =>
+        String(field).includes('.')
+      );
+      if (nestedSorts.length === 0) return;
+
+      lastQb = createMockQb();
+      lastQb.getManyAndCount.mockResolvedValue([[], 0]);
+      repository.createQueryBuilder.mockReturnValue(lastQb as any);
+
+      const nestedField = String(nestedSorts[0]);
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: nestedField,
+        orderDirection: 'ASC',
+      });
+
+      const parts = nestedField.split('.');
+      const alias = parts.slice(0, -1).join('_');
+      const column = parts[parts.length - 1];
+      expect(lastQb.orderBy).toHaveBeenCalledWith(
+        `${alias}.${column}`,
+        'ASC'
+      );
+    });
+
     it('should join include relations via leftJoinAndSelect', async () => {
       if (!config.include || config.include.length === 0) return;
 
@@ -318,6 +369,35 @@ export function crudServiceTests<
       });
 
       expect(result.meta).toHaveProperty('total');
+    });
+
+    it('should join nested relations on the count query when includeTotal is true', async () => {
+      const nestedIncludes = (config.include ?? []).filter((relation) =>
+        relation.includes('.')
+      );
+      if (nestedIncludes.length === 0) return;
+
+      lastQb = createMockQb();
+      lastQb.getMany.mockResolvedValue([]);
+      repository.createQueryBuilder.mockReturnValue(lastQb as any);
+
+      const countQb = createMockQb();
+      countQb.getCount.mockResolvedValue(0);
+      repository.createQueryBuilder.mockReturnValueOnce(lastQb as any);
+      repository.createQueryBuilder.mockReturnValueOnce(countQb as any);
+
+      await service.findAllWithCursor({ limit: 10, includeTotal: true });
+
+      for (const relation of nestedIncludes) {
+        const parts = relation.split('.');
+        const parentAlias = parts.slice(0, -1).join('_');
+        const field = parts[parts.length - 1];
+        const alias = parts.join('_');
+        expect(countQb.leftJoin).toHaveBeenCalledWith(
+          `${parentAlias}.${field}`,
+          alias
+        );
+      }
     });
   });
 

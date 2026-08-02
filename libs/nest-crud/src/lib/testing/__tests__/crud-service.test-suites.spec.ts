@@ -69,3 +69,18 @@ describe('crudServiceTests with disabledEndpoints', () => {
     },
   });
 });
+
+describe('crudServiceTests with nested filters and sorting', () => {
+  crudServiceTests({
+    serviceClass: NestCrudService,
+    entity: TestEntity,
+    allowedFilters: ['name', 'author.name'] as const,
+    allowedSortFields: ['id', 'author.name'] as const,
+    include: ['author', 'author.profile'],
+    test: {
+      createPayload: { name: 'Alice', email: 'alice@test.com' },
+      updatePayload: { name: 'Updated' },
+      mockEntity: { id: 1, name: 'Alice', email: 'alice@test.com' },
+    },
+  });
+});

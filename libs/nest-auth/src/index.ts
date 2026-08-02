@@ -19,6 +19,7 @@ export * from './lib/interfaces/api-key-options';
 export * from './lib/decorators/auth-options';
 export * from './lib/interfaces/rbac-options.interface';
 export * from './lib/interfaces/permission-registry.interface';
+export * from './lib/interfaces/register-hooks.interface';
 export * from './lib/entities/role.entity';
 export * from './lib/entities/user-role.entity';
 export * from './lib/entities/api-key.entity';

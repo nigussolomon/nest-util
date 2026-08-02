@@ -14,8 +14,8 @@ export interface CrudTestConfig<
   createDto?: Type<TCreateDto>;
   updateDto?: Type<TUpdateDto>;
   responseDto?: Type<TResponseDto>;
-  allowedFilters?: readonly (keyof TEntity)[];
-  allowedSortFields?: readonly (keyof TEntity)[];
+  allowedFilters?: readonly (keyof TEntity | (string & {}))[];
+  allowedSortFields?: readonly (keyof TEntity | (string & {}))[];
   include?: readonly string[];
   userOwnershipField?: keyof TEntity;
   findMineQuery?: (qb: any, userId: string | number) => void;

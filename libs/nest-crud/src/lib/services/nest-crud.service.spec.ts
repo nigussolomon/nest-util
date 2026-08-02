@@ -40,6 +40,31 @@ function buildServiceWithIncludes(
   });
 }
 
+/** Helper that builds a NestCrudService supporting nested filter/sort paths. */
+function buildServiceWithNestedOptions(
+  repo: jest.Mocked<Repository<MockEntity>>,
+  options: { include?: string[]; allowedFilters?: string[]; allowedSortFields?: string[] }
+) {
+  return new NestCrudService<
+    MockEntity,
+    Partial<MockEntity>,
+    Partial<MockEntity>,
+    MockResponseDto
+  >({
+    repository: repo,
+    allowedFilters: options.allowedFilters ?? ['name'],
+    allowedSortFields: options.allowedSortFields ?? [],
+    include: options.include ?? [],
+    relations: [],
+    toResponseDto: (entity: MockEntity | MockEntity[]) => {
+      if (Array.isArray(entity)) {
+        return entity.map((e) => ({ id: e.id, name: e.name }));
+      }
+      return { id: entity.id, name: entity.name };
+    },
+  });
+}
+
 describe('NestCrudService', () => {
   let service: NestCrudService<
     MockEntity,
@@ -58,7 +83,10 @@ describe('NestCrudService', () => {
       take: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+      getCount: jest.fn().mockResolvedValue(0),
       getManyAndCount: jest.fn(),
     } as unknown as jest.Mocked<SelectQueryBuilder<MockEntity>>;
 
@@ -209,6 +237,94 @@ describe('NestCrudService', () => {
       await service.findAll({ page: 1, limit: 10 });
 
       expect(queryBuilder.leftJoinAndSelect).not.toHaveBeenCalled();
+    });
+
+    it('should filter by a nested field when its join prefix is included', async () => {
+      const svc = buildServiceWithNestedOptions(repository, {
+        include: ['author'],
+        allowedFilters: ['name', 'author.name'],
+      });
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({
+        page: 1,
+        limit: 10,
+        filter: { 'author.name_cont': 'John' },
+      });
+
+      const [sql, params] = queryBuilder.andWhere.mock.calls[0] as [
+        string,
+        Record<string, unknown>
+      ];
+      expect(sql).toContain('author.name ILIKE :filter_0');
+      expect(params).toMatchObject({ filter_0: '%John%' });
+    });
+
+    it('should skip a nested filter whose join prefix is not included', async () => {
+      const svc = buildServiceWithNestedOptions(repository, {
+        include: [],
+        allowedFilters: ['name', 'author.name'],
+      });
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({
+        page: 1,
+        limit: 10,
+        filter: { 'author.name_cont': 'John', name_eq: 'Alice' },
+      });
+
+      const [sql] = queryBuilder.andWhere.mock.calls[0] as [string];
+      expect(sql).toContain('e.name = :filter_0');
+      expect(sql).not.toContain('author');
+    });
+
+    it('should skip a nested filter that is not whitelisted', async () => {
+      const svc = buildServiceWithNestedOptions(repository, {
+        include: ['author'],
+        allowedFilters: ['name'],
+      });
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({
+        page: 1,
+        limit: 10,
+        filter: { 'author.name_cont': 'John' },
+      });
+
+      expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('should sort by a nested field when its join prefix is included', async () => {
+      const svc = buildServiceWithNestedOptions(repository, {
+        include: ['author'],
+        allowedSortFields: ['name', 'author.name'],
+      });
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: 'author.name',
+        orderDirection: 'ASC',
+      });
+
+      expect(queryBuilder.orderBy).toHaveBeenCalledWith('author.name', 'ASC');
+    });
+
+    it('should skip sorting by a nested field whose join prefix is not included', async () => {
+      const svc = buildServiceWithNestedOptions(repository, {
+        include: [],
+        allowedSortFields: ['name', 'author.name'],
+      });
+      queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await svc.findAll({
+        page: 1,
+        limit: 10,
+        orderBy: 'author.name',
+      });
+
+      expect(queryBuilder.orderBy).not.toHaveBeenCalled();
     });
 
     it('should support OR groups while preserving default AND behavior', async () => {

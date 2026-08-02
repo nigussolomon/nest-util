@@ -3,7 +3,7 @@ import { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 type FilterGroup = Record<string, unknown>;
 
 type FilterCombinator = 'and' | 'or';
-const SAFE_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
+const SAFE_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/;
 
 const toArrayValue = (value: unknown): unknown[] => {
   if (Array.isArray(value)) {
@@ -45,8 +45,35 @@ const parseFilterKey = (
   return { field, operator };
 };
 
-const buildCondition = (
+/**
+ * Resolves a filter/sort field to a query-builder target.
+ *
+ * - Plain fields resolve against the root alias: `name` -> `e.name`.
+ * - Nested fields (dot notation) resolve against a joined alias whose path
+ *   prefix must be present in `include`: `author.name` -> `author.name`,
+ *   `userRoles.role.name` -> `userRoles_role.name`.
+ * - Returns `null` when the field is unsafe or the join prefix is not
+ *   configured, so callers can skip the condition entirely.
+ */
+export function resolveQueryTarget(
   field: string,
+  include: readonly string[] = [],
+  rootAlias = 'e'
+): string | null {
+  if (!SAFE_FIELD_PATTERN.test(field)) return null;
+
+  const parts = field.split('.');
+  if (parts.length === 1) return `${rootAlias}.${field}`;
+
+  const joinPath = parts.slice(0, -1).join('.');
+  if (!include.includes(joinPath)) return null;
+
+  const alias = joinPath.replace(/\./g, '_');
+  return `${alias}.${parts[parts.length - 1]}`;
+}
+
+const buildCondition = (
+  target: string,
   operator: string,
   value: unknown,
   paramIndex: { current: number }
@@ -55,46 +82,46 @@ const buildCondition = (
 
   switch (operator) {
     case 'eq':
-      return { sql: `e.${field} = :${paramKey}`, params: { [paramKey]: value } };
+      return { sql: `${target} = :${paramKey}`, params: { [paramKey]: value } };
 
     case 'ne':
-      return { sql: `e.${field} != :${paramKey}`, params: { [paramKey]: value } };
+      return { sql: `${target} != :${paramKey}`, params: { [paramKey]: value } };
 
     case 'cont':
       return {
-        sql: `e.${field} ILIKE :${paramKey}`,
+        sql: `${target} ILIKE :${paramKey}`,
         params: { [paramKey]: `%${value}%` },
       };
 
     case 'notcont':
       return {
-        sql: `e.${field} NOT ILIKE :${paramKey}`,
+        sql: `${target} NOT ILIKE :${paramKey}`,
         params: { [paramKey]: `%${value}%` },
       };
 
     case 'starts':
       return {
-        sql: `e.${field} ILIKE :${paramKey}`,
+        sql: `${target} ILIKE :${paramKey}`,
         params: { [paramKey]: `${value}%` },
       };
 
     case 'ends':
       return {
-        sql: `e.${field} ILIKE :${paramKey}`,
+        sql: `${target} ILIKE :${paramKey}`,
         params: { [paramKey]: `%${value}` },
       };
 
     case 'gte':
-      return { sql: `e.${field} >= :${paramKey}`, params: { [paramKey]: value } };
+      return { sql: `${target} >= :${paramKey}`, params: { [paramKey]: value } };
 
     case 'lte':
-      return { sql: `e.${field} <= :${paramKey}`, params: { [paramKey]: value } };
+      return { sql: `${target} <= :${paramKey}`, params: { [paramKey]: value } };
 
     case 'gt':
-      return { sql: `e.${field} > :${paramKey}`, params: { [paramKey]: value } };
+      return { sql: `${target} > :${paramKey}`, params: { [paramKey]: value } };
 
     case 'lt':
-      return { sql: `e.${field} < :${paramKey}`, params: { [paramKey]: value } };
+      return { sql: `${target} < :${paramKey}`, params: { [paramKey]: value } };
 
     case 'in':
     case 'nin': {
@@ -104,8 +131,8 @@ const buildCondition = (
       return {
         sql:
           operator === 'in'
-            ? `e.${field} IN (:...${paramKey})`
-            : `e.${field} NOT IN (:...${paramKey})`,
+            ? `${target} IN (:...${paramKey})`
+            : `${target} NOT IN (:...${paramKey})`,
         params: { [paramKey]: values },
       };
     }
@@ -114,7 +141,7 @@ const buildCondition = (
       const isNull = toBooleanValue(value);
       if (isNull === null) return null;
 
-      return { sql: isNull ? `e.${field} IS NULL` : `e.${field} IS NOT NULL` };
+      return { sql: isNull ? `${target} IS NULL` : `${target} IS NOT NULL` };
     }
 
     default:
@@ -126,6 +153,7 @@ const buildExpression = (
   node: unknown,
   combinator: FilterCombinator,
   allowedFilters: readonly string[],
+  include: readonly string[],
   paramIndex: { current: number },
   params: Record<string, unknown>
 ): string | null => {
@@ -146,6 +174,7 @@ const buildExpression = (
             nestedNode,
             'and',
             allowedFilters,
+            include,
             paramIndex,
             params
           )
@@ -164,10 +193,12 @@ const buildExpression = (
 
     const { field, operator } = parsed;
 
-    if (!SAFE_FIELD_PATTERN.test(field)) continue;
     if (!allowedFilters.includes(field)) continue;
 
-    const condition = buildCondition(field, operator, value, paramIndex);
+    const target = resolveQueryTarget(field, include);
+    if (!target) continue;
+
+    const condition = buildCondition(target, operator, value, paramIndex);
     if (!condition) continue;
 
     if (condition.params) Object.assign(params, condition.params);
@@ -183,7 +214,8 @@ const buildExpression = (
 export function applyFilters<Entity extends ObjectLiteral>(
   qb: SelectQueryBuilder<Entity>,
   filters: Record<string, unknown> | undefined,
-  allowedFilters: readonly (keyof Entity)[]
+  allowedFilters: readonly (keyof Entity)[],
+  include?: readonly string[]
 ): void {
   if (!filters) return;
 
@@ -192,6 +224,7 @@ export function applyFilters<Entity extends ObjectLiteral>(
     filters as FilterGroup,
     'and',
     allowedFilters.map(String),
+    include ?? [],
     { current: 0 },
     params
   );

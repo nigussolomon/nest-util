@@ -3,8 +3,16 @@ import { AuthService } from './auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { RoleEntity } from '../entities/role.entity';
+import { UserRoleEntity } from '../entities/user-role.entity';
 
 jest.mock('bcrypt');
 
@@ -14,6 +22,12 @@ describe('AuthService', () => {
   let repository: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let jwtService: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let manager: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let roleRepository: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let userRoleRepository: any;
 
   const mockUserEntity = class User {
     id: number | string = 1;
@@ -32,6 +46,9 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     mockOptions.otp = undefined;
+    mockOptions.verification = undefined;
+    mockOptions.registerHooks = undefined;
+    mockOptions.identifierFields = undefined;
 
     repository = {
       findOne: jest.fn(),
@@ -49,6 +66,26 @@ describe('AuthService', () => {
       }),
     };
 
+    roleRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    userRoleRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    manager = {
+      getRepository: jest.fn((entity: unknown) => {
+        if (entity === RoleEntity) return roleRepository;
+        if (entity === UserRoleEntity) return userRoleRepository;
+        return repository;
+      }),
+    };
+
     jwtService = {
       sign: jest.fn(),
       verify: jest.fn(),
@@ -56,6 +93,9 @@ describe('AuthService', () => {
 
     const mockDataSource = {
       getRepository: jest.fn().mockReturnValue(repository),
+      transaction: jest.fn(
+        async (fn: (m: unknown) => unknown) => fn(manager)
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -98,7 +138,7 @@ describe('AuthService', () => {
       const result = await service.register(dto);
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { email: dto.email },
+        where: [{ email: dto.email }],
       });
       expect(bcrypt.hash).toHaveBeenCalledWith(dto.password, 10);
       expect(repository.save).toHaveBeenCalled();
@@ -110,6 +150,225 @@ describe('AuthService', () => {
       repository.findOne.mockResolvedValue({ id: 1, email: dto.email });
 
       await expect(service.register(dto)).rejects.toThrow(ConflictException);
+    });
+
+    it('should allow beforeRegister to mutate the payload', async () => {
+      const dto = { email: 'new@example.com', password: 'password123' };
+      mockOptions.registerHooks = {
+        beforeRegister: jest.fn(async (ctx) => {
+          ctx.payload.isActive = true;
+        }),
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockImplementation((payload: Record<string, unknown>) => payload);
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+        isActive: true,
+      });
+
+      const result = await service.register(dto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: true })
+      );
+      expect(result.email).toBe(dto.email);
+    });
+
+    it('should abort registration when beforeRegister throws', async () => {
+      const dto = { email: 'new@example.com', password: 'password123' };
+      mockOptions.registerHooks = {
+        beforeRegister: jest.fn(async () => {
+          throw new BadRequestException('Blocked');
+        }),
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+
+      await expect(service.register(dto)).rejects.toThrow(BadRequestException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('should assign a role by name via afterRegister hook', async () => {
+      const dto = { email: 'new@example.com', password: 'password123' };
+      mockOptions.registerHooks = {
+        afterRegister: jest.fn(async (ctx) => {
+          await ctx.assignRole('USER');
+        }),
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
+      roleRepository.findOne.mockResolvedValue({ id: 5, name: 'USER' });
+
+      const result = await service.register(dto);
+
+      expect(roleRepository.findOne).toHaveBeenCalledWith({
+        where: { name: 'USER' },
+      });
+      expect(userRoleRepository.create).toHaveBeenCalledWith({
+        userId: 1,
+        roleId: 5,
+      });
+      expect(userRoleRepository.save).toHaveBeenCalled();
+      expect(result.email).toBe(dto.email);
+    });
+
+    it('should assign a role by id via afterRegister hook', async () => {
+      const dto = { email: 'new@example.com', password: 'password123' };
+      mockOptions.registerHooks = {
+        afterRegister: jest.fn(async (ctx) => {
+          await ctx.assignRole(5);
+        }),
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
+      roleRepository.findOne.mockResolvedValue({ id: 5, name: 'USER' });
+
+      await service.register(dto);
+
+      expect(roleRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 5 },
+      });
+      expect(userRoleRepository.create).toHaveBeenCalledWith({
+        userId: 1,
+        roleId: 5,
+      });
+    });
+
+    it('should fail registration when afterRegister throws', async () => {
+      const dto = { email: 'new@example.com', password: 'password123' };
+      mockOptions.registerHooks = {
+        afterRegister: jest.fn(async () => {
+          throw new InternalServerErrorException('Role assignment failed');
+        }),
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
+
+      await expect(service.register(dto)).rejects.toThrow(
+        InternalServerErrorException
+      );
+    });
+
+    it('should fail registration when the assigned role does not exist', async () => {
+      const dto = { email: 'new@example.com', password: 'password123' };
+      mockOptions.registerHooks = {
+        afterRegister: jest.fn(async (ctx) => {
+          await ctx.assignRole('GHOST');
+        }),
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
+      roleRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.register(dto)).rejects.toThrow(NotFoundException);
+      expect(userRoleRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should register a user with multiple identifiers and check conflicts across all', async () => {
+      mockOptions.identifierFields = ['email', 'phone'];
+      const dto = {
+        email: 'new@example.com',
+        phone: '+15551234567',
+        password: 'password123',
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
+
+      const result = await service.register(dto);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: [{ email: dto.email }, { phone: dto.phone }],
+      });
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: dto.email,
+          phone: dto.phone,
+        })
+      );
+      expect(result.email).toBe(dto.email);
+      expect(result.phone).toBe(dto.phone);
+    });
+
+    it('should throw ConflictException if any identifier already exists', async () => {
+      mockOptions.identifierFields = ['email', 'phone'];
+      const dto = {
+        email: 'new@example.com',
+        phone: '+15551234567',
+        password: 'password123',
+      };
+      repository.findOne.mockResolvedValue({ id: 1, phone: dto.phone });
+
+      await expect(service.register(dto)).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw BadRequestException when no identifier is provided', async () => {
+      await expect(
+        service.register({ password: 'password123' })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should deliver the verification code to verification.identifierField', async () => {
+      const deliverCode = jest.fn().mockResolvedValue(undefined);
+      mockOptions.identifierFields = ['email', 'phone'];
+      mockOptions.verification = {
+        enabled: true,
+        deliverCode,
+        identifierField: 'phone',
+      };
+      const dto = {
+        email: 'new@example.com',
+        phone: '+15551234567',
+        password: 'password123',
+      };
+      repository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      repository.create.mockReturnValue({ ...dto, password: 'hashedPassword' });
+      repository.save.mockResolvedValue({
+        id: 1,
+        ...dto,
+        password: 'hashedPassword',
+      });
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+
+      await service.register(dto);
+
+      expect(deliverCode).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: dto.phone })
+      );
     });
   });
 
@@ -139,9 +398,10 @@ describe('AuthService', () => {
       expect(queryBuilder.addSelect).toHaveBeenCalledWith(
         `user.${mockOptions.passkeyField}`
       );
-      expect(queryBuilder.where).toHaveBeenCalledWith({
-        [mockOptions.identifierField]: credentials.email,
-      });
+      expect(queryBuilder.where).toHaveBeenCalledWith(
+        'user.email = :identifier',
+        { identifier: credentials.email }
+      );
       expect(queryBuilder.update).toHaveBeenCalled();
       expect(queryBuilder.execute).toHaveBeenCalled();
       expect(result.access_token).toBeDefined();
@@ -171,6 +431,58 @@ describe('AuthService', () => {
       await expect(
         service.login({ email: 'test@example.com', password: 'wrong' })
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should login using the phone identifier when identifierFields is configured', async () => {
+      mockOptions.identifierFields = ['email', 'phone'];
+      const credentials = {
+        phone: '+15551234567',
+        password: 'password123',
+      };
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        phone: '+15551234567',
+        password: 'hashedPassword',
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedRefreshToken');
+      jwtService.sign.mockReturnValue('mock-token');
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+
+      const result = await service.login(credentials);
+
+      expect(queryBuilder.where).toHaveBeenCalledWith(
+        'user.email = :identifier OR user.phone = :identifier',
+        { identifier: credentials.phone }
+      );
+      expect(result.access_token).toBeDefined();
+      expect(result.user.phone).toBe(user.phone);
+    });
+
+    it('should include all identifier fields in the token payload', async () => {
+      mockOptions.identifierFields = ['email', 'phone'];
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        phone: '+15551234567',
+        password: 'hashedPassword',
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedRefreshToken');
+      jwtService.sign.mockReturnValue('mock-token');
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+
+      await service.login({ email: user.email, password: 'password123' });
+
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ email: user.email, phone: user.phone }),
+        expect.anything()
+      );
     });
   });
 
@@ -221,6 +533,37 @@ describe('AuthService', () => {
         message: expect.any(String),
       });
       expect(deliverCode).not.toHaveBeenCalled();
+    });
+
+    it('should request OTP by phone when identifierFields is configured', async () => {
+      mockOptions.identifierFields = ['email', 'phone'];
+      const deliverCode = jest.fn().mockResolvedValue(undefined);
+      mockOptions.otp = {
+        enabled: true,
+        deliverCode,
+      };
+
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        phone: '+15551234567',
+        otpRequestAttempts: 0,
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
+
+      const result = await service.requestOtp({ phone: '+15551234567' });
+
+      expect(queryBuilder.where).toHaveBeenCalledWith(
+        'user.email = :identifier OR user.phone = :identifier',
+        { identifier: '+15551234567' }
+      );
+      expect(result).toEqual({ success: true });
+      expect(deliverCode).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: '+15551234567' })
+      );
     });
   });
 

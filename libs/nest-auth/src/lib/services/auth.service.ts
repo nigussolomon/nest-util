@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
-import type { Repository } from 'typeorm';
+import type { Repository, EntityManager } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -106,16 +106,71 @@ export class AuthService {
     });
   }
 
+  private getIdentifierFields(): string[] {
+    return this.options.identifierFields?.length
+      ? this.options.identifierFields
+      : [this.options.identifierField];
+  }
+
+  private getIdentifierLabel(): string {
+    return this.getIdentifierFields().join(' or ');
+  }
+
+  private buildIdentifierOrCondition(alias: string): string {
+    return this.getIdentifierFields()
+      .map((field) => `${alias}.${field} = :identifier`)
+      .join(' OR ');
+  }
+
+  private getPresentIdentifiers(data: Record<string, unknown>): {
+    field: string;
+    value: string;
+  }[] {
+    return this.getIdentifierFields()
+      .map((field) => ({ field, value: data[field] }))
+      .filter(
+        (entry): entry is { field: string; value: string } =>
+          typeof entry.value === 'string' && entry.value.trim().length > 0
+      );
+  }
+
+  private resolveVerificationIdentifier(
+    presentIdentifiers: { field: string; value: string }[]
+  ): string {
+    const override = this.options.verification?.identifierField;
+    if (override) {
+      const matched = presentIdentifiers.find(({ field }) => field === override);
+      if (!matched) {
+        throw new BadRequestException(
+          `verification.identifierField '${override}' was not provided in the registration payload`
+        );
+      }
+      return matched.value.trim();
+    }
+    return presentIdentifiers[0].value.trim();
+  }
+
   async register(data: Record<string, unknown>): Promise<AuthUser> {
-    const identifier = data[this.options.identifierField] as string;
     const password = data[this.options.passkeyField] as string;
 
+    const presentIdentifiers = this.getPresentIdentifiers(data);
+
+    if (presentIdentifiers.length === 0) {
+      throw new BadRequestException(
+        `${this.getIdentifierLabel()} is required`
+      );
+    }
+
     const existingUser = await this.userRepository.findOne({
-      where: { [this.options.identifierField]: identifier },
+      where: presentIdentifiers.map(({ field, value }) => ({
+        [field]: value.trim(),
+      })) as never,
     });
 
     if (existingUser) {
-      this.emitAuthEvent('auth.user.register.conflict', { metadata: { identifier } });
+      this.emitAuthEvent('auth.user.register.conflict', {
+        metadata: { identifier: presentIdentifiers[0].value },
+      });
       throw new ConflictException('User already exists');
     }
 
@@ -125,25 +180,55 @@ export class AuthService {
 
     const verificationEnabled = this.options.verification?.enabled;
     const verifiedField = this.options.verification?.verifiedField ?? 'isVerified';
+    const hooks = this.options.registerHooks;
 
-    const newUser = this.userRepository.create({
-      ...data,
-      [this.options.passkeyField]: hashedPassword,
-      ...(verificationEnabled ? { [verifiedField]: false } : {}),
+    const savedUser = await this.dataSource.transaction(async (manager) => {
+      if (hooks?.beforeRegister) {
+        await hooks.beforeRegister({ payload: data, manager });
+      }
+
+      const userRepository = manager.getRepository(this.options.userEntity);
+
+      const newUser = userRepository.create({
+        ...data,
+        [this.options.passkeyField]: hashedPassword,
+        ...(verificationEnabled ? { [verifiedField]: false } : {}),
+      });
+
+      const saved = await userRepository.save(newUser);
+
+      if (hooks?.afterRegister) {
+        const userId = (saved as Record<string, unknown>).id as string | number;
+        await hooks.afterRegister({
+          payload: data,
+          entity: saved,
+          userId,
+          manager,
+          assignRole: this.makeAssignRole(manager, userId),
+        });
+      }
+
+      return saved as Record<string, unknown>;
     });
 
-    const savedUser = await this.userRepository.save(newUser);
     this.emitAuthEvent('auth.user.register.success', {
       entityId: (savedUser as any).id,
       userId: (savedUser as any).id,
-      metadata: { identifier },
+      metadata: {
+        identifier: presentIdentifiers[0].value,
+        identifiers: presentIdentifiers.map(({ field, value }) => ({
+          [field]: value,
+        })),
+      },
     });
 
     if (verificationEnabled) {
+      const deliveryIdentifier =
+        this.resolveVerificationIdentifier(presentIdentifiers);
       try {
         await this.generateAndSendVerificationOtp(
           (savedUser as any).id as string | number,
-          identifier
+          deliveryIdentifier
         );
       } catch {
         await this.userRepository.delete((savedUser as any).id);
@@ -157,13 +242,21 @@ export class AuthService {
   }
 
   async login(credentials: Record<string, unknown>): Promise<AuthTokens> {
-    const identifier = credentials[this.options.identifierField] as string;
     const password = credentials[this.options.passkeyField] as string;
+
+    const presentIdentifiers = this.getPresentIdentifiers(credentials);
+    if (presentIdentifiers.length === 0) {
+      this.emitAuthEvent('auth.user.login.failed.user_not_found', {
+        metadata: { identifier: undefined },
+      });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const identifier = presentIdentifiers[0].value;
 
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect(`user.${this.options.passkeyField}`)
-      .where({ [this.options.identifierField]: identifier })
+      .where(this.buildIdentifierOrCondition('user'), { identifier })
       .getOne();
 
     if (!user) {
@@ -212,15 +305,15 @@ export class AuthService {
   ): Promise<{ success: boolean; message?: string }> {
     const otpOptions = this.getOtpOptions();
     const otpConfig = this.resolveOtpOptions(otpOptions);
-    const identifier = data[this.options.identifierField];
+    const presentIdentifiers = this.getPresentIdentifiers(data);
 
-    if (typeof identifier !== 'string' || identifier.trim().length === 0) {
+    if (presentIdentifiers.length === 0) {
       throw new BadRequestException(
-        `${this.options.identifierField} is required`
+        `${this.getIdentifierLabel()} is required`
       );
     }
 
-    const normalizedIdentifier = identifier.trim();
+    const normalizedIdentifier = presentIdentifiers[0].value.trim();
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect(`user.${otpConfig.codeField}`)
@@ -228,7 +321,9 @@ export class AuthService {
       .addSelect(`user.${otpConfig.attemptsField}`)
       .addSelect(`user.${otpConfig.lastSentAtField}`)
       .addSelect(`user.${otpConfig.lockUntilField}`)
-      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .where(this.buildIdentifierOrCondition('user'), {
+        identifier: normalizedIdentifier,
+      })
       .getOne();
 
     // Avoid account enumeration by returning the same response for unknown users.
@@ -312,13 +407,13 @@ export class AuthService {
   ): Promise<AuthTokens> {
     const otpConfig = this.resolveOtpOptions(this.getOtpOptions());
 
-    const identifier = credentials[this.options.identifierField];
+    const presentIdentifiers = this.getPresentIdentifiers(credentials);
     const otpCode = credentials[otpConfig.inputCodeField];
 
-    if (typeof identifier !== 'string' || !identifier.trim()) {
+    if (presentIdentifiers.length === 0) {
       throw new BadRequestException({
         code: 'IDENTIFIER_REQUIRED',
-        message: `${this.options.identifierField} is required`,
+        message: `${this.getIdentifierLabel()} is required`,
       });
     }
 
@@ -329,7 +424,7 @@ export class AuthService {
       });
     }
 
-    const normalizedIdentifier = identifier.trim();
+    const normalizedIdentifier = presentIdentifiers[0].value.trim();
     const normalizedOtp = otpCode.trim();
 
     const user = await this.userRepository
@@ -338,7 +433,9 @@ export class AuthService {
       .addSelect(`user.${otpConfig.expiresAtField}`)
       .addSelect(`user.${otpConfig.attemptsField}`)
       .addSelect(`user.${otpConfig.lockUntilField}`)
-      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .where(this.buildIdentifierOrCondition('user'), {
+        identifier: normalizedIdentifier,
+      })
       .getOne();
 
     if (!user) {
@@ -592,22 +689,22 @@ export class AuthService {
     const resetOptions = this.getPasswordResetOptions();
     const resetConfig = this.resolvePasswordResetOptions(resetOptions);
 
-    const identifier = data[this.options.identifierField];
+    const presentIdentifiers = this.getPresentIdentifiers(data);
 
-    if (typeof identifier !== 'string' || !identifier.trim()) {
+    if (presentIdentifiers.length === 0) {
       throw new BadRequestException(
-        `${this.options.identifierField} is required`
+        `${this.getIdentifierLabel()} is required`
       );
     }
 
-    const normalizedIdentifier = identifier.trim();
+    const normalizedIdentifier = presentIdentifiers[0].value.trim();
 
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect(`user.${resetConfig.tokenField}`)
       .addSelect(`user.${resetConfig.expiresAtField}`)
-      .where({
-        [this.options.identifierField]: normalizedIdentifier,
+      .where(this.buildIdentifierOrCondition('user'), {
+        identifier: normalizedIdentifier,
       })
       .getOne();
 
@@ -937,10 +1034,15 @@ export class AuthService {
   private async generateTokens(
     user: Record<string, unknown>
   ): Promise<AuthTokens> {
-    const identifierField = this.options.identifierField;
     const refreshTokenField = this.options.refreshTokenField || 'refreshToken';
     const accessTokenField = this.options.accessTokenField || 'accessToken';
-    const payload = { sub: user.id, [identifierField]: user[identifierField] };
+    const payload: Record<string, unknown> = { sub: user.id };
+
+    for (const field of this.getIdentifierFields()) {
+      if (user[field] !== undefined) {
+        payload[field] = user[field];
+      }
+    }
 
     const refreshPayload = {
       ...payload,
@@ -1142,12 +1244,12 @@ export class AuthService {
     const verifOptions = this.getVerificationOptions();
     const verif = this.resolveVerificationOptions(verifOptions);
 
-    const identifier = data[this.options.identifierField];
+    const presentIdentifiers = this.getPresentIdentifiers(data);
     const code = data[verif.inputCodeField];
 
-    if (typeof identifier !== 'string' || !identifier.trim()) {
+    if (presentIdentifiers.length === 0) {
       throw new BadRequestException(
-        `${this.options.identifierField} is required`
+        `${this.getIdentifierLabel()} is required`
       );
     }
 
@@ -1155,7 +1257,7 @@ export class AuthService {
       throw new BadRequestException(`${verif.inputCodeField} is required`);
     }
 
-    const normalizedIdentifier = identifier.trim();
+    const normalizedIdentifier = presentIdentifiers[0].value.trim();
 
     const user = await this.userRepository
       .createQueryBuilder('user')
@@ -1164,7 +1266,9 @@ export class AuthService {
       .addSelect(`user.${verif.expiresAtField}`)
       .addSelect(`user.${verif.attemptsField}`)
       .addSelect(`user.${verif.lockUntilField}`)
-      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .where(this.buildIdentifierOrCondition('user'), {
+        identifier: normalizedIdentifier,
+      })
       .getOne();
 
     if (!user) {
@@ -1271,21 +1375,23 @@ export class AuthService {
     const verifOptions = this.getVerificationOptions();
     const verif = this.resolveVerificationOptions(verifOptions);
 
-    const identifier = data[this.options.identifierField];
+    const presentIdentifiers = this.getPresentIdentifiers(data);
 
-    if (typeof identifier !== 'string' || !identifier.trim()) {
+    if (presentIdentifiers.length === 0) {
       throw new BadRequestException(
-        `${this.options.identifierField} is required`
+        `${this.getIdentifierLabel()} is required`
       );
     }
 
-    const normalizedIdentifier = identifier.trim();
+    const normalizedIdentifier = presentIdentifiers[0].value.trim();
 
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect(`user.${verif.lastSentAtField}`)
       .addSelect(`user.${verif.lockUntilField}`)
-      .where({ [this.options.identifierField]: normalizedIdentifier })
+      .where(this.buildIdentifierOrCondition('user'), {
+        identifier: normalizedIdentifier,
+      })
       .getOne();
 
     if (!user) {
@@ -1518,6 +1624,31 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+  }
+
+  private makeAssignRole(
+    manager: EntityManager,
+    userId: string | number
+  ): (roleIdOrName: string | number) => Promise<void> {
+    const roleRepository = manager.getRepository(RoleEntity);
+    const userRoleRepository = manager.getRepository(UserRoleEntity);
+
+    return async (roleIdOrName: string | number) => {
+      const role =
+        typeof roleIdOrName === 'number'
+          ? await roleRepository.findOne({ where: { id: roleIdOrName } })
+          : await roleRepository.findOne({ where: { name: roleIdOrName } });
+
+      if (!role) {
+        throw new NotFoundException(`Role '${roleIdOrName}' not found`);
+      }
+
+      const assignment = userRoleRepository.create({
+        userId: userId as number,
+        roleId: role.id,
+      });
+      await userRoleRepository.save(assignment);
+    };
   }
 
   private toPermissionArray(value: unknown): string[] {

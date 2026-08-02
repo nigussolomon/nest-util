@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Type } from '@nestjs/common';
 import { DeepPartial, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 import { AuditLogEntity } from '../entities/audit-log.entity';
-import { applyFilters } from '../helpers/filter.helper';
+import { applyFilters, resolveQueryTarget } from '../helpers/filter.helper';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
@@ -20,8 +20,8 @@ import {
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto>
   extends FindMineConfig<Entity> {
   repository: Repository<Entity>;
-  allowedFilters?: readonly (keyof Entity)[];
-  allowedSortFields?: readonly (keyof Entity)[];
+  allowedFilters?: readonly (keyof Entity | (string & {}))[];
+  allowedSortFields?: readonly (keyof Entity | (string & {}))[];
   include?: readonly string[];
   relations?: {
     property: keyof Entity;
@@ -46,8 +46,8 @@ export class NestCrudService<
 > implements CrudInterface<CreateDto, UpdateDto, ResponseDto>
 {
   protected readonly repo: Repository<Entity>;
-  protected readonly allowedFilters: readonly (keyof Entity)[];
-  protected readonly allowedSortFields: readonly (keyof Entity)[];
+  protected readonly allowedFilters: readonly (keyof Entity | (string & {}))[];
+  protected readonly allowedSortFields: readonly (keyof Entity | (string & {}))[];
   protected readonly include: readonly string[];
   protected readonly relations: {
     property: keyof Entity;
@@ -176,20 +176,49 @@ export class NestCrudService<
     return result;
   }
 
-  private applyIncludeJoins(qb: SelectQueryBuilder<Entity>): void {
+  private applyIncludeJoins(
+    qb: SelectQueryBuilder<Entity>,
+    withSelect = true
+  ): void {
     if (this.include.length === 0) return;
+
+    const join = withSelect
+      ? (path: string, alias: string) => qb.leftJoinAndSelect(path, alias)
+      : (path: string, alias: string) => qb.leftJoin(path, alias);
 
     this.include.forEach((relation) => {
       const parts = relation.split('.');
       if (parts.length === 1) {
-        qb.leftJoinAndSelect(`e.${parts[0]}`, parts[0]);
+        join(`e.${parts[0]}`, parts[0]);
       } else {
         const parentAlias = parts.slice(0, -1).join('_');
         const field = parts[parts.length - 1];
         const alias = parts.join('_');
-        qb.leftJoinAndSelect(`${parentAlias}.${field}`, alias);
+        join(`${parentAlias}.${field}`, alias);
       }
     });
+  }
+
+  private applyOrderBy(
+    qb: SelectQueryBuilder<Entity>,
+    orderBy: string | undefined,
+    orderDirection: 'ASC' | 'DESC'
+  ): void {
+    if (!orderBy) return;
+
+    const target = resolveQueryTarget(
+      orderBy,
+      this.include.map(String),
+      'e'
+    );
+    if (!target) return;
+
+    if (
+      this.allowedSortFields.length === 0 ||
+      this.allowedSortFields.includes(orderBy as keyof Entity)
+    ) {
+      qb.orderBy(target, orderDirection);
+    }
   }
 
   private isOwnershipConfigured(): boolean {
@@ -260,19 +289,15 @@ export class NestCrudService<
 
     this.applyIncludeJoins(qb);
 
-    applyFilters(qb, query.filter, this.allowedFilters);
+    applyFilters(qb, query.filter, this.allowedFilters, this.include);
 
     const paginationMeta = applyPagination(qb, query);
 
-    if (query.orderBy) {
-      const orderDirection = query.orderDirection === 'ASC' ? 'ASC' : 'DESC';
-      if (
-        this.allowedSortFields.length === 0 ||
-        this.allowedSortFields.includes(query.orderBy as keyof Entity)
-      ) {
-        qb.orderBy(`e.${query.orderBy}`, orderDirection);
-      }
-    }
+    this.applyOrderBy(
+      qb,
+      query.orderBy,
+      query.orderDirection === 'ASC' ? 'ASC' : 'DESC'
+    );
 
     const [entities, total] = await qb.getManyAndCount();
 
@@ -299,19 +324,15 @@ export class NestCrudService<
 
     this.applyIncludeJoins(qb);
 
-    applyFilters(qb, query.filter, this.allowedFilters);
+    applyFilters(qb, query.filter, this.allowedFilters, this.include);
 
     const paginationMeta = applyPagination(qb, query);
 
-    if (query.orderBy) {
-      const orderDirection = query.orderDirection === 'ASC' ? 'ASC' : 'DESC';
-      if (
-        this.allowedSortFields.length === 0 ||
-        this.allowedSortFields.includes(query.orderBy as keyof Entity)
-      ) {
-        qb.orderBy(`e.${query.orderBy}`, orderDirection);
-      }
-    }
+    this.applyOrderBy(
+      qb,
+      query.orderBy,
+      query.orderDirection === 'ASC' ? 'ASC' : 'DESC'
+    );
 
     const [entities, total] = await qb.getManyAndCount();
 
@@ -337,7 +358,7 @@ export class NestCrudService<
     this.applyIncludeJoins(qb);
 
     // Apply filters
-    applyFilters(qb, query.filter, this.allowedFilters);
+    applyFilters(qb, query.filter, this.allowedFilters, this.include);
 
     // Apply cursor filter
     if (query.cursor) {
@@ -363,15 +384,8 @@ export class NestCrudService<
     if (query.includeTotal) {
       // Build a clean count query (reuse same filters but no cursor/order/take)
       const countQb = this.repo.createQueryBuilder('e');
-      if (this.include.length > 0) {
-        this.include.forEach((relation) => {
-          const parts = relation.split('.');
-          if (parts.length === 1) {
-            countQb.leftJoin(`e.${parts[0]}`, parts[0]);
-          }
-        });
-      }
-      applyFilters(countQb, query.filter, this.allowedFilters);
+      this.applyIncludeJoins(countQb, false);
+      applyFilters(countQb, query.filter, this.allowedFilters, this.include);
       total = await countQb.getCount();
     }
 

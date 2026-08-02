@@ -187,7 +187,13 @@ app.getHttpAdapter().getInstance().set('query parser', 'extended');
 - `filter[or][0][field_eq]=val&filter[or][1][other_eq]=val2` → OR group
 - Groups can be nested arbitrarily
 
-**Safety**: Field names validated against `/^[A-Za-z][A-Za-z0-9_]*$/`. Only `allowedFilters` fields are processed.
+**Nested (related) fields**: Use dot notation — `filter[author.name_cont]=John`. Requirements:
+1. The join prefix must be listed in `include` (e.g. `include: ['author']`); nested prefixes resolve to the joined alias (`author.name` → `author.name`, `author.profile.bio` → `author_profile.bio`)
+2. The full path must be whitelisted in `allowedFilters` (e.g. `allowedFilters: ['author.name']`)
+3. A nested filter whose join prefix is missing from `include` is silently skipped
+- Nested sorting works the same way via `orderBy=author.name` + `allowedSortFields`
+
+**Safety**: Field names validated against `/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/`. Only `allowedFilters` fields are processed.
 
 ### Pagination
 
@@ -197,7 +203,7 @@ app.getHttpAdapter().getInstance().set('query parser', 'extended');
 
 `applyPagination()` only applies `skip()`/`take()` when both `page` and `limit` are provided. If absent, no pagination is applied (returns all results).
 
-Sorting via `orderBy` only works if field is in `allowedSortFields` (or if `allowedSortFields` is empty, any field is allowed).
+Sorting via `orderBy` only works if field is in `allowedSortFields` (or if `allowedSortFields` is empty, any field is allowed). Nested sort fields (`orderBy=author.name`) also require the join prefix to be in `include`. Cursor pagination keeps its fixed `id` ordering.
 
 #### Cursor-based
 

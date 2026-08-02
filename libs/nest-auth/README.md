@@ -39,6 +39,60 @@ import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
 export class AppModule {}
 ```
 
+### Multiple Login Identifiers
+
+Set `identifierFields` to allow a user to sign in (and request OTP / password reset) with **any** of several fields, e.g. `email` **or** `phone`. Lookups match against all configured fields, so the request body only needs the value under one of those keys. When both are provided, `identifierFields` takes precedence over `identifierField`.
+
+```typescript
+AuthModule.forRoot({
+  // ...other options
+  identifierField: 'email',                       // still required (fallback)
+  identifierFields: ['email', 'phone'],           // optional; wins when set
+  verification: {
+    enabled: true,
+    deliverCode: async ({ identifier, code }) => { /* send */ },
+    identifierField: 'phone',                     // optional: which field to deliver post-register codes to
+  },
+});
+```
+
+- **Register**: conflict-check runs across every identifier present in the payload (duplicate email *or* phone is rejected). At least one identifier is required.
+- **Login / OTP / password reset / verification**: the submitted value is matched against all identifier fields.
+- **Tokens**: the JWT payload carries every identifier field present on the user.
+- When verification is enabled and both identifiers are present, the code is delivered to the first identifier field in configured order, unless `verification.identifierField` pins a specific one (that field must be present in the registration payload).
+- Add unique columns/indexes (e.g. `phone`) on your User entity for the new identifier fields.
+
+### Registration Hooks
+
+`registerHooks` lets you run `beforeRegister` and `afterRegister` logic atomically with user creation. Both hooks run inside the same database transaction as the user insert — if any hook throws, the registration rolls back (no orphan users, no half-applied role assignments).
+
+```typescript
+AuthModule.forRoot({
+  // ...other options
+  registerHooks: {
+    beforeRegister: async ({ payload }) => {
+      // Validate/transform the payload; mutations flow into the saved user.
+      payload.name = payload.name?.trim();
+    },
+    afterRegister: async ({ userId, assignRole, manager }) => {
+      // Assign roles by name or id. Throwing (e.g. role not found) fails registration.
+      await assignRole('USER');
+      // Or do arbitrary transactional work via the transaction-scoped `manager`.
+    },
+  },
+});
+```
+
+Hook context:
+
+| Field | beforeRegister | afterRegister |
+|---|---|---|
+| `payload` | Mutable registration DTO | Snapshot of the registration DTO |
+| `entity` | — | Saved user entity |
+| `userId` | — | Saved user id |
+| `manager` | Transaction `EntityManager` | Transaction `EntityManager` |
+| `assignRole(roleIdOrName)` | — | Assigns a role by id or name |
+
 ### 2. Protect Routes
 
 Use `JwtAuthGuard` and `@CurrentUser()` decorator:
