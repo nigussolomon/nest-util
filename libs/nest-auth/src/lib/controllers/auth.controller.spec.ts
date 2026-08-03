@@ -6,6 +6,8 @@ import { PERMISSIONS_KEY } from '../decorators/permissions';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { Reflector } from '@nestjs/core';
 import { ApiKeyService } from '../services/api-key.service';
+import { JwtService } from '@nestjs/jwt';
+import { DataSource } from 'typeorm';
 
 import { CreateAuthController } from './auth.controller';
 import { CreatePermissionsController } from './permissions.controller';
@@ -53,6 +55,9 @@ const mockAuthService = {
   assignRoleToUser: jest.fn(),
   removeRoleFromUser: jest.fn(),
   getUserRoles: jest.fn(),
+  startOnboarding: jest.fn(),
+  completeOnboarding: jest.fn(),
+  createUserFromOnboarding: jest.fn(),
 };
 
 const mockApiKeyService = {
@@ -61,6 +66,21 @@ const mockApiKeyService = {
   revoke: jest.fn(),
   assignRole: jest.fn(),
   removeRole: jest.fn(),
+};
+
+const mockDataSource = {
+  getRepository: jest.fn().mockReturnValue({
+    findOne: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+  }),
+};
+
+const mockJwtService = {
+  sign: jest.fn(),
+  verify: jest.fn(),
 };
 
 async function createController<T>(
@@ -74,6 +94,8 @@ async function createController<T>(
       { provide: PermissionsGuard, useValue: { canActivate: jest.fn().mockReturnValue(true) } },
       { provide: Reflector, useValue: { getAllAndOverride: jest.fn() } },
       { provide: ApiKeyService, useValue: mockApiKeyService },
+      { provide: JwtService, useValue: mockJwtService },
+      { provide: DataSource, useValue: mockDataSource },
     ],
   }).compile();
 
@@ -195,6 +217,74 @@ describe('CreateAuthController', () => {
       const result = await controller.logout(user);
       expect(mockAuthService.logout).toHaveBeenCalledWith(1);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('onboarding', () => {
+    it('should call authService.startOnboarding if not disabled', async () => {
+      const dto = { email: 'alice@example.com' };
+      mockAuthService.startOnboarding.mockResolvedValue({
+        success: true,
+        attemptId: 1,
+      });
+
+      const result = await controller.startOnboarding(dto);
+
+      expect(mockAuthService.startOnboarding).toHaveBeenCalledWith(dto);
+      expect(result).toEqual({ success: true, attemptId: 1 });
+    });
+
+    it('should throw ForbiddenException if onboarding/start is disabled', async () => {
+      mockOptions.disabledRoutes = ['onboarding/start'];
+      await expect(controller.startOnboarding({ email: 'x' })).rejects.toThrow(
+        ForbiddenException
+      );
+    });
+
+    it('should call authService.completeOnboarding if not disabled', async () => {
+      const dto = { email: 'alice@example.com', code: '123456' };
+      mockAuthService.completeOnboarding.mockResolvedValue({
+        onboarding_token: 'token',
+      });
+
+      const result = await controller.completeOnboarding(dto);
+
+      expect(mockAuthService.completeOnboarding).toHaveBeenCalledWith(dto);
+      expect(result).toEqual({ onboarding_token: 'token' });
+    });
+
+    it('should throw ForbiddenException if onboarding/complete is disabled', async () => {
+      mockOptions.disabledRoutes = ['onboarding/complete'];
+      await expect(
+        controller.completeOnboarding({ email: 'x', code: 'y' })
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should pass the request onboarding attempt to authService.createUserFromOnboarding', async () => {
+      const attempt = { id: 1, identifierField: 'email', identifier: 'a@b.c' };
+      const dto = { name: 'Alice' };
+      mockAuthService.createUserFromOnboarding.mockResolvedValue({
+        id: 1,
+        name: 'Alice',
+      });
+
+      const result = await controller.createOnboardedUser(
+        { onboardingAttempt: attempt },
+        dto
+      );
+
+      expect(mockAuthService.createUserFromOnboarding).toHaveBeenCalledWith(
+        attempt,
+        dto
+      );
+      expect(result).toEqual({ id: 1, name: 'Alice' });
+    });
+
+    it('should throw ForbiddenException if onboarding/user is disabled', async () => {
+      mockOptions.disabledRoutes = ['onboarding/user'];
+      await expect(
+        controller.createOnboardedUser({ onboardingAttempt: { id: 1 } }, {})
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });
@@ -404,5 +494,32 @@ describe('admin route permissions', () => {
         expect(requiredPermissions).toEqual(['admin.access']);
       }
     }
+  });
+});
+
+describe('onboarding route permissions', () => {
+  it('should require onboarding.start / onboarding.complete on agent routes', () => {
+    const controller = new (CreateAuthController(mockOptions) as unknown as new (
+      ...args: unknown[]
+    ) => unknown)(mockAuthService, mockOptions);
+
+    const startPermissions = Reflect.getMetadata(
+      PERMISSIONS_KEY,
+      (controller as any).startOnboarding
+    ) as string[];
+    expect(startPermissions).toEqual(['onboarding.start']);
+
+    const completePermissions = Reflect.getMetadata(
+      PERMISSIONS_KEY,
+      (controller as any).completeOnboarding
+    ) as string[];
+    expect(completePermissions).toEqual(['onboarding.complete']);
+
+    // The user-creation route is guarded by the onboarding token, not a permission.
+    const createPermissions = Reflect.getMetadata(
+      PERMISSIONS_KEY,
+      (controller as any).createOnboardedUser
+    ) as string[] | undefined;
+    expect(createPermissions).toBeUndefined();
   });
 });

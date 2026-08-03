@@ -11,6 +11,10 @@ export const permissionRegistry: PermissionRegistryConfig = {
       permissions: ['read', 'manage'],
     },
     {
+      resource: 'onboarding',
+      permissions: ['start', 'complete'],
+    },
+    {
       resource: 'posts',
       permissions: ['read', 'create', 'update', 'delete', 'audit'],
     },

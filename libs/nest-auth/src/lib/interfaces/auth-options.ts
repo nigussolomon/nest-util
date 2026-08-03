@@ -62,6 +62,37 @@ export interface AuthPasswordResetOptions {
   }) => Promise<void>;
 }
 
+export interface AuthOnboardingOptions {
+  enabled?: boolean;
+  codeLength?: number;
+  ttlSeconds?: number;
+  cooldownSeconds?: number;
+  maxAttempts?: number;
+  lockSeconds?: number;
+  channel?: string;
+  /**
+   * Secret used to sign the one-purpose onboarding JWT returned after OTP
+   * verification. Defaults to `jwtSecret`.
+   */
+  onboardingTokenSecret?: string;
+  /**
+   * Expiration for the one-purpose onboarding JWT.
+   * @default '15m'
+   */
+  onboardingTokenExpiresIn?: string;
+  startDto?: Type<unknown>;
+  completeDto?: Type<unknown>;
+  createUserDto?: Type<unknown>;
+  metadata?: Record<string, unknown>;
+  buildDeliveryContext?: (params: {
+    identifier: string;
+  }) => Record<string, unknown>;
+  /**
+   * REQUIRED callback — sends the OTP to the invitee's email/phone.
+   */
+  deliverCode?: OtpDeliveryCallback;
+}
+
 export interface AuthVerificationOptions {
   enabled?: boolean;
   codeLength?: number;
@@ -187,6 +218,15 @@ export interface AuthModuleOptions {
   apiKey?: ApiKeyModuleOptions;
 
   verification?: AuthVerificationOptions;
+
+  /**
+   * Agent-assisted onboarding with OTP verification. The agent starts an
+   * attempt (OTP delivered to the invitee), verifies the code the invitee
+   * reads back, and receives a one-purpose onboarding JWT that guards a
+   * single endpoint creating the user (with `registerHooks`). Independent of
+   * the normal registration flow.
+   */
+  onboarding?: AuthOnboardingOptions;
 
   /**
    * Optional before/after registration hooks. Runs atomically with the user

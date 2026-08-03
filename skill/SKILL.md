@@ -213,6 +213,7 @@ export class AppModule {}
 | `passwordReset` | `AuthPasswordResetOptions` | — | No | Password reset configuration |
 | `apiKey` | `ApiKeyModuleOptions` | — | No | API key authentication configuration |
 | `verification` | `AuthVerificationOptions` | — | No | Registration OTP verification |
+| `onboarding` | `AuthOnboardingOptions` | — | No | Agent-assisted onboarding (OTP + single-purpose token) |
 
 ### OTP Configuration
 
@@ -324,6 +325,59 @@ verificationLockedUntil?: Date;
 **Flow**: On wrong code, attempts are tracked. After max attempts or code expiry, the user is deleted (must register again). `POST /auth/login`, `POST /auth/refresh`, and JWT validation all reject unverified users with 401.
 
 **Guardrail**: `deliverCode` **MUST** be provided when `verification.enabled: true`. The module throws at startup if it's missing.
+
+### Assisted Onboarding Configuration
+
+Opt-in agent-assisted onboarding. An agent starts the flow on behalf of an invitee (OTP is sent to the invitee), the agent enters the invitee's OTP to complete it and receives a **single-purpose onboarding JWT** that only works on `POST /auth/onboarding/user` to create the user. No password is ever set; created users log in with OTP.
+
+```typescript
+onboarding: {
+  enabled: true,
+  codeLength: 6,                 // 4-10, default: 6
+  ttlSeconds: 300,               // Code validity, default: 300 (5 min)
+  cooldownSeconds: 60,           // Min time between requests, default: 60
+  maxAttempts: 5,                // Max failed attempts before lock, default: 5
+  lockSeconds: 300,              // Lockout duration, default: 300
+  channel: 'email',              // Delivery channel, default: 'email'
+  onboardingTokenSecret: process.env.ONBOARDING_TOKEN_SECRET, // default: jwtSecret
+  onboardingTokenExpiresIn: '15m', // default: '15m'
+  startDto: OnboardingStartDto,
+  completeDto: OnboardingCompleteDto,
+  createUserDto: OnboardingCreateUserDto,
+  deliverCode: async ({ identifier, code, expiresAt }) => {
+    // REQUIRED callback — send the code to the invitee
+  },
+}
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | — | Enable assisted onboarding |
+| `codeLength` | `number` | `6` | OTP code length (4-10) |
+| `ttlSeconds` | `number` | `300` | Code validity in seconds |
+| `cooldownSeconds` | `number` | `60` | Min time between starts |
+| `maxAttempts` | `number` | `5` | Max failed completes before lock |
+| `lockSeconds` | `number` | `300` | Lockout after too many attempts |
+| `channel` | `string` | `'email'` | Delivery channel passed to callback |
+| `onboardingTokenSecret` | `string` | `jwtSecret` | Separate secret for the onboarding JWT |
+| `onboardingTokenExpiresIn` | `string` | `'15m'` | Onboarding JWT expiry |
+| `startDto` | `Type<unknown>` | — | Swagger DTO for start endpoint |
+| `completeDto` | `Type<unknown>` | — | Swagger DTO for complete endpoint |
+| `createUserDto` | `Type<unknown>` | — | Swagger DTO for create-user endpoint |
+| `buildDeliveryContext` | `(params: { identifier }) => Record<string, unknown>` | — | Build extra context passed to callback |
+| `deliverCode` | `OnboardingDeliveryCallback` | — | **Required** — callback to send the code |
+
+**Endpoints**:
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `POST /auth/onboarding/start` | POST | JwtAuthGuard + PermissionsGuard(`onboarding.start`) | Agent starts onboarding; sends OTP to the invitee |
+| `POST /auth/onboarding/complete` | POST | JwtAuthGuard + PermissionsGuard(`onboarding.complete`) | Agent enters invitee's code → returns single-use `onboarding_token` |
+| `POST /auth/onboarding/user` | POST | OnboardingJwtGuard only | Creates the user (runs `registerHooks`, marks `verifiedAt`), consumes attempt |
+
+**Behavior**: Attempt state lives on a dedicated `OnboardingAttemptEntity` (not the User row) since the user doesn't exist until the final step. A partial unique index on `(identifierField, identifier)` where `consumedAt IS NULL` ensures only one pending attempt per identifier. `start` is rate-limited like OTP login; the create endpoint is guarded **only** by `OnboardingJwtGuard` (no JWT/RBAC required) so the token must be kept on the agent side and used once. If the onboarding user already exists, `ConflictException` is thrown.
+
+**Guardrail**: `deliverCode` **MUST** be provided when `onboarding.enabled: true`. The module throws at startup if it's missing.
 
 ---
 

@@ -49,12 +49,14 @@ describe('AuthService', () => {
     mockOptions.verification = undefined;
     mockOptions.registerHooks = undefined;
     mockOptions.identifierFields = undefined;
+    mockOptions.onboarding = undefined;
 
     repository = {
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue({
         addSelect: jest.fn().mockReturnThis(),
         leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -764,6 +766,349 @@ describe('AuthService', () => {
         'user.roles',
         'roles'
       );
+    });
+  });
+
+  describe('onboarding', () => {
+    const deliverCode = jest.fn().mockResolvedValue(undefined);
+
+    const pendingAttempt = {
+      id: 1,
+      identifierField: 'email',
+      identifier: 'alice@example.com',
+      codeHash: 'hashedCode',
+      codeExpiresAt: new Date(Date.now() + 60000),
+      attempts: 0,
+      lastSentAt: new Date(Date.now() - 120000),
+      lockedUntil: null,
+      consumedAt: null,
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockOptions.onboarding = {
+        enabled: true,
+        deliverCode,
+      };
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedCode');
+      repository.update.mockResolvedValue({ affected: 1 });
+    });
+
+    describe('startOnboarding', () => {
+      it('should create a pending attempt and deliver an OTP', async () => {
+        repository.findOne
+          .mockResolvedValueOnce(null) // no existing user
+          .mockResolvedValueOnce(null); // no pending attempt
+        repository.create.mockReturnValue({
+          identifierField: 'email',
+          identifier: 'alice@example.com',
+          attempts: 0,
+        });
+        repository.save.mockResolvedValue({
+          id: 1,
+          identifierField: 'email',
+          identifier: 'alice@example.com',
+          attempts: 0,
+        });
+
+        const result = await service.startOnboarding({
+          email: 'alice@example.com',
+        });
+
+        expect(result).toEqual({ success: true, attemptId: 1 });
+        expect(repository.update).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({
+            codeHash: 'hashedCode',
+            codeExpiresAt: expect.any(Date),
+            attempts: 0,
+          })
+        );
+        expect(deliverCode).toHaveBeenCalledWith(
+          expect.objectContaining({
+            identifier: 'alice@example.com',
+            code: expect.any(String),
+            channel: 'email',
+          })
+        );
+      });
+
+      it('should throw ConflictException if the identifier already belongs to a user', async () => {
+        repository.findOne.mockResolvedValueOnce({ id: 1, email: 'alice@example.com' });
+
+        await expect(
+          service.startOnboarding({ email: 'alice@example.com' })
+        ).rejects.toThrow(ConflictException);
+        expect(deliverCode).not.toHaveBeenCalled();
+      });
+
+      it('should throw BadRequestException when no identifier is provided', async () => {
+        await expect(service.startOnboarding({})).rejects.toThrow(
+          BadRequestException
+        );
+      });
+
+      it('should delete the attempt and throw when delivery fails', async () => {
+        repository.findOne
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(null);
+        repository.create.mockReturnValue({
+          identifierField: 'email',
+          identifier: 'alice@example.com',
+        });
+        repository.save.mockResolvedValue({ id: 1 });
+        deliverCode.mockRejectedValueOnce(new Error('smtp down'));
+
+        await expect(
+          service.startOnboarding({ email: 'alice@example.com' })
+        ).rejects.toThrow(InternalServerErrorException);
+        expect(repository.delete).toHaveBeenCalledWith(1);
+      });
+
+      it('should respect the resend cooldown on an existing attempt', async () => {
+        repository.findOne
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
+            ...pendingAttempt,
+            lastSentAt: new Date(),
+          });
+
+        const result = await service.startOnboarding({
+          email: 'alice@example.com',
+        });
+
+        expect(result.success).toBe(false);
+        expect(deliverCode).not.toHaveBeenCalled();
+      });
+
+      it('should reject while the attempt is locked', async () => {
+        repository.findOne
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
+            ...pendingAttempt,
+            lockedUntil: new Date(Date.now() + 60000),
+          });
+
+        const result = await service.startOnboarding({
+          email: 'alice@example.com',
+        });
+
+        expect(result.success).toBe(false);
+        expect(deliverCode).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('completeOnboarding', () => {
+      it('should validate the OTP and issue a one-purpose onboarding token', async () => {
+        repository.findOne.mockResolvedValueOnce(pendingAttempt);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        jwtService.sign.mockReturnValue('signed-onboarding-token');
+
+        const result = await service.completeOnboarding({
+          email: 'alice@example.com',
+          code: '123456',
+        });
+
+        expect(result.onboarding_token).toBe('signed-onboarding-token');
+        expect(jwtService.sign).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sub: 1,
+            type: 'onboarding',
+            identifier: 'alice@example.com',
+          }),
+          expect.objectContaining({
+            secret: 'test-secret',
+            expiresIn: '15m',
+          })
+        );
+        // OTP state cleared, but attempt stays consumable until the user is created.
+        expect(repository.update).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ codeHash: null })
+        );
+      });
+
+      it('should throw UnauthorizedException for an invalid code and increment attempts', async () => {
+        repository.findOne.mockResolvedValueOnce(pendingAttempt);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        await expect(
+          service.completeOnboarding({
+            email: 'alice@example.com',
+            code: '000000',
+          })
+        ).rejects.toThrow(UnauthorizedException);
+        expect(repository.update).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ attempts: 1 })
+        );
+      });
+
+      it('should lock the attempt after max failed attempts', async () => {
+        repository.findOne.mockResolvedValueOnce({
+          ...pendingAttempt,
+          attempts: 4,
+        });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        await expect(
+          service.completeOnboarding({
+            email: 'alice@example.com',
+            code: '000000',
+          })
+        ).rejects.toThrow(BadRequestException);
+        expect(repository.update).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ lockedUntil: expect.any(Date) })
+        );
+      });
+
+      it('should throw UnauthorizedException when the code has expired', async () => {
+        repository.findOne.mockResolvedValueOnce({
+          ...pendingAttempt,
+          codeExpiresAt: new Date(Date.now() - 60000),
+        });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        await expect(
+          service.completeOnboarding({
+            email: 'alice@example.com',
+            code: '123456',
+          })
+        ).rejects.toThrow(UnauthorizedException);
+        expect(repository.update).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ codeHash: null })
+        );
+      });
+
+      it('should throw UnauthorizedException when no pending attempt exists', async () => {
+        repository.findOne.mockResolvedValueOnce(null);
+
+        await expect(
+          service.completeOnboarding({
+            email: 'ghost@example.com',
+            code: '123456',
+          })
+        ).rejects.toThrow(UnauthorizedException);
+      });
+    });
+
+    describe('createUserFromOnboarding', () => {
+      const attempt = {
+        id: 1,
+        identifierField: 'email',
+        identifier: 'alice@example.com',
+      };
+
+      it('should create the user with the attempt identifier and no password', async () => {
+        const afterRegister = jest.fn().mockResolvedValue(undefined);
+        mockOptions.registerHooks = { afterRegister };
+
+        repository.create.mockImplementation(
+          (payload: Record<string, unknown>) => payload
+        );
+        repository.save.mockResolvedValue({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+        });
+
+        const result = await service.createUserFromOnboarding(
+          attempt as never,
+          { name: 'Alice' }
+        );
+
+        expect(repository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Alice',
+            email: 'alice@example.com',
+            password: undefined,
+          })
+        );
+        expect(afterRegister).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 1 })
+        );
+        // Attempt consumed atomically with user creation.
+        expect(repository.update).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ consumedAt: expect.any(Date) })
+        );
+        expect(result.email).toBe('alice@example.com');
+        expect(result.password).toBeUndefined();
+      });
+
+      it('should run beforeRegister hook mutations', async () => {
+        mockOptions.registerHooks = {
+          beforeRegister: jest.fn(async (ctx) => {
+            ctx.payload.isActive = true;
+          }),
+        };
+        repository.create.mockImplementation(
+          (payload: Record<string, unknown>) => payload
+        );
+        repository.save.mockResolvedValue({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+          isActive: true,
+        });
+
+        await service.createUserFromOnboarding(
+          attempt as never,
+          { name: 'Alice' }
+        );
+
+        expect(repository.create).toHaveBeenCalledWith(
+          expect.objectContaining({ isActive: true })
+        );
+      });
+
+      it('should mark the user verified when verification is enabled', async () => {
+        mockOptions.verification = { enabled: true };
+        repository.create.mockImplementation(
+          (payload: Record<string, unknown>) => payload
+        );
+        repository.save.mockResolvedValue({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+          isVerified: true,
+        });
+
+        await service.createUserFromOnboarding(
+          attempt as never,
+          { name: 'Alice' }
+        );
+
+        expect(repository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isVerified: true,
+            verifiedAt: expect.any(Date),
+          })
+        );
+      });
+
+      it('should throw BadRequestException on identifier mismatch', async () => {
+        await expect(
+          service.createUserFromOnboarding(
+            attempt as never,
+            { name: 'Alice', email: 'other@example.com' }
+          )
+        ).rejects.toThrow(BadRequestException);
+        expect(repository.save).not.toHaveBeenCalled();
+      });
+
+      it('should throw BadRequestException when onboarding is disabled', async () => {
+        mockOptions.onboarding = { enabled: false };
+
+        await expect(
+          service.createUserFromOnboarding(
+            attempt as never,
+            { name: 'Alice' }
+          )
+        ).rejects.toThrow(BadRequestException);
+      });
     });
   });
 });

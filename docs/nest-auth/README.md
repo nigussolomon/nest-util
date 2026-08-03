@@ -159,6 +159,11 @@ export class DataController {
 - `POST /auth/api-keys/:id/roles/:roleId`
 - `DELETE /auth/api-keys/:id/roles/:roleId`
 
+### Assisted Onboarding
+- `POST /auth/onboarding/start` (agent, `onboarding.start`)
+- `POST /auth/onboarding/complete` (agent, `onboarding.complete`)
+- `POST /auth/onboarding/user` (OnboardingJwtGuard only)
+
 ## 6) Example DTOs
 
 ```ts
@@ -243,7 +248,39 @@ AuthModule.forRoot({
 - `POST /auth/otp/request`: Accepts `{ email: "user@example.com" }`. Triggers the `deliverCode` callback.
 - `POST /auth/otp/login`: Accepts `{ email: "user@example.com", otpCode: "123456" }`. Validates the code and returns auth tokens.
 
-## 10) Help Notes
+## 10) Assisted Onboarding
+
+To enable agent-assisted onboarding, configure the `onboarding` option in `AuthModule.forRoot`. An agent starts the flow on behalf of an invitee (OTP is sent to the invitee), then enters the invitee's OTP to complete it and receives a **single-purpose onboarding JWT** that only works on `POST /auth/onboarding/user` to create the user. No password is ever set; created users log in with OTP.
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  onboarding: {
+    enabled: true,
+    codeLength: 6,
+    ttlSeconds: 300, // Code validity in seconds (5 minutes)
+    cooldownSeconds: 60, // Minimum time between start requests
+    maxAttempts: 5, // Max failed completes before lockout
+    lockSeconds: 300, // Lockout duration in seconds
+    channel: 'email',
+    onboardingTokenSecret: process.env.ONBOARDING_TOKEN_SECRET, // default: jwtSecret
+    onboardingTokenExpiresIn: '15m',
+    deliverCode: async ({ identifier, code, expiresAt }) => {
+      // TODO: Send email/SMS with the OTP code to the invitee
+      console.log(`Send onboarding OTP ${code} to ${identifier}`);
+    },
+  },
+})
+```
+
+**Endpoints:**
+- `POST /auth/onboarding/start`: Agent-only (`onboarding.start`). Accepts `{ email: "invitee@example.com" }`. Triggers the `deliverCode` callback. Rate-limited like OTP login.
+- `POST /auth/onboarding/complete`: Agent-only (`onboarding.complete`). Accepts `{ email: "invitee@example.com", code: "123456" }`. Validates the code and returns a single-use `onboarding_token`.
+- `POST /auth/onboarding/user`: Guarded only by `OnboardingJwtGuard` (Bearer onboarding token). Accepts `{ email: "invitee@example.com" }`, creates the user with `registerHooks` and `verifiedAt` set, and consumes the attempt. Returns `ConflictException` if the user already exists.
+
+Permissions `onboarding.start` and `onboarding.complete` are the fixed convention — register them in your permission registry.
+
+## 11) Help Notes
 
 - `refresh` currently expects `refreshToken` in request body.
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.

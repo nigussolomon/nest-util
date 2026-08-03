@@ -9,7 +9,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 import type { Repository, EntityManager } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -17,6 +17,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AUTH_OPTIONS } from '../constants';
 import type {
   AuthModuleOptions,
+  AuthOnboardingOptions,
   AuthPasswordResetOptions,
   AuthVerificationOptions,
 } from '../interfaces/auth-options';
@@ -24,6 +25,7 @@ import type { AuthOtpOptions } from '../interfaces/auth-options';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 import { RoleEntity } from '../entities/role.entity';
 import { UserRoleEntity } from '../entities/user-role.entity';
+import { OnboardingAttemptEntity } from '../entities/onboarding-attempt.entity';
 import { CreateRoleDto } from '../dtos/create-role.dto';
 
 interface AuditEvent {
@@ -77,11 +79,30 @@ interface ResolvedVerificationOptions {
   inputCodeField: string;
 }
 
+interface ResolvedOnboardingOptions {
+  codeLength: number;
+  ttlSeconds: number;
+  cooldownSeconds: number;
+  maxAttempts: number;
+  lockSeconds: number;
+  channel: string;
+  tokenSecret: string;
+  tokenExpiresIn: string;
+}
+
+interface CreateUserConfig {
+  hashedPassword?: string;
+  verified?: boolean;
+  verifiedAt?: Date;
+  onSaved?: (manager: EntityManager, saved: Record<string, unknown>) => Promise<void>;
+}
+
 @Injectable()
 export class AuthService {
   private readonly userRepository: Repository<Record<string, unknown>>;
   private readonly roleRepository: Repository<RoleEntity>;
   private readonly userRoleRepository: Repository<UserRoleEntity>;
+  private readonly onboardingAttemptRepository: Repository<OnboardingAttemptEntity>;
 
   constructor(
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
@@ -94,6 +115,8 @@ export class AuthService {
     ) as Repository<Record<string, unknown>>;
     this.roleRepository = this.dataSource.getRepository(RoleEntity);
     this.userRoleRepository = this.dataSource.getRepository(UserRoleEntity);
+    this.onboardingAttemptRepository =
+      this.dataSource.getRepository(OnboardingAttemptEntity);
   }
 
   private emitAuthEvent(action: string, data: Partial<AuditEvent> = {}): void {
@@ -179,36 +202,10 @@ export class AuthService {
       : undefined;
 
     const verificationEnabled = this.options.verification?.enabled;
-    const verifiedField = this.options.verification?.verifiedField ?? 'isVerified';
-    const hooks = this.options.registerHooks;
 
-    const savedUser = await this.dataSource.transaction(async (manager) => {
-      if (hooks?.beforeRegister) {
-        await hooks.beforeRegister({ payload: data, manager });
-      }
-
-      const userRepository = manager.getRepository(this.options.userEntity);
-
-      const newUser = userRepository.create({
-        ...data,
-        [this.options.passkeyField]: hashedPassword,
-        ...(verificationEnabled ? { [verifiedField]: false } : {}),
-      });
-
-      const saved = await userRepository.save(newUser);
-
-      if (hooks?.afterRegister) {
-        const userId = (saved as Record<string, unknown>).id as string | number;
-        await hooks.afterRegister({
-          payload: data,
-          entity: saved,
-          userId,
-          manager,
-          assignRole: this.makeAssignRole(manager, userId),
-        });
-      }
-
-      return saved as Record<string, unknown>;
+    const savedUser = await this.createUserWithHooks(data, {
+      hashedPassword,
+      ...(verificationEnabled ? { verified: false } : {}),
     });
 
     this.emitAuthEvent('auth.user.register.success', {
@@ -1152,6 +1149,90 @@ export class AuthService {
     };
   }
 
+  // ── Onboarding Helpers ─────────────────────────────────────────
+
+  private getOnboardingOptions(): AuthOnboardingOptions {
+    if (!this.options.onboarding?.enabled) {
+      throw new BadRequestException('Assisted onboarding is not enabled');
+    }
+
+    if (!this.options.onboarding.deliverCode) {
+      throw new BadRequestException(
+        'Onboarding delivery callback is not configured'
+      );
+    }
+
+    return this.options.onboarding;
+  }
+
+  private resolveOnboardingOptions(
+    onboarding: AuthOnboardingOptions
+  ): ResolvedOnboardingOptions {
+    const codeLength = onboarding.codeLength ?? 6;
+    if (codeLength < 4 || codeLength > 10) {
+      throw new BadRequestException(
+        'Onboarding OTP code length must be between 4 and 10'
+      );
+    }
+
+    return {
+      codeLength,
+      ttlSeconds: onboarding.ttlSeconds ?? 300,
+      cooldownSeconds: onboarding.cooldownSeconds ?? 60,
+      maxAttempts: onboarding.maxAttempts ?? 5,
+      lockSeconds: onboarding.lockSeconds ?? 300,
+      channel: onboarding.channel ?? 'email',
+      tokenSecret: onboarding.onboardingTokenSecret || this.options.jwtSecret,
+      tokenExpiresIn: onboarding.onboardingTokenExpiresIn ?? '15m',
+    };
+  }
+
+  private generateOnboardingToken(
+    attempt: OnboardingAttemptEntity
+  ): string {
+    const config = this.resolveOnboardingOptions(this.getOnboardingOptions());
+
+    return this.jwtService.sign(
+      {
+        sub: attempt.id,
+        type: 'onboarding',
+        identifierField: attempt.identifierField,
+        identifier: attempt.identifier,
+      },
+      {
+        secret: config.tokenSecret,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expiresIn: config.tokenExpiresIn as any,
+      }
+    );
+  }
+
+  private async updateOnboardingState(
+    attemptId: number,
+    state: Record<string, unknown>
+  ): Promise<void> {
+    const result = await this.onboardingAttemptRepository.update(
+      attemptId,
+      state
+    );
+
+    if (result.affected === 0) {
+      throw new InternalServerErrorException(
+        'Failed to update onboarding state'
+      );
+    }
+  }
+
+  private async clearOnboardingState(attemptId: number): Promise<void> {
+    await this.updateOnboardingState(attemptId, {
+      codeHash: null,
+      codeExpiresAt: null,
+      attempts: 0,
+      lastSentAt: null,
+      lockedUntil: null,
+    });
+  }
+
   // ── Verification Helpers ──────────────────────────────────────
 
   private getVerificationOptions(): AuthVerificationOptions {
@@ -1442,6 +1523,299 @@ export class AuthService {
     return { success: true };
   }
 
+  // ── Assisted Onboarding ─────────────────────────────────────────
+
+  /**
+   * Agent-initiated step. Creates (or refreshes) a pending onboarding attempt
+   * and delivers an OTP to the invitee's identifier. Does not create a user.
+   */
+  async startOnboarding(
+    data: Record<string, unknown>
+  ): Promise<{ success: boolean; attemptId?: number; message?: string }> {
+    const onboardingOptions = this.getOnboardingOptions();
+    const config = this.resolveOnboardingOptions(onboardingOptions);
+
+    const presentIdentifiers = this.getPresentIdentifiers(data);
+    if (presentIdentifiers.length === 0) {
+      throw new BadRequestException(
+        `${this.getIdentifierLabel()} is required`
+      );
+    }
+
+    const { field, value } = presentIdentifiers[0];
+    const identifier = value.trim();
+
+    const existingUser = await this.userRepository.findOne({
+      where: { [field]: identifier } as never,
+    });
+
+    if (existingUser) {
+      this.emitAuthEvent('auth.onboarding.start.failed.user_exists', {
+        metadata: { identifier },
+      });
+      throw new ConflictException('User already exists');
+    }
+
+    const now = new Date();
+
+    let attempt = await this.onboardingAttemptRepository.findOne({
+      where: {
+        identifierField: field,
+        identifier,
+        consumedAt: IsNull(),
+      } as never,
+    });
+
+    const lockUntil = this.toDate(attempt?.lockedUntil);
+    if (attempt && lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.onboarding.start.locked', {
+        metadata: { identifier, attemptId: attempt.id },
+      });
+      return {
+        success: false,
+        message:
+          'Onboarding OTP requests are temporarily locked due to multiple failed attempts',
+      };
+    }
+
+    const lastSentAt = this.toDate(attempt?.lastSentAt);
+    if (
+      attempt &&
+      lastSentAt &&
+      now.getTime() - lastSentAt.getTime() < config.cooldownSeconds * 1000
+    ) {
+      this.emitAuthEvent('auth.onboarding.start.cooldown', {
+        metadata: { identifier, attemptId: attempt.id },
+      });
+      return { success: false, message: 'Onboarding OTP request is on cooldown' };
+    }
+
+    const code = this.generateOtpCode(config.codeLength);
+    const hashedCode = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(now.getTime() + config.ttlSeconds * 1000);
+
+    let isNewAttempt = false;
+    if (!attempt) {
+      attempt = this.onboardingAttemptRepository.create({
+        identifierField: field,
+        identifier,
+        attempts: 0,
+      });
+      attempt = await this.onboardingAttemptRepository.save(attempt);
+      isNewAttempt = true;
+    }
+
+    await this.updateOnboardingState(attempt.id, {
+      codeHash: hashedCode,
+      codeExpiresAt: expiresAt,
+      attempts: 0,
+      lastSentAt: now,
+      lockedUntil: null,
+    });
+
+    try {
+      await onboardingOptions.deliverCode!({
+        identifier,
+        code,
+        channel: onboardingOptions.channel ?? config.channel,
+        expiresAt,
+        metadata: onboardingOptions.metadata,
+        context: onboardingOptions.buildDeliveryContext?.({ identifier }),
+      });
+    } catch {
+      if (isNewAttempt) {
+        await this.onboardingAttemptRepository.delete(attempt.id);
+      } else {
+        await this.clearOnboardingState(attempt.id);
+      }
+      this.emitAuthEvent('auth.onboarding.start.failed.delivery', {
+        metadata: { identifier, channel: onboardingOptions.channel ?? config.channel },
+      });
+      throw new InternalServerErrorException('Failed to deliver onboarding code');
+    }
+
+    this.emitAuthEvent('auth.onboarding.start.success', {
+      metadata: { identifier, attemptId: attempt.id },
+    });
+    return { success: true, attemptId: attempt.id };
+  }
+
+  /**
+   * Agent-initiated step. Validates the OTP the invitee read back, then
+   * issues a one-purpose onboarding JWT that only guards the user-creation
+   * endpoint.
+   */
+  async completeOnboarding(
+    data: Record<string, unknown>
+  ): Promise<{ onboarding_token: string }> {
+    const onboardingOptions = this.getOnboardingOptions();
+    const config = this.resolveOnboardingOptions(onboardingOptions);
+    const inputCodeField = 'code';
+
+    const presentIdentifiers = this.getPresentIdentifiers(data);
+    const code = data[inputCodeField];
+
+    if (presentIdentifiers.length === 0) {
+      throw new BadRequestException({
+        code: 'IDENTIFIER_REQUIRED',
+        message: `${this.getIdentifierLabel()} is required`,
+      });
+    }
+
+    if (typeof code !== 'string' || !code.trim()) {
+      throw new BadRequestException({
+        code: 'OTP_REQUIRED',
+        message: `${inputCodeField} is required`,
+      });
+    }
+
+    const normalizedCode = code.trim();
+
+    const attempt = await this.onboardingAttemptRepository.findOne({
+      where: presentIdentifiers.map(({ field: f, value: v }) => ({
+        identifierField: f,
+        identifier: v.trim(),
+        consumedAt: IsNull(),
+      })) as never,
+    });
+
+    if (!attempt) {
+      this.emitAuthEvent('auth.onboarding.complete.failed.not_found', {
+        metadata: {
+          identifiers: presentIdentifiers.map(({ value: v }) => v),
+        },
+      });
+      throw new UnauthorizedException('Invalid onboarding code');
+    }
+
+    const now = new Date();
+
+    const lockUntil = this.toDate(attempt.lockedUntil);
+    if (lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.onboarding.complete.failed.locked', {
+        metadata: { attemptId: attempt.id },
+      });
+      throw new BadRequestException('Too many onboarding OTP attempts');
+    }
+
+    const storedHash = attempt.codeHash as string | null;
+    const expiresAt = this.toDate(attempt.codeExpiresAt);
+
+    if (!storedHash || !expiresAt) {
+      this.emitAuthEvent('auth.onboarding.complete.failed.not_requested', {
+        metadata: { attemptId: attempt.id },
+      });
+      throw new UnauthorizedException('No onboarding code has been generated');
+    }
+
+    if (expiresAt <= now) {
+      await this.clearOnboardingState(attempt.id);
+      this.emitAuthEvent('auth.onboarding.complete.failed.expired', {
+        metadata: { attemptId: attempt.id },
+      });
+      throw new UnauthorizedException(
+        'Onboarding code has expired. Please start again.'
+      );
+    }
+
+    const isCodeValid = await bcrypt.compare(normalizedCode, storedHash);
+
+    if (!isCodeValid) {
+      const currentAttempts = this.toNumber(attempt.attempts);
+      const nextAttempts = currentAttempts + 1;
+
+      const updatePayload: Record<string, unknown> = {
+        attempts: nextAttempts,
+      };
+
+      if (nextAttempts >= config.maxAttempts) {
+        updatePayload.lockedUntil = new Date(
+          now.getTime() + config.lockSeconds * 1000
+        );
+        await this.updateOnboardingState(attempt.id, updatePayload);
+        this.emitAuthEvent('auth.onboarding.complete.failed.max_attempts', {
+          metadata: { attemptId: attempt.id, lockUntil: updatePayload.lockedUntil },
+        });
+        throw new BadRequestException('Maximum onboarding attempts reached');
+      }
+
+      await this.updateOnboardingState(attempt.id, updatePayload);
+      this.emitAuthEvent('auth.onboarding.complete.failed.invalid', {
+        metadata: { attemptId: attempt.id, attemptsRemaining: config.maxAttempts - nextAttempts },
+      });
+      throw new UnauthorizedException({
+        code: 'ONBOARDING_INVALID',
+        message: 'Invalid onboarding code',
+        attemptsRemaining: config.maxAttempts - nextAttempts,
+      });
+    }
+
+    // Clear OTP state but keep the attempt pending so the token stays valid.
+    await this.clearOnboardingState(attempt.id);
+
+    const onboarding_token = this.generateOnboardingToken(attempt);
+
+    this.emitAuthEvent('auth.onboarding.complete.success', {
+      metadata: { attemptId: attempt.id, identifier: attempt.identifier },
+    });
+
+    return { onboarding_token };
+  }
+
+  /**
+   * Token-guarded step. Creates the user for the identifier bound to the
+   * onboarding attempt, reusing the same `registerHooks` transaction as
+   * `register()`. No password is set; the attempt is consumed (single use).
+   */
+  async createUserFromOnboarding(
+    attempt: OnboardingAttemptEntity,
+    data: Record<string, unknown>
+  ): Promise<AuthUser> {
+    if (!this.options.onboarding?.enabled) {
+      throw new BadRequestException('Onboarding is not enabled');
+    }
+
+    const field = attempt.identifierField;
+    const identifier = attempt.identifier;
+
+    const provided = data[field];
+    if (
+      provided !== undefined &&
+      provided !== null &&
+      String(provided).trim() !== identifier
+    ) {
+      throw new BadRequestException(`Identifier mismatch for ${field}`);
+    }
+
+    const userData: Record<string, unknown> = {
+      ...data,
+      [field]: identifier,
+    };
+    delete userData[this.options.passkeyField];
+
+    const verificationEnabled = this.options.verification?.enabled;
+
+    const savedUser = await this.createUserWithHooks(userData, {
+      hashedPassword: undefined,
+      ...(verificationEnabled
+        ? { verified: true, verifiedAt: new Date() }
+        : {}),
+      onSaved: async (manager) => {
+        await manager
+          .getRepository(OnboardingAttemptEntity)
+          .update(attempt.id, { consumedAt: new Date() });
+      },
+    });
+
+    this.emitAuthEvent('auth.onboarding.user.create.success', {
+      entityId: savedUser.id,
+      userId: savedUser.id,
+      metadata: { attemptId: attempt.id, identifier },
+    });
+
+    return this.removeSensitiveData(savedUser);
+  }
+
   private async clearPasswordResetState(
     userId: string | number,
     config: ResolvedPasswordResetOptions
@@ -1614,6 +1988,56 @@ export class AuthService {
     }
 
     return this.removeSensitiveData(user);
+  }
+
+  private async createUserWithHooks(
+    data: Record<string, unknown>,
+    config: CreateUserConfig
+  ): Promise<Record<string, unknown>> {
+    const hooks = this.options.registerHooks;
+    const verifiedField = this.options.verification?.verifiedField ?? 'isVerified';
+    const verifiedAtField = this.options.verification?.verifiedAtField ?? 'verifiedAt';
+
+    return await this.dataSource.transaction(async (manager) => {
+      if (hooks?.beforeRegister) {
+        await hooks.beforeRegister({ payload: data, manager });
+      }
+
+      const userRepository = manager.getRepository(this.options.userEntity);
+
+      const columns: Record<string, unknown> = {
+        ...data,
+        [this.options.passkeyField]: config.hashedPassword,
+      };
+
+      if (config.verified !== undefined) {
+        columns[verifiedField] = config.verified;
+      }
+      if (config.verifiedAt !== undefined) {
+        columns[verifiedAtField] = config.verifiedAt;
+      }
+
+      const newUser = userRepository.create(columns);
+
+      const saved = await userRepository.save(newUser);
+
+      if (hooks?.afterRegister) {
+        const userId = (saved as Record<string, unknown>).id as string | number;
+        await hooks.afterRegister({
+          payload: data,
+          entity: saved,
+          userId,
+          manager,
+          assignRole: this.makeAssignRole(manager, userId),
+        });
+      }
+
+      if (config.onSaved) {
+        await config.onSaved(manager, saved as Record<string, unknown>);
+      }
+
+      return saved as Record<string, unknown>;
+    });
   }
 
   private async assertUserExists(userId: number): Promise<void> {

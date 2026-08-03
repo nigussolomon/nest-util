@@ -21,6 +21,9 @@ import {
   OtpLoginDto,
   PasswordResetDto,
   PasswordResetRequestDto,
+  OnboardingStartDto,
+  OnboardingCompleteDto,
+  OnboardingCreateUserDto,
 } from './auth/auth.dto';
 import { permissionRegistry } from './auth/permission-registry';
 import {
@@ -113,6 +116,24 @@ import { NestFileModule } from '@nest-util/nest-file';
         nestedRoleKey: 'role',
       },
       permissionRegistry,
+      onboarding: {
+        enabled: true,
+        startDto: OnboardingStartDto,
+        completeDto: OnboardingCompleteDto,
+        createUserDto: OnboardingCreateUserDto,
+        ttlSeconds: 300,
+        cooldownSeconds: 60,
+        maxAttempts: 5,
+        lockSeconds: 300,
+        channel: 'email',
+        onboardingTokenExpiresIn: '15m',
+        deliverCode: async ({ identifier, code, channel, expiresAt }) => {
+          Logger.log(
+            `[demo-api ONBOARDING] channel=${channel} identifier=${identifier} code=${code} expiresAt=${expiresAt.toISOString()}`,
+            'DemoAuthModule'
+          );
+        },
+      },
     }),
     PaymentModule,
     NestFileModule.forRoot({

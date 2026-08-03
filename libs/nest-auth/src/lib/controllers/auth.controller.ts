@@ -7,6 +7,7 @@ import {
   UseGuards,
   Get,
   Type,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,6 +20,10 @@ import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
+import { Permissions } from '../decorators/permissions';
+import { OnboardingJwtGuard } from '../guards/onboarding-jwt.guard';
+import { OnboardingAttemptEntity } from '../entities/onboarding-attempt.entity';
 import { CurrentUser } from '../decorators/current-user';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
 
@@ -72,6 +77,24 @@ export function CreateAuthController(
   const verificationVerifyDto =
     options.verification?.verifyDto ||
     class VerificationVerifyDto {
+      [key: string]: unknown;
+    };
+
+  const onboardingStartDto =
+    options.onboarding?.startDto ||
+    class OnboardingStartDto {
+      [key: string]: unknown;
+    };
+
+  const onboardingCompleteDto =
+    options.onboarding?.completeDto ||
+    class OnboardingCompleteDto {
+      [key: string]: unknown;
+    };
+
+  const onboardingCreateUserDto =
+    options.onboarding?.createUserDto ||
+    class OnboardingCreateUserDto {
       [key: string]: unknown;
     };
 
@@ -151,6 +174,55 @@ export function CreateAuthController(
     ): Promise<{ success: boolean; message?: string }> {
       this.checkIfRouteDisabled('verify/resend');
       return await this.authService.resendVerificationCode(data);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions('onboarding.start')
+    @Post('onboarding/start')
+    @ApiOperation({ summary: 'Start assisted onboarding (agent only)' })
+    @ApiBody({ type: onboardingStartDto })
+    @ApiResponse({ status: 201, description: 'Onboarding attempt created, OTP sent' })
+    @ApiResponse({ status: 403, description: 'Agent lacks onboarding.start permission' })
+    @ApiResponse({ status: 409, description: 'Identifier already belongs to a user' })
+    async startOnboarding(
+      @Body() data: Record<string, unknown>
+    ): Promise<{ success: boolean; attemptId?: number; message?: string }> {
+      this.checkIfRouteDisabled('onboarding/start');
+      return await this.authService.startOnboarding(data);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions('onboarding.complete')
+    @Post('onboarding/complete')
+    @ApiOperation({ summary: 'Complete assisted onboarding (agent only)' })
+    @ApiBody({ type: onboardingCompleteDto })
+    @ApiResponse({ status: 200, description: 'OTP verified, onboarding token issued' })
+    @ApiResponse({ status: 403, description: 'Agent lacks onboarding.complete permission' })
+    @ApiResponse({ status: 401, description: 'Invalid or expired onboarding code' })
+    async completeOnboarding(
+      @Body() data: Record<string, unknown>
+    ): Promise<{ onboarding_token: string }> {
+      this.checkIfRouteDisabled('onboarding/complete');
+      return await this.authService.completeOnboarding(data);
+    }
+
+    @UseGuards(OnboardingJwtGuard)
+    @Post('onboarding/user')
+    @ApiOperation({ summary: 'Create the onboarded user (onboarding token required)' })
+    @ApiBody({ type: onboardingCreateUserDto })
+    @ApiResponse({ status: 201, description: 'User created via registerHooks, attempt consumed' })
+    @ApiResponse({ status: 401, description: 'Missing, invalid, or already-used onboarding token' })
+    async createOnboardedUser(
+      @Req() req: {
+        onboardingAttempt?: OnboardingAttemptEntity;
+      },
+      @Body() data: Record<string, unknown>
+    ): Promise<AuthUser> {
+      this.checkIfRouteDisabled('onboarding/user');
+      return await this.authService.createUserFromOnboarding(
+        req.onboardingAttempt as OnboardingAttemptEntity,
+        data
+      );
     }
 
     @Post('refresh')

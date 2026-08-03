@@ -68,6 +68,7 @@ npm run build  # or your build command
 | Ownership Enforcement | Scope `findOne`/`update`/`remove`/`create` to owned records | Add `enforceOwnership: true` alongside findMine config |
 | Cursor Pagination | `?cursor=<opaque>` on `GET /` | No changes needed — automatic |
 | Registration Verification | OTP verification during registration | Add `verification: { enabled: true, deliverCode: ... }` |
+| Assisted Onboarding | Agent-created users via OTP + single-purpose token | Add `onboarding: { enabled: true, deliverCode: ... }` + register `onboarding.start`/`onboarding.complete` permissions |
 
 ### Package Versions
 

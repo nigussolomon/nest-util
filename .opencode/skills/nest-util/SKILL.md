@@ -444,6 +444,7 @@ interface AuthModuleOptions {
   permissionRegistry?: PermissionRegistryConfig;
   otp?: AuthOtpOptions;
   passwordReset?: AuthPasswordResetOptions;
+  onboarding?: AuthOnboardingOptions;
 }
 ```
 
@@ -530,6 +531,9 @@ Permission keys are built as `{resource}.{action}` (e.g. `posts.create`). If `st
 | `POST /auth/roles/:roleId/permissions` | Post | JwtAuthGuard + PermissionsGuard(`admin.access`) | Add permissions to role |
 | `DELETE /auth/roles/:roleId/permissions` | Delete | JwtAuthGuard + PermissionsGuard(`admin.access`) | Remove permissions from role |
 | `GET /auth/users/:userId/roles` | Get | JwtAuthGuard + PermissionsGuard(`admin.access`) | Get user's roles |
+| `POST /auth/onboarding/start` | Post | JwtAuthGuard + PermissionsGuard(`onboarding.start`) | Agent starts assisted onboarding (sends OTP to invitee) |
+| `POST /auth/onboarding/complete` | Post | JwtAuthGuard + PermissionsGuard(`onboarding.complete`) | Agent enters invitee's OTP, receives single-use `onboarding_token` |
+| `POST /auth/onboarding/user` | Post | OnboardingJwtGuard only | Creates the user from the onboarding attempt (runs `registerHooks`) |
 
 All `/auth` endpoints check `options.disabledRoutes` before executing; if the route name is in the list, `ForbiddenException` is thrown.
 
@@ -570,6 +574,37 @@ interface OtpDeliveryPayload {
 
 Your User entity must have fields for: `otpCodeHash`, `otpCodeExpiresAt`, `otpRequestAttempts`, `otpLastSentAt`, `otpLockedUntil` (or custom field names).
 
+### Assisted Onboarding Configuration
+
+Opt-in agent-assisted onboarding. An agent starts the flow on behalf of an invitee (OTP is sent to the invitee), the agent enters the invitee's OTP to complete it and receives a **single-purpose onboarding JWT** that can only be used on `POST /auth/onboarding/user` to create the user. No password is ever set; created users log in with OTP.
+
+```typescript
+interface AuthOnboardingOptions {
+  enabled?: boolean;
+  codeLength?: number;            // default: 6 (must be 4-10)
+  ttlSeconds?: number;            // default: 300 (5 min)
+  cooldownSeconds?: number;       // default: 60
+  maxAttempts?: number;           // default: 5 (before lock)
+  lockSeconds?: number;           // default: 300
+  channel?: string;               // default: 'email'
+  onboardingTokenSecret?: string; // default: same as jwtSecret
+  onboardingTokenExpiresIn?: string; // default: '15m'
+  startDto?: Type<unknown>;       // body: { [identifierField]: string, password?: never }
+  completeDto?: Type<unknown>;    // body: { [identifierField]: string, code: string }
+  createUserDto?: Type<unknown>;  // body: { [identifierField]: string, password?: never }
+  metadata?: Record<string, unknown>;
+  buildDeliveryContext?: (params: { identifier }) => Record<string, unknown>;
+  deliverCode?: OnboardingDeliveryCallback;  // REQUIRED if onboarding.enabled
+}
+```
+
+Attempt state lives on a dedicated `OnboardingAttemptEntity` (not the User row) because the user does not exist until the final step. The entity uses a partial unique index on `(identifierField, identifier)` where `consumedAt IS NULL` so only one pending attempt can exist per identifier. Permissions are fixed convention: `onboarding.start` and `onboarding.complete` (via `@Permissions` + `PermissionsGuard`).
+
+Flow:
+1. Agent: `POST /auth/onboarding/start` `{ email }` → OTP delivered to invitee (rate-limited like OTP login)
+2. Agent: `POST /auth/onboarding/complete` `{ email, code }` → `{ onboarding_token }` (single-use, expires in `onboardingTokenExpiresIn`)
+3. Agent: `POST /auth/onboarding/user` with `Authorization: Bearer <onboarding_token>` → user created with `registerHooks` + `verifiedAt`, attempt consumed
+
 ### Password Reset Configuration
 
 ```typescript
@@ -594,6 +629,7 @@ interface AuthPasswordResetOptions {
 - `requestPasswordReset()` also returns success for non-existent users
 - `resetPassword()` invalidates all existing sessions (clears both token fields)
 - `validateUser()` eager-loads relations via `leftJoinAndSelect` to build full RBAC context
+- `onboarding/user` creates users with no password and never returns token fields; the onboarding JWT has `type: 'onboarding'`, is single-use (attempt `consumedAt`), and only guards the create endpoint
 - All sensitive fields (password, tokens, OTP fields) are stripped from response via `removeSensitiveData()`
 
 ---
