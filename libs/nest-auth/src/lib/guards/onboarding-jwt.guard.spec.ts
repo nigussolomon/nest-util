@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, type ExecutionContext } from '@nestjs/common';
 import { OnboardingJwtGuard } from './onboarding-jwt.guard';
 import { AUTH_OPTIONS } from '../constants';
 
@@ -62,7 +62,7 @@ describe('OnboardingJwtGuard', () => {
     }
     return {
       switchToHttp: jest.fn().mockReturnValue({ getRequest: jest.fn().mockReturnValue(request) }),
-    } as never;
+    } as unknown as ExecutionContext;
   }
 
   it('should be defined', () => {

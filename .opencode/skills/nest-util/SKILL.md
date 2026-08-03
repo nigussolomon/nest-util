@@ -1,6 +1,6 @@
 ---
 name: nest-util
-description: Use ONLY when working with @nest-util/nest-crud or @nest-util/nest-auth packages. Use for NestJS CRUD scaffolding, JWT auth with RBAC, audit logging, hooks, cursor pagination, or findMine. Covers the entire nest-util monorepo.
+description: Use ONLY when working with @nest-util/nest-crud, @nest-util/nest-auth, or @nest-util/nest-notify packages. Use for NestJS CRUD scaffolding, JWT auth with RBAC, audit logging, hooks, cursor pagination, findMine, or FCM/SMTP notifications. Covers the entire nest-util monorepo.
 ---
 
 # Nest-Util Skill
@@ -15,6 +15,7 @@ Nx monorepo (`pnpm workspaces`) with these packages:
 |---|---|---|
 | `@nest-util/nest-crud` | 1.0.7 | Generic CRUD service + controller factory + audit + hooks + cursor pagination + findMine |
 | `@nest-util/nest-auth` | 1.1.0 | JWT auth with RBAC, OTP, password reset, API key auth |
+| `@nest-util/nest-notify` | 1.0.0 | FCM push + SMTP email notifications with device-token and history persistence |
 
 **Key design**: Audit logging, lifecycle hooks, cursor pagination, and findMine are all built into `nest-crud`. No separate audit package exists.
 
@@ -631,6 +632,75 @@ interface AuthPasswordResetOptions {
 - `validateUser()` eager-loads relations via `leftJoinAndSelect` to build full RBAC context
 - `onboarding/user` creates users with no password and never returns token fields; the onboarding JWT has `type: 'onboarding'`, is single-use (attempt `consumedAt`), and only guards the create endpoint
 - All sensitive fields (password, tokens, OTP fields) are stripped from response via `removeSensitiveData()`
+
+---
+
+## Package 3: `@nest-util/nest-notify`
+
+### Exports
+
+```typescript
+// Module
+export class NestNotifyModule { static forRoot(options: NestNotifyOptions): DynamicModule }
+
+// Services
+export class NotifyService {
+  registerDeviceToken(userId, token, platform, deviceId?)
+  unregisterDeviceToken(userId, token)
+  listDeviceTokens(userId): Promise<DeviceTokenEntity[]>
+  push(userId, payload: PushPayload): Promise<SendPushResult>   // sends + records history + prunes dead tokens
+  pushToToken(token, payload: PushPayload)
+  email(payload: EmailPayload, userId?): Promise<{ success }>
+  getNotifications({ userId, channel?, page?, limit? })
+}
+export class FcmService    // sendToToken, sendToTokens (batches of 500), getDeadTokens
+export class EmailService  // send(payload)
+
+// Controller factory
+export function CreateNotifyController(options?: NotifyControllerOptions): abstract class
+export interface NotifyControllerOptions { permissions?: { devices?, push?, email?, history? } }
+
+// Entities
+export class DeviceTokenEntity   // table: device_tokens, unique token, indexed userId
+export class NotificationEntity  // table: notifications, channel/provider/status/title/body/subject/to/error/metadata(jsonb)/sentAt
+
+// Options
+export interface NestNotifyOptions {
+  fcm?: { enabled?, app?, projectId?, clientEmail?, privateKey? };
+  smtp?: { enabled?, transport?, host?, port?, secure?, user?, pass?, from?: { name?, address } };
+  controller?: { enable?, path?, permissions?: { devices?, push?, email?, history? } };
+}
+
+// Payloads
+export interface PushPayload { title: string; body: string; imageUrl?, clickAction?, data? }
+export interface EmailPayload { to; subject; text?; html?; cc?; bcc?; replyTo? }
+export interface PushResult { token; success; code? }
+export interface SendPushResult { successCount; failureCount; results: PushResult[] }
+```
+
+### `NestNotifyModule.forRoot()` Configuration
+
+- `fcm.enabled: true` requires **either** `fcm.app` (pre-initialized firebase-admin App) **or** `fcm.projectId` + `fcm.clientEmail` + `fcm.privateKey` — otherwise `FcmService` throws at construction.
+- `smtp.enabled: true` requires **either** `smtp.transport` (pre-built nodemailer transport) **or** `smtp.host` + `smtp.port` + `smtp.from.address` — otherwise `EmailService` throws at construction.
+- The module is `@Global()`; the auto controller is registered at `controller.path` (default `'notify'`) guarded with `JwtAuthGuard` + `PermissionsGuard`. Requires `@nest-util/nest-auth` installed (uses `@CurrentUser()`).
+- When `controller.permissions` is provided, permission metadata (`AUTH_PERMISSIONS_METADATA_KEY`) is set on each handler — `PermissionsGuard` picks these up automatically.
+
+### Auto-Registered Endpoints
+
+| Endpoint | Method | Auth | Permission Key |
+|---|---|---|---|
+| `POST /notify/devices` | POST | JWT+Perm | `devices` |
+| `GET /notify/devices` | GET | JWT+Perm | `devices` |
+| `DELETE /notify/devices` | DELETE | JWT+Perm | `devices` |
+| `POST /notify/push` | POST | JWT+Perm | `push` |
+| `POST /notify/email` | POST | JWT+Perm | `email` |
+| `GET /notify/history` | GET | JWT+Perm | `history` |
+
+`push`/`email` default to the authenticated user via `userId` optional body field. History is always scoped to the authenticated user.
+
+### Dead-Token Pruning
+
+FCM responses with dead-token codes (`messaging/registration-token-not-registered`, `messaging/invalid-registration-token`, `messaging/invalid-argument`, `messaging/mismatched-credential`) are collected by `FcmService.getDeadTokens()`; `NotifyService.push()` deletes those rows from `device_tokens` via `In(deadTokens)` after sending. FCM `sendEach` batches at most 500 messages per call.
 
 ---
 

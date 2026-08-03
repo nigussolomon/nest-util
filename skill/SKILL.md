@@ -1,15 +1,15 @@
 ---
 name: nest-util
-description: Complete guide for using @nest-util/nest-crud, @nest-util/nest-auth, @nest-util/nest-file, and @nest-util/nest-payment in any NestJS project. Covers CRUD scaffolding, JWT auth with RBAC and API keys, audit logging, lifecycle hooks, cursor pagination, findMine, S3 file uploads, payments with webhooks and reconciliation, and a testing factory. Use when working with these packages.
+description: Complete guide for using @nest-util/nest-crud, @nest-util/nest-auth, @nest-util/nest-file, @nest-util/nest-payment, and @nest-util/nest-notify in any NestJS project. Covers CRUD scaffolding, JWT auth with RBAC and API keys, audit logging, lifecycle hooks, cursor pagination, findMine, S3 file uploads, payments with webhooks and reconciliation, FCM push + SMTP email notifications, and a testing factory. Use when working with these packages.
 ---
 
 # Nest-Util Consumer Guide
 
-Complete reference for consuming `@nest-util/nest-crud` v1.0.8, `@nest-util/nest-auth` v1.1.1, `@nest-util/nest-file` v1.0.1, and `@nest-util/nest-payment` v1.0.1 in any NestJS project.
+Complete reference for consuming `@nest-util/nest-crud` v1.0.8, `@nest-util/nest-auth` v1.1.1, `@nest-util/nest-file` v1.0.1, `@nest-util/nest-payment` v1.0.1, and `@nest-util/nest-notify` v1.0.0 in any NestJS project.
 
 ## Overview
 
-Four packages that eliminate NestJS boilerplate:
+Five packages that eliminate NestJS boilerplate:
 
 | Package | Version | Purpose |
 |---|---|---|
@@ -17,10 +17,11 @@ Four packages that eliminate NestJS boilerplate:
 | `@nest-util/nest-auth` | 1.1.1 | JWT auth with RBAC, API key auth, OTP login, password reset |
 | `@nest-util/nest-file` | 1.0.1 | S3/MinIO file uploads with presigned URLs and metadata tracking |
 | `@nest-util/nest-payment` | 1.0.1 | Provider-agnostic payments: checkout, subscriptions, refunds, webhooks, reconciliation |
+| `@nest-util/nest-notify` | 1.0.0 | FCM push + SMTP email notifications with device-token and history persistence |
 
-**Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. `nest-file` and `nest-payment` both depend on `nest-auth` for guards and the `@CurrentUser()` decorator.
+**Key design**: Audit logging, hooks, cursor pagination, findMine, and testing are all built into `nest-crud`. `nest-file`, `nest-payment`, and `nest-notify` all depend on `nest-auth` for guards and the `@CurrentUser()` decorator.
 
-**Integration order**: TypeORM → `AuthModule.forRoot(...)` → `NestCrudService` → `CreateNestedCrudController(...)` → (optional) `NestFileModule.forRoot(...)` / `NestPaymentModule.forRoot(...)` → global interceptors/filters.
+**Integration order**: TypeORM → `AuthModule.forRoot(...)` → `NestCrudService` → `CreateNestedCrudController(...)` → (optional) `NestFileModule.forRoot(...)` / `NestPaymentModule.forRoot(...)` / `NestNotifyModule.forRoot(...)` → global interceptors/filters.
 
 ---
 
@@ -29,12 +30,13 @@ Four packages that eliminate NestJS boilerplate:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.8 @nest-util/nest-auth@^1.1.1 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.0.8 @nest-util/nest-auth@^1.1.1 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner  # only if using nest-file
-pnpm add -D @types/passport-jwt @types/bcrypt
+pnpm add firebase-admin nodemailer                       # only if using nest-notify
+pnpm add -D @types/passport-jwt @types/bcrypt @types/nodemailer
 ```
 
-Install only the packages you need. `nest-file` requires the AWS SDK (works with any S3-compatible endpoint such as MinIO). `nest-file` and `nest-payment` both require `@nest-util/nest-auth` to be installed for guards and the `@CurrentUser()` decorator.
+Install only the packages you need. `nest-file` requires the AWS SDK (works with any S3-compatible endpoint such as MinIO). `nest-file`, `nest-payment`, and `nest-notify` all require `@nest-util/nest-auth` to be installed for guards and the `@CurrentUser()` decorator. `nest-notify` bundles `firebase-admin` (FCM) and `nodemailer` (SMTP) as regular dependencies — you do **not** install them yourself, but you may pass a pre-built `firebase-admin` app or nodemailer transport via the options.
 
 ### Peer Dependencies
 
@@ -1682,6 +1684,93 @@ All three services honor `idempotencyKey`: if a payment/subscription/refund with
 
 ---
 
+## NestNotifyModule (FCM Push + SMTP Email)
+
+`@nest-util/nest-notify` delivers **push notifications via Firebase Cloud Messaging** and **emails via SMTP (nodemailer)**. It persists device tokens and a per-user notification history, auto-prunes dead FCM tokens, and exposes a guarded, auto-registered controller.
+
+### Setup
+
+```typescript
+import { NestNotifyModule } from '@nest-util/nest-notify';
+
+@Module({
+  imports: [
+    AuthModule.forRoot({ /* ... */ }),   // required: guards + @CurrentUser()
+    NestNotifyModule.forRoot({
+      fcm: {
+        enabled: true,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY,
+        // OR pass an already-initialized firebase-admin app:
+        // app: myFirebaseApp,
+      },
+      smtp: {
+        enabled: true,
+        host: process.env.SMTP_HOST,
+        port: 587,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+        from: { name: 'My App', address: 'no-reply@example.com' },
+        // OR pass a pre-built nodemailer transport:
+        // transport: myTransport,
+      },
+      controller: {
+        path: 'notify',                  // default: 'notify'
+        permissions: {
+          devices: 'notify.devices',
+          push: 'notify.push',
+          email: 'notify.email',
+          history: 'notify.history',
+        },
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`forRootAsync` is also available. The module is `@Global()` and exports `NotifyService`, `FcmService`, `EmailService`, and the options token. Register `DeviceTokenEntity` and `NotificationEntity` with TypeORM (`autoLoadEntities: true` handles this).
+
+### Guardrails
+
+1. **FCM**: `fcm.enabled: true` requires either `fcm.app` OR `fcm.projectId` + `fcm.clientEmail` + `fcm.privateKey` — otherwise `FcmService` throws at construction.
+2. **SMTP**: `smtp.enabled: true` requires either `smtp.transport` OR `smtp.host` + `smtp.port` + `smtp.from.address` — otherwise `EmailService` throws at construction.
+3. The controller is guarded with `JwtAuthGuard` + `PermissionsGuard` (requires `@nest-util/nest-auth`). Disable it with `controller.enable: false` and build your own from `CreateNotifyController()`.
+
+### Auto-Registered Endpoints
+
+| Endpoint | Method | Auth | Permission Key | Description |
+|---|---|---|---|---|
+| `POST /notify/devices` | POST | JWT+Perm | `devices` | Register an FCM device token (`{ token, platform, deviceId? }`) |
+| `GET /notify/devices` | GET | JWT+Perm | `devices` | List the current user's device tokens |
+| `DELETE /notify/devices` | DELETE | JWT+Perm | `devices` | Unregister a device token |
+| `POST /notify/push` | POST | JWT+Perm | `push` | Send a push (`{ title, body, userId?, imageUrl?, clickAction?, data? }`) |
+| `POST /notify/email` | POST | JWT+Perm | `email` | Send an email (`{ to, subject, text?, html?, cc?, bcc?, replyTo?, userId? }`) |
+| `GET /notify/history` | GET | JWT+Perm | `history` | Query the current user's notification history (`channel?`, `page?`, `limit?`) |
+
+`push` and `email` default to the authenticated user when `userId` is omitted. All history queries are scoped to the authenticated user.
+
+### NotifyService Methods
+
+```typescript
+registerDeviceToken(userId, token, platform, deviceId?)   // upsert device token
+unregisterDeviceToken(userId, token)                       // delete own token
+listDeviceTokens(userId)                                   // → DeviceTokenEntity[]
+push(userId, { title, body, imageUrl?, clickAction?, data? })
+  // → { successCount, failureCount, results: [{ token, success, code? }] }
+  //   sends via FCM, records history, auto-prunes dead tokens
+pushToToken(token, payload)                                // fire-and-forget to one token
+email(payload, userId?)                                    // → { success } and records history
+getNotifications({ userId, channel?, page?, limit? })      // paginated history
+```
+
+### Dead-Token Pruning
+
+FCM failures with dead-token codes (`messaging/registration-token-not-registered`, `messaging/invalid-registration-token`, `messaging/invalid-argument`, `messaging/mismatched-credential`) are collected and the tokens are deleted from `device_tokens` after each batch send.
+
+---
+
 ## Security Rules
 
 These rules are **mandatory** — violating any of them will cause data leaks, runtime errors, or security vulnerabilities.
@@ -1706,6 +1795,8 @@ These rules are **mandatory** — violating any of them will cause data leaks, r
 18. **NEVER** guard the payment webhook route — it is `@Public()` and relies on the provider's `verifyWebhookSignature`
 19. **ALWAYS** pass `idempotencyKey` for retry-safe payment/subscription/refund flows
 20. API keys are only returned once at creation — hash is stored, never the raw key
+21. **ALWAYS** provide `fcm` service-account fields (or `app`) and `smtp` transport (or `host`/`port`/`from`) when enabling `NestNotifyModule` channels — services throw at construction otherwise
+22. **NEVER** pass raw FCM service-account keys in code — read them from environment variables
 
 ---
 
@@ -1784,3 +1875,11 @@ Register `TypeOrmExceptionFilter` as a global filter. It maps Postgres code `235
 1. Ensure `apiKey.enabled: true` in `AuthModule.forRoot` and the header name matches (`x-api-key` by default)
 2. Add `ApiKeyGuard` to the route guards you want key auth on (`JwtAuthGuard, PermissionsGuard, ApiKeyGuard`)
 3. Register `ApiKeyEntity`/`ApiKeyRoleEntity` in your TypeORM config/migrations
+
+### Notifications failing to send
+
+1. FCM/SMTP must be `enabled: true` in `NestNotifyModule.forRoot` — otherwise the services throw a `BadRequestException`-style guardrail at construction
+2. FCM needs either an injected `app` or `projectId` + `clientEmail` + `privateKey` from a Firebase service-account JSON (watch for escaped `\n` in the private key)
+3. SMTP needs either an injected `transport` or `host` + `port` + `from.address` — for Gmail-style servers set `secure: true` with port 465
+4. `push`/`email` endpoints require `notify.push`/`notify.email` permissions; add the `notify` resource to your permission registry
+5. Add `DeviceTokenEntity` + `NotificationEntity` to your TypeORM registration (or rely on `autoLoadEntities: true`)

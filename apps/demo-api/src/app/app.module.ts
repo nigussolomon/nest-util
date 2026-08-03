@@ -34,6 +34,7 @@ import {
 } from '@nest-util/nest-crud';
 import { PaymentModule } from './payment/payment.module';
 import { NestFileModule } from '@nest-util/nest-file';
+import { NotifyModule } from './notify/notify.module';
 
 @Module({
   imports: [
@@ -136,6 +137,7 @@ import { NestFileModule } from '@nest-util/nest-file';
       },
     }),
     PaymentModule,
+    NotifyModule,
     NestFileModule.forRoot({
       s3: {
         endpoint: process.env.S3_ENDPOINT,

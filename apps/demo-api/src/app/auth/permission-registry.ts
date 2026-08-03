@@ -26,5 +26,9 @@ export const permissionRegistry: PermissionRegistryConfig = {
       resource: 'files',
       permissions: ['create', 'read', 'delete'],
     },
+    {
+      resource: 'notify',
+      permissions: ['push', 'email', 'devices', 'history'],
+    },
   ],
 };

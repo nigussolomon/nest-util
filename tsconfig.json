@@ -17,6 +17,9 @@
     },
     {
       "path": "./apps/demo-api"
+    },
+    {
+      "path": "./libs/nest-notify"
     }
   ]
 }
