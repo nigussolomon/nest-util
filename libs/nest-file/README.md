@@ -94,6 +94,59 @@ Endpoints are available immediately — no controller class needed.
 | `GET` | `/files/:id` | Get file metadata |
 | `DELETE` | `/files/:id` | Delete a file from S3 |
 
+## Upload Flow
+
+1. **Request URL** — `POST /files/upload-url` with `{ fileName, mimeType, folder? }`
+2. **Upload to S3** — `PUT` the file directly to the presigned URL
+3. **Confirm** — `POST /files/confirm` with `{ fileId, key }` to finalize
+
+`RequestUploadDto` accepts an optional `folder` field that overrides `upload.pathPrefix` for the S3 key (e.g. `avatars/1712345678901-photo.jpg`). `UpdateFileDto` accepts optional `description` and `tags` (comma-separated).
+
+## Services
+
+### FileService
+
+- `requestUpload(dto: RequestUploadDto, userId: string)` → `Promise<PresignedUploadResult>` (`uploadUrl`, `key`, `fileId`)
+- `confirmUpload(dto: ConfirmUploadDto)` → `Promise<FileEntity>`
+- `getDownloadUrl(fileId: string)` → `Promise<string>` (presigned download URL)
+- `getFile(fileId: string)` → `Promise<FileEntity>`
+- `deleteFile(fileId: string)` → `Promise<boolean>`
+- `findAll({ page?, limit?, orderBy?, orderDirection? })` → `Promise<{ data, meta }>`
+- `findMine(userId, query?)` → `Promise<{ data, meta }>` (user-scoped)
+
+### S3Service
+
+- `generatePresignedUploadUrl({ key, contentType, expiresIn? })` → `Promise<{ uploadUrl, key }>`
+- `generatePresignedDownloadUrl(key, expiresIn?)` → `Promise<string>`
+- `uploadBuffer(key, buffer, contentType)` → `Promise<{ key, url }>` (server-side)
+- `deleteObject(key)` → `Promise<void>`
+- `objectExists(key)` → `Promise<boolean>`
+- `getClient()` / `getBucket()` — raw `S3Client` / bucket accessors
+
+### Helpers
+
+`generateStoredName(fileName)` (sanitize + timestamp), `generateS3Key(storedName, pathPrefix?)` (default `uploads/`), `isImageMime(mimeType)`, `getMimeTypeExtension(mimeType)` (fallback `'bin'`), `IMAGE_MIME_PREFIXES`.
+
+### Result & Metadata Interfaces
+
+```ts
+interface PresignedUploadResult { uploadUrl: string; key: string; fileId: string; }
+interface PresignedDownloadResult { downloadUrl: string; }
+interface FileMetadata {
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  size: number;
+  bucket: string;
+  key: string;
+  url: string;
+  userId: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
+`NEST_FILE_OPTIONS` is the injection token for the resolved `NestFileOptions`.
+
 ## FileEntity
 
 | Column | Type | Description |
@@ -144,6 +197,31 @@ export class FilesController extends FileBase {
 ```
 
 ## Testing
+
+Use the `@nest-util/nest-file/testing` entry point for mock factories and generated test suites.
+
+### Generated Test Suites
+
+```typescript
+import { fileServiceTests } from '@nest-util/nest-file/testing';
+import { FileService } from '@nest-util/nest-file';
+import { FileEntity } from './file.entity';
+
+describe('FileService', () => {
+  fileServiceTests({
+    serviceClass: FileService,
+    entity: FileEntity,
+    test: {
+      requestUploadPayload: { fileName: 'photo.jpg', mimeType: 'image/jpeg' },
+      confirmUploadPayload: { fileId: '00000000-0000-0000-0000-000000000001', key: 'uploads/photo.jpg' },
+    },
+  });
+});
+```
+
+Config types: `FileServiceTestConfig` and `FileControllerTestConfig`; a `FileTestContext` exposes `{ service, repository, s3Service }` mocks.
+
+### Manual Setup with Mocks
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';

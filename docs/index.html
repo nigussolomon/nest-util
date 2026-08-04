@@ -46,10 +46,11 @@
 <section class="hero">
   <div class="container">
     <div class="hero-badges">
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-crud v1.0.7</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-auth v1.1.0</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-file v1.0.0</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-payment v1.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-crud v1.1.3</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-auth v1.4.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-file v1.0.1</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-payment v1.0.1</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-notify v1.0.0</span>
     </div>
     <h1>
       NestJS CRUD, Auth, Files, Payments &amp; Notifications<br>
@@ -182,6 +183,13 @@
         <p>Checkout sessions, subscriptions, refunds, webhook handling, reconciliation, and idempotency. No SDK bundled.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <h3>Push + Email Notifications</h3>
+        <p>FCM push and SMTP email with device-token management, dead-token pruning, and per-user history.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon purple">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
@@ -198,7 +206,7 @@
 <section id="packages">
   <div class="container">
     <div class="section-header">
-      <h2>Four Packages</h2>
+      <h2>Five Packages</h2>
       <p>Focused modules. No bloat.</p>
     </div>
     <div class="packages">
@@ -287,23 +295,23 @@
           <a href="nest-payment/index.html">Docs &rarr;</a>
         </div>
       </div>
-      <div class="package-card coming-soon">
+      <div class="package-card">
         <div class="package-header">
-          <div class="package-name">@nest-util/nest-notify <span class="coming-soon-badge">Coming Soon</span></div>
-          <div class="package-desc">Multi-channel notifications</div>
+          <div class="package-name">@nest-util/nest-notify</div>
+          <div class="package-desc">FCM push + SMTP email notifications</div>
         </div>
         <div class="package-body">
           <ul>
-            <li>Email, SMS, push, and in-app notifications</li>
-            <li>Template engine with Handlebars/EJS</li>
-            <li>Event-driven notification triggers</li>
-            <li>Delivery tracking and retry logic</li>
-            <li>User preference management</li>
-            <li>Rate limiting per channel</li>
+            <li>Firebase Cloud Messaging push with dead-token pruning</li>
+            <li>SMTP email via nodemailer transport</li>
+            <li>Device-token registration &amp; management</li>
+            <li>Per-user notification history</li>
+            <li>RBAC-protected auto-registered controller</li>
+            <li>500-message batch sending</li>
           </ul>
         </div>
         <div class="package-footer">
-          <a href="#">Docs &rarr;</a>
+          <a href="nest-notify/index.html">Docs &rarr;</a>
         </div>
       </div>
     </div>
@@ -700,8 +708,8 @@
         <div class="label">install</div>
       </div>
       <div class="terminal-body">
-        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-file @nest-util/nest-payment typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
     </div>
 
@@ -719,7 +727,7 @@
       <div class="step">
         <div class="step-number">3</div>
         <h3>Wire Up AppModule</h3>
-        <p>Import <code>NestCrudModule</code>, <code>AuthModule</code>, <code>NestFileModule</code>, and <code>NestPaymentModule</code>. Register interceptors, deploy.</p>
+        <p>Import <code>NestCrudModule</code>, <code>AuthModule</code>, <code>NestFileModule</code>, <code>NestPaymentModule</code>, and <code>NestNotifyModule</code>. Register interceptors, deploy.</p>
       </div>
     </div>
 
@@ -755,6 +763,20 @@
       provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
       entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
       webhookSecret: process.env.<span class="typ">WEBHOOK_SECRET</span>,
+    }),
+    <span class="typ">NestNotifyModule</span>.<span class="fn">forRoot</span>({
+      fcm: {
+        enabled: <span class="num">true</span>,
+        projectId: process.env.<span class="typ">FIREBASE_PROJECT_ID</span>,
+        clientEmail: process.env.<span class="typ">FIREBASE_CLIENT_EMAIL</span>,
+        privateKey: process.env.<span class="typ">FIREBASE_PRIVATE_KEY</span>,
+      },
+      smtp: {
+        enabled: <span class="num">true</span>,
+        host: process.env.<span class="typ">SMTP_HOST</span>,
+        port: <span class="num">587</span>,
+        from: { address: process.env.<span class="typ">SMTP_FROM</span> },
+      },
     }),
   ],
   providers: [

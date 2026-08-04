@@ -27,6 +27,7 @@
       <li><a href="#module">Module</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
       <li><a href="#provider">Provider</a></li>
+      <li><a href="#services">Services</a></li>
       <li><a href="#webhooks">Webhooks</a></li>
       <li><a href="#testing">Testing</a></li>
       <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
@@ -54,6 +55,7 @@
       <li><a href="#module">Module</a></li>
       <li><a href="#provider">Provider Interface</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#services">Services</a></li>
       <li class="sidebar-section">Features</li>
       <li><a href="#webhooks">Webhooks & Callbacks</a></li>
       <li><a href="#reconciliation">Reconciliation</a></li>
@@ -138,10 +140,21 @@
 <span class="dec">@Module</span>({
   imports: [
     <span class="typ">NestPaymentModule</span>.<span class="fn">forRoot</span>({
-      provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
+      providers: [<span class="kw">new</span> <span class="typ">ChapaProvider</span>()],  <span class="cm">// array of providers</span>
       entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
-      webhookSecret: process.env.<span class="typ">WEBHOOK_SECRET</span>,
-      webhookTtlMs: <span class="num">300_000</span>,
+      webhook: {
+        enable: <span class="num">true</span>,
+        path: <span class="str">'webhook'</span>,           <span class="cm">// default</span>
+        rawBody: <span class="num">true</span>,             <span class="cm">// default</span>
+        deduplicate: <span class="num">true</span>,         <span class="cm">// default</span>
+        deduplicationTtlMs: <span class="num">300_000</span>, <span class="cm">// 5 min window</span>
+      },
+      onWebhook: <span class="kw">async</span> (event, rawBody) =&gt; {
+        <span class="cm">// Optional hook after each processed webhook event</span>
+      },
+      onReconciliationMismatch: <span class="kw">async</span> (payment, providerStatus) =&gt; {
+        <span class="cm">// Optional hook when reconciliation finds a mismatch</span>
+      },
       controller: {
         path: <span class="str">'payments'</span>,
         permissions: {
@@ -169,9 +182,9 @@
 
 <span class="typ">NestPaymentModule</span>.<span class="fn">forRootAsync</span>({
   useFactory: (config: <span class="typ">ConfigService</span>) =&gt; ({
-    provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
+    providers: [<span class="kw">new</span> <span class="typ">ChapaProvider</span>()],
     entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
-    webhookSecret: config.<span class="fn">getOrThrow</span>(<span class="str">'WEBHOOK_SECRET'</span>),
+    webhook: { enable: <span class="num">true</span>, path: <span class="str">'webhook'</span> },
   }),
   inject: [<span class="typ">ConfigService</span>],
 })</pre>
@@ -189,9 +202,9 @@
         </thead>
         <tbody>
           <tr>
-            <td><code>provider</code></td>
-            <td><code>PaymentProvider</code></td>
-            <td>Your payment gateway implementation</td>
+            <td><code>providers</code></td>
+            <td><code>PaymentProvider[]</code></td>
+            <td>Your payment gateway implementations (array)</td>
           </tr>
           <tr>
             <td><code>entities</code></td>
@@ -199,14 +212,29 @@
             <td>TypeORM entities for Payment, Subscription, Refund</td>
           </tr>
           <tr>
-            <td><code>webhookSecret</code></td>
-            <td><code>string</code></td>
-            <td>Secret for verifying webhook signatures</td>
+            <td><code>webhook.enable</code></td>
+            <td><code>boolean</code></td>
+            <td>Enable webhook endpoint (default: <code>true</code>)</td>
           </tr>
           <tr>
-            <td><code>webhookTtlMs</code></td>
+            <td><code>webhook.path</code></td>
+            <td><code>string</code></td>
+            <td>Webhook route segment (default: <code>'webhook'</code>)</td>
+          </tr>
+          <tr>
+            <td><code>webhook.rawBody</code></td>
+            <td><code>boolean</code></td>
+            <td>Use raw body for signature verification (default: <code>true</code>)</td>
+          </tr>
+          <tr>
+            <td><code>webhook.deduplicate</code></td>
+            <td><code>boolean</code></td>
+            <td>In-memory event dedup (default: <code>true</code>)</td>
+          </tr>
+          <tr>
+            <td><code>webhook.deduplicationTtlMs</code></td>
             <td><code>number</code></td>
-            <td>In-memory dedup window (default: <code>300_000</code>)</td>
+            <td>Dedup window (default: <code>300_000</code> = 5 min)</td>
           </tr>
           <tr>
             <td><code>reconciliation.enable</code></td>
@@ -217,6 +245,16 @@
             <td><code>reconciliation.staleAfterMs</code></td>
             <td><code>number</code></td>
             <td>Stale threshold in ms (default: <code>600_000</code> = 10 min)</td>
+          </tr>
+          <tr>
+            <td><code>onWebhook</code></td>
+            <td><code>fn</code></td>
+            <td>Called after each processed webhook event</td>
+          </tr>
+          <tr>
+            <td><code>onReconciliationMismatch</code></td>
+            <td><code>fn</code></td>
+            <td>Called when reconciliation finds a mismatch</td>
           </tr>
           <tr>
             <td><code>controller.path</code></td>
@@ -236,6 +274,7 @@
         </tbody>
       </table>
     </div>
+    <p>The module is registered with <code>global: true</code>, so <code>PaymentService</code>, <code>SubscriptionService</code>, <code>RefundService</code>, and the <code>PAYMENT_OPTIONS</code> token are available app-wide without re-importing.</p>
 
     <!-- ═══════════════════════════════════════════════════
          PROVIDER INTERFACE
@@ -251,11 +290,9 @@
       <pre><span class="kw">import</span> { <span class="typ">PaymentProvider</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-payment'</span>;
 
 <span class="kw">export class</span> <span class="typ">ChapaProvider</span> <span class="kw">implements</span> <span class="typ">PaymentProvider</span> {
-  <span class="kw">readonly</span> name = <span class="str">'chapa'</span>;
-  <span class="kw">readonly</span> supportsSubscriptions = <span class="num">false</span>;
-  <span class="kw">readonly</span> supportsRefunds = <span class="num">false</span>;
+  <span class="kw">readonly</span> id = <span class="str">'chapa'</span>;
 
-  <span class="kw">async</span> <span class="fn">createCheckout</span>(input) {
+  <span class="kw">async</span> <span class="fn">createCheckoutSession</span>(input) {
     <span class="kw">const</span> response = <span class="kw">await</span> chapa.<span class="fn">initialize</span>({
       amount: input.amount,
       currency: input.currency,
@@ -263,21 +300,24 @@
       tx_ref: `tx_${Date.now()}_${randomBytes(8).toString('hex')}`,
     });
     <span class="kw">return</span> {
-      providerPaymentId: response.tx_ref,
+      providerReference: response.tx_ref,
       checkoutUrl: response.checkout_url,
-      status: <span class="str">'pending'</span>,
+    };
+  }
+
+  <span class="kw">async</span> <span class="fn">parseWebhookEvent</span>(rawBody, headers) {
+    <span class="kw">const</span> payload = <span class="typ">JSON</span>.<span class="fn">parse</span>(rawBody.<span class="fn">toString</span>());
+    <span class="kw">return</span> {
+      provider: <span class="kw">this</span>.id,
+      type: <span class="str">'chapa.checkout.completed'</span>,
+      providerPaymentId: payload.tx_ref,
+      status: <span class="str">'succeeded'</span>,
     };
   }
 
   <span class="kw">async</span> <span class="fn">getPaymentStatus</span>(providerPaymentId) {
     <span class="kw">const</span> result = <span class="kw">await</span> chapa.<span class="fn">verify</span>(providerPaymentId);
-    <span class="kw">return</span> {
-      status: result.status === <span class="str">'success'</span> ? <span class="str">'succeeded'</span> : <span class="str">'pending'</span>,
-    };
-  }
-
-  <span class="kw">async</span> <span class="fn">refund</span>(providerPaymentId, amount) {
-    <span class="kw">throw new</span> <span class="typ">Error</span>(<span class="str">'Chapa does not support refunds'</span>);
+    <span class="kw">return</span> result.status === <span class="str">'success'</span> ? <span class="str">'succeeded'</span> : <span class="str">'pending'</span>;
   }
 }</pre>
     </div>
@@ -294,38 +334,49 @@
         </thead>
         <tbody>
           <tr>
-            <td><code>createCheckout(input)</code></td>
+            <td><code>id</code></td>
             <td>Yes</td>
-            <td>Create a checkout session and return a checkout URL</td>
+            <td>Unique provider identifier (e.g. <code>'stripe'</code>, <code>'chapa'</code>)</td>
+          </tr>
+          <tr>
+            <td><code>createCheckoutSession(params)</code></td>
+            <td>Yes</td>
+            <td>Create a checkout session; returns <code>CheckoutSessionResult</code></td>
+          </tr>
+          <tr>
+            <td><code>parseWebhookEvent(rawBody, headers)</code></td>
+            <td>Yes</td>
+            <td>Parse raw webhook/callback body into a normalized <code>WebhookEvent</code></td>
+          </tr>
+          <tr>
+            <td><code>verifyWebhookSignature(rawBody, headers)</code></td>
+            <td>No</td>
+            <td>Return true if the signature is valid; the endpoint rejects invalid ones</td>
           </tr>
           <tr>
             <td><code>getPaymentStatus(id)</code></td>
-            <td>Yes</td>
-            <td>Check current payment status from the provider</td>
+            <td>No</td>
+            <td>Query provider for actual status (used by reconciliation)</td>
           </tr>
           <tr>
-            <td><code>refund(id, amount)</code></td>
-            <td>If <code>supportsRefunds</code></td>
-            <td>Issue a full or partial refund</td>
+            <td><code>createRefund(params)</code></td>
+            <td>No</td>
+            <td>Issue a full or partial refund (refund endpoint enabled when present)</td>
           </tr>
           <tr>
-            <td><code>createSubscription(input)</code></td>
-            <td>If <code>supportsSubscriptions</code></td>
-            <td>Create a recurring subscription</td>
+            <td><code>createSubscription(params)</code></td>
+            <td>No</td>
+            <td>Create a recurring subscription (enabled when present)</td>
           </tr>
           <tr>
             <td><code>cancelSubscription(id)</code></td>
-            <td>If <code>supportsSubscriptions</code></td>
-            <td>Cancel an active subscription</td>
-          </tr>
-          <tr>
-            <td><code>getSubscriptionStatus(id)</code></td>
-            <td>If <code>supportsSubscriptions</code></td>
-            <td>Check current subscription status</td>
+            <td>No</td>
+            <td>Cancel an active subscription (enabled when present)</td>
           </tr>
         </tbody>
       </table>
     </div>
+    <p>Optional methods are feature-detected — implement them to enable the corresponding feature. Feature gates like <code>supportsSubscriptions</code> are <em>not</em> part of the interface.</p>
 
     <!-- ═══════════════════════════════════════════════════
          ENDPOINTS
@@ -417,41 +468,24 @@
     <!-- ═══════════════════════════════════════════════════
          WEBHOOKS & CALLBACKS
          ═══════════════════════════════════════════════════ -->
-    <h2 id="webhooks">Webhooks & Callbacks</h2>
-    <p>The webhook/callback is the <strong>source of truth</strong> for payment status — not the API response.</p>
+    <h2 id="webhooks">Webhooks &amp; Callbacks</h2>
+    <p>The webhook/callback is the <strong>source of truth</strong> for payment status — not the API response. A single endpoint, <code>POST /payments/webhook/:provider</code>, handles both provider webhooks and Chapa-style <code>callback_url</code> redirects.</p>
 
-    <h3>Callback Flow (Chapa-style)</h3>
+    <h3>Flow</h3>
     <div class="code-block">
       <div class="code-block-header">
         <div class="code-block-dots"><span></span><span></span><span></span></div>
-        <div class="code-block-title">callback-handler.ts</div>
+        <div class="code-block-title">webhook processing</div>
       </div>
-      <pre><span class="cm">// Provider redirects user back to your app</span>
-app.<span class="fn">use</span>(<span class="str">'/payments/callback'</span>, <span class="kw">async</span> (req, res) =&gt; {
-  <span class="kw">await</span> paymentService.<span class="fn">handleCallback</span>({
-    providerPaymentId: req.query.tx_ref,
-  });
-  res.<span class="fn">redirect</span>(<span class="str">'/success'</span>);
-});</pre>
-    </div>
-
-    <h3>Webhook Flow (Stripe-style)</h3>
-    <div class="code-block">
-      <div class="code-block-header">
-        <div class="code-block-dots"><span></span><span></span><span></span></div>
-        <div class="code-block-title">webhook-handler.ts</div>
-      </div>
-      <pre><span class="cm">// Provider sends signed webhook to your server</span>
-app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <span class="kw">async</span> (req, res) =&gt; {
-  <span class="kw">const</span> sig = req.headers[<span class="str">'stripe-signature'</span>];
-  <span class="kw">const</span> event = stripe.webhooks.<span class="fn">constructEvent</span>(
-    req.body, sig, secret
-  );
-  <span class="kw">await</span> paymentService.<span class="fn">handleWebhook</span>({
-    providerPaymentId: event.data.object.id,
-  });
-  res.<span class="fn">sendStatus</span>(<span class="num">200</span>);
-});</pre>
+      <pre><span class="cm">// 1. Signature verified (if provider implements verifyWebhookSignature)</span>
+<span class="cm">// 2. Raw body parsed via provider.parseWebhookEvent → WebhookEvent</span>
+<span class="cm">// 3. Deduplicated in-memory (TTL window, default 5 min)</span>
+<span class="cm">// 4. Dispatched: paymentService.handleWebhook(event)</span>
+<span class="cm">//                 subscriptionService.handleWebhook(event)</span>
+<span class="cm">//                 refundService.handleWebhook(event)</span>
+<span class="cm">// 5. onWebhook(event, rawBody) callback fires</span>
+POST /payments/webhook/chapa   <span class="cm">// Chapa callback_url</span>
+POST /payments/webhook/stripe  <span class="cm">// Stripe signed webhook</span></pre>
     </div>
 
     <h3>In-Memory Deduplication</h3>
@@ -526,6 +560,38 @@ app.<span class="fn">use</span>(<span class="str">'/payments/webhook'</span>, <s
         <div class="hook-arrow">&rarr; active | past_due</div>
       </div>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         SERVICES
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="services">Services</h2>
+
+    <h3>PaymentService</h3>
+    <ul>
+      <li><code>createCheckout(userId, dto)</code> &rarr; <code>{ payment, checkoutUrl?, error? }</code> &mdash; creates a <code>pending</code> record first, then calls the provider; on provider failure the payment stays <code>pending</code> with an <code>error</code> (never marked failed). Idempotent when <code>idempotencyKey</code> is supplied.</li>
+      <li><code>handleWebhook(event)</code> &rarr; <code>PaymentEntity</code> &mdash; applies forward-only status transitions, or creates a record for unknown payments.</li>
+      <li><code>findOne(id)</code> / <code>findByProviderPaymentId(provider, providerPaymentId)</code></li>
+      <li><code>findAll({ page?, limit?, orderBy?, orderDirection?, provider?, status? })</code> &rarr; <code>{ data, meta }</code></li>
+      <li><code>findMine(userId, query?)</code> &rarr; <code>{ data, meta }</code> &mdash; user-scoped</li>
+      <li><code>reconcilePayment(id)</code> &rarr; <code>PaymentEntity</code> &mdash; orphaned payments (no <code>providerPaymentId</code>) are marked <code>failed</code></li>
+      <li><code>reconcileStalePayments({ staleAfterMs? })</code> &rarr; <code>{ checked, updated, failed }</code></li>
+      <li><code>getProvider(providerId)</code> &rarr; <code>PaymentProvider</code></li>
+    </ul>
+
+    <h3>SubscriptionService</h3>
+    <ul>
+      <li><code>create(userId, dto)</code> &rarr; <code>{ subscription, error? }</code></li>
+      <li><code>cancel(subscriptionId)</code> &rarr; <code>SubscriptionEntity</code> &mdash; requires provider <code>cancelSubscription</code></li>
+      <li><code>handleWebhook(event)</code> &rarr; <code>SubscriptionEntity | null</code></li>
+      <li><code>findOne(id)</code> / <code>findAll(query?)</code> / <code>findMine(userId, query?)</code></li>
+    </ul>
+
+    <h3>RefundService</h3>
+    <ul>
+      <li><code>create(userId, dto)</code> &rarr; <code>{ refund, error? }</code> &mdash; requires provider <code>createRefund</code></li>
+      <li><code>handleWebhook(event)</code> &rarr; <code>RefundEntity | null</code></li>
+      <li><code>findOne(id)</code> / <code>findByPaymentId(paymentId)</code> / <code>findAll(query?)</code></li>
+    </ul>
 
     <!-- ═══════════════════════════════════════════════════
          TESTING

@@ -7,7 +7,7 @@ This guide is based on the current implementation in `libs/nest-auth`.
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-auth@^1.1.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
+pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
 ```
 
 ## 2) Prepare Requirements
@@ -20,6 +20,7 @@ pnpm add @nest-util/nest-auth@^1.1.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0
    - access token hash field (default `accessToken`)
    - *(Optional, for OTP)* `otpCodeHash`, `otpCodeExpiresAt`, `otpRequestAttempts`, `otpLastSentAt`, `otpLockedUntil`
    - *(Optional, for Password Reset)* `passwordResetTokenHash`, `passwordResetTokenExpiresAt`
+   - *(Optional, for Account Verification)* `isVerified`, `verifiedAt`, `verificationCodeHash`, `verificationCodeExpiresAt`, `verificationAttempts`, `verificationLastSentAt`, `verificationLockedUntil` (all configurable)
 3. Add DTOs for login/register/refresh payloads.
 
 ## 3) Register `AuthModule`
@@ -164,6 +165,10 @@ export class DataController {
 - `POST /auth/onboarding/complete` (agent, `onboarding.complete`)
 - `POST /auth/onboarding/user` (OnboardingJwtGuard only)
 
+### Account Verification
+- `POST /auth/verify` — verify account with the emailed code
+- `POST /auth/verify/resend` — resend the verification code
+
 ## 6) Example DTOs
 
 ```ts
@@ -209,6 +214,9 @@ AuthModule.forRoot({
     tokenTtlSeconds: 3600, // Token validity in seconds (1 hour)
     tokenField: 'passwordResetTokenHash', // DB field to store hashed token
     expiresAtField: 'passwordResetTokenExpiresAt', // DB field to store expiration
+    requestDto: PasswordResetRequestDto,
+    resetDto: PasswordResetDto,
+    buildResetContext: ({ identifier, user }) => ({ appName: 'MyApp' }),
     deliverToken: async ({ identifier, token, expiresAt }) => {
       // TODO: Send email/SMS with the reset token or link
       console.log(`Send reset token ${token} to ${identifier}`);
@@ -230,12 +238,24 @@ AuthModule.forRoot({
   // ... other options
   otp: {
     enabled: true,
-    codeLength: 6,
+    codeLength: 6, // Code length (4-10)
     ttlSeconds: 300, // Code validity in seconds (5 minutes)
     cooldownSeconds: 60, // Minimum time between requests
     maxAttempts: 5, // Max failed attempts before lockout
     lockSeconds: 300, // Lockout duration in seconds
     channel: 'email',
+    // Configurable DB field names (defaults shown):
+    codeField: 'otpCodeHash',
+    expiresAtField: 'otpCodeExpiresAt',
+    attemptsField: 'otpRequestAttempts',
+    lastSentAtField: 'otpLastSentAt',
+    lockUntilField: 'otpLockedUntil',
+    inputCodeField: 'otpCode', // request body field for the code
+    // Optional DTOs / context:
+    requestDto: OtpRequestDto,
+    loginDto: OtpLoginDto,
+    metadata: { purpose: 'login' },
+    buildDeliveryContext: ({ identifier, user }) => ({ appName: 'MyApp' }),
     deliverCode: async ({ identifier, code, expiresAt }) => {
       // TODO: Send email/SMS with the OTP code
       console.log(`Send OTP code ${code} to ${identifier}`);
@@ -265,6 +285,11 @@ AuthModule.forRoot({
     channel: 'email',
     onboardingTokenSecret: process.env.ONBOARDING_TOKEN_SECRET, // default: jwtSecret
     onboardingTokenExpiresIn: '15m',
+    startDto: OnboardingStartDto,
+    completeDto: OnboardingCompleteDto,
+    createUserDto: OnboardingCreateUserDto,
+    metadata: { source: 'sales' },
+    buildDeliveryContext: ({ identifier }) => ({ inviter: 'support' }),
     deliverCode: async ({ identifier, code, expiresAt }) => {
       // TODO: Send email/SMS with the OTP code to the invitee
       console.log(`Send onboarding OTP ${code} to ${identifier}`);
@@ -274,17 +299,124 @@ AuthModule.forRoot({
 ```
 
 **Endpoints:**
-- `POST /auth/onboarding/start`: Agent-only (`onboarding.start`). Accepts `{ email: "invitee@example.com" }`. Triggers the `deliverCode` callback. Rate-limited like OTP login.
+- `POST /auth/onboarding/start`: Agent-only (`onboarding.start`). Accepts `{ email: "invitee@example.com" }`. Triggers the `deliverCode` callback. Rate-limited like OTP login. Returns `ConflictException` if a user with that identifier already exists.
 - `POST /auth/onboarding/complete`: Agent-only (`onboarding.complete`). Accepts `{ email: "invitee@example.com", code: "123456" }`. Validates the code and returns a single-use `onboarding_token`.
-- `POST /auth/onboarding/user`: Guarded only by `OnboardingJwtGuard` (Bearer onboarding token). Accepts `{ email: "invitee@example.com" }`, creates the user with `registerHooks` and `verifiedAt` set, and consumes the attempt. Returns `ConflictException` if the user already exists.
+- `POST /auth/onboarding/user`: Guarded only by `OnboardingJwtGuard` (Bearer onboarding token). Accepts `{ email: "invitee@example.com" }`, creates the user with `registerHooks` and `verifiedAt` set, and consumes the attempt.
 
 Permissions `onboarding.start` and `onboarding.complete` are the fixed convention — register them in your permission registry.
 
-## 11) Help Notes
+## 11) Account Verification
 
-- `refresh` currently expects `refreshToken` in request body.
+To require email/phone verification after registration, configure the `verification` option. A code is delivered to the new user (defaults to the first identifier field in the registration payload); they must verify before the account is considered active. Optionally combine with `loginDto`/OTP to reject logins from unverified accounts.
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  verification: {
+    enabled: true,
+    codeLength: 6,
+    ttlSeconds: 600, // Code validity in seconds (10 minutes)
+    cooldownSeconds: 60, // Minimum time between resends
+    maxAttempts: 5, // Max failed verifications before lockout
+    lockSeconds: 600, // Lockout duration in seconds
+    channel: 'email',
+    // Configurable DB field names (defaults shown):
+    verifiedField: 'isVerified',
+    verifiedAtField: 'verifiedAt',
+    codeHashField: 'verificationCodeHash',
+    expiresAtField: 'verificationCodeExpiresAt',
+    attemptsField: 'verificationAttempts',
+    lastSentAtField: 'verificationLastSentAt',
+    lockUntilField: 'verificationLockedUntil',
+    inputCodeField: 'code', // request body field for the code
+    requestDto: VerificationRequestDto,
+    verifyDto: VerificationVerifyDto,
+    identifierField: 'email', // which identifier to deliver the code to
+    deliverCode: async ({ identifier, code, expiresAt }) => {
+      // TODO: Send email/SMS with the verification code
+      console.log(`Send verification code ${code} to ${identifier}`);
+    },
+  },
+})
+```
+
+**Endpoints:**
+- `POST /auth/verify`: Accepts `{ code: "123456" }` (optionally the identifier). Marks the account verified. Rate-limited and locked like OTP.
+- `POST /auth/verify/resend`: Re-sends the code (cooldown enforced). Returns success whether or not the account exists to prevent enumeration.
+
+## 12) Register Hooks
+
+`registerHooks` lets you mutate the registration payload or run side effects atomically with user creation — everything runs inside a transaction, so a throwing hook rolls back the whole registration.
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  registerHooks: {
+    beforeRegister: async ({ payload, manager }) => {
+      payload.displayName = `${payload.firstName} ${payload.lastName}`;
+    },
+    afterRegister: async ({ entity, userId, manager, assignRole }) => {
+      await assignRole?.('member'); // role id or name
+    },
+  },
+})
+```
+
+**Hook context** (`RegisterHookContext`): `payload` (mutable DTO — mutations flow into the saved user), `entity` + `userId` (afterRegister only), `manager` (transaction-scoped `EntityManager`), `assignRole` (afterRegister only; accepts a role id or name).
+
+## 13) Multi-Identifier Login
+
+`identifierFields` lets users log in with any of several fields (e.g. email OR phone):
+
+```ts
+AuthModule.forRoot({
+  identifierField: 'email',
+  identifierFields: ['email', 'phone'], // takes precedence over identifierField
+  // ...
+})
+```
+
+## 14) API Key Configuration
+
+API key auth auto-registers admin endpoints. Configure via the `apiKey` option:
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  apiKey: {
+    enabled: true,
+    headerName: 'x-api-key', // default: 'x-api-key'
+    keyPrefix: 'nuk_live_', // default: 'nuk_live_'
+    hashRounds: 10, // bcrypt rounds, default: 10
+  },
+})
+```
+
+`JwtAuthGuard` automatically detects the API key header and delegates to `ApiKeyService` — no separate guard needed. Admin API-key endpoints (`POST /auth/api-keys`, etc.) are only registered when `apiKey.enabled: true`.
+
+## 15) Public API Reference
+
+**Guards**: `JwtAuthGuard`, `PermissionsGuard`, `RouteDisabledGuard`, `ApiKeyGuard`, `OnboardingJwtGuard`, `JwtStrategy`.
+
+**Decorators**: `@Public()` / `IS_PUBLIC_KEY`, `@CurrentUser()`, `@Permissions(...)`, `@AuthOptions()` / `AUTH_OPTIONS`.
+
+**Entities**: `RoleEntity`, `UserRoleEntity`, `ApiKeyEntity`, `ApiKeyRoleEntity`, `OnboardingAttemptEntity`.
+
+**DTOs**: `CreateRoleDto`, `RolePermissionsDto`, `CreateApiKeyDto`.
+
+**Helpers**: `resolvePermissions(user, rbac?)`, `resolvePermissionRegistry(registry?)`, `buildCrudPermissionsFromRegistry(registry, options)`.
+
+**Key types**: `AuthModuleOptions`, `AuthOtpOptions`, `AuthPasswordResetOptions`, `AuthVerificationOptions`, `AuthOnboardingOptions`, `ApiKeyModuleOptions`, `AuthRbacOptions`, `AuthRegisterHooks`, `RegisterHook`, `RegisterHookContext`, `PermissionRegistryConfig`, `PermissionRegistryResource`, `ResolvedPermissionRegistry`, `PermissionEvaluationContext`, `OtpDeliveryPayload`, `OtpDeliveryCallback`, `AuthTokens`, `AuthUser`, `CreatedApiKey`, `ApiKeyListItem`, `OnboardingTokenPayload`.
+
+**`AuthService` methods**: `register`, `login`, `requestOtp`, `loginWithOtp`, `refresh`, `logout`, `changePassword`, `requestPasswordReset`, `resetPassword`, `verifyAccount`, `resendVerificationCode`, `startOnboarding`, `completeOnboarding`, `createUserFromOnboarding`, `createRole`, `assignRoleToUser`, `assignPermissionsToRole`, `removePermissionsFromRole`, `removeRoleFromUser`, `getUserRoles`, `getAllRoles`, `validateUser`.
+
+## 16) Help Notes
+
+- `refresh` currently expects `refreshToken` in request body (or in the `refreshTokenHeaderName` header, default `x-refresh-token`).
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.
 - If you enable RBAC, ensure `relations` include role relations needed during JWT validation.
 - Use `disabledRoutes` to hard-disable selected auth endpoints (for example `['register', 'otp/request']`).
 - `JwtAuthGuard` auto-detects `x-api-key` header — no need to add `ApiKeyGuard` separately.
 - `superAdminPermission` in `rbac` config grants full access across all guarded routes.
+- Defaults: `expiresIn` `'1h'`, `refreshTokenExpiresIn` `'7d'`, `onboardingTokenExpiresIn` `'15m'`.
+- RBAC options also include `directPermissionsKey` (default `'permissions'`), `rolePermissionsKey` (default `'permissions'`), `requireAllPermissions` (default `true`, `false` = any match suffices), and `permissionEvaluator` for custom permission logic.

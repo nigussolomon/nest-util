@@ -80,8 +80,8 @@
     <h2 id="quickstart">Install</h2>
     <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
     <div class="install-box">
-      <code>pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
+      <code>pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
     <p><code>@nest-util/nest-crud</code> includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.</p>
 
@@ -310,6 +310,51 @@
       </tbody>
     </table>
 
+    <h3>Response &amp; Entity Decorators</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">post.controller.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">Message</span>, <span class="typ">EntityName</span>, <span class="typ">Audit</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+
+<span class="dec">@ApiTags</span>(<span class="str">'post'</span>)
+<span class="dec">@Controller</span>(<span class="str">'post'</span>)
+<span class="dec">@EntityName</span>(<span class="str">'post'</span>) <span class="cm">// entity name used by @Audit()/AuditInterceptor</span>
+<span class="kw">export class</span> <span class="typ">PostController</span> {
+  <span class="dec">@Audit</span>({ action: <span class="str">'publish'</span> }) <span class="cm">// emits crud.post.publish.success/.error</span>
+  <span class="dec">@Message</span>(<span class="str">'Post published successfully'</span>)
+  <span class="dec">@Post</span>(<span class="str">':id/publish'</span>)
+  <span class="fn">publish</span>(<span class="dec">@Param</span>(<span class="str">'id'</span>) id: <span class="typ">string</span>) { <span class="cm">/* ... */</span> }
+}</pre>
+    </div>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Decorator</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>@Audit({ action, entity? })</code></td>
+          <td>Method</td>
+          <td>Records the action via <code>AuditService</code> and emits <code>crud.&lt;entity&gt;.&lt;action&gt;.success/.error</code></td>
+        </tr>
+        <tr>
+          <td><code>@Message(message)</code></td>
+          <td>Method</td>
+          <td>Sets a custom response message for the endpoint</td>
+        </tr>
+        <tr>
+          <td><code>@EntityName('post')</code> / <code>@EntityName({ singular, plural })</code></td>
+          <td>Class</td>
+          <td>Names the resource; used by <code>@Audit()</code> when <code>entity</code> is omitted</td>
+        </tr>
+      </tbody>
+    </table>
+
     <!-- ═══════════════════════════════════════════════════
          ENDPOINTS
          ═══════════════════════════════════════════════════ -->
@@ -473,6 +518,40 @@
 <span class="cm"># With total count (adds a DB COUNT query)</span>
 <span class="kw">GET</span> /posts?cursor=<span class="str">eyJpZCI6MTB9</span>&amp;limit=<span class="num">10</span>&amp;includeTotal=<span class="num">true</span></pre>
     </div>
+
+    <h3>Cursor Helpers</h3>
+    <p>Low-level utilities are exported for custom pagination logic:</p>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Helper</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>base64UrlEncode(payload)</code> / <code>base64UrlDecode(raw)</code></td>
+          <td>Encode/decode opaque base64url cursors</td>
+        </tr>
+        <tr>
+          <td><code>decodeCursor(raw, strategy)</code></td>
+          <td>Validate and decode a cursor against a strategy</td>
+        </tr>
+        <tr>
+          <td><code>applyCursorFilter(qb, decoded, strategy, dir)</code></td>
+          <td>Mutate a TypeORM <code>SelectQueryBuilder</code> with the cursor predicate</td>
+        </tr>
+        <tr>
+          <td><code>buildNextCursor(entities, strategy)</code></td>
+          <td>Build the next cursor from the last page of results</td>
+        </tr>
+        <tr>
+          <td><code>detectCursorStrategy(repo)</code></td>
+          <td>Auto-detect <code>integer</code> vs <code>uuid</code> from the repository PK metadata</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Strategies: <code>{ type: 'integer' }</code> or <code>{ type: 'uuid', timestampColumn }</code>.</p>
 
     <!-- ═══════════════════════════════════════════════════
          FINDMINE
@@ -840,6 +919,52 @@
   }
 }</pre>
     </div>
+
+    <h3>DB-Backed Audit Trail</h3>
+    <p>Register <code>NestCrudModule</code> to get a persistent <code>audit_logs</code> table and the <code>AuditService</code> for page- and cursor-based queries.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">app.module.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">TypeOrmModule</span> } <span class="kw">from</span> <span class="str">'@nestjs/typeorm'</span>;
+<span class="kw">import</span> { <span class="typ">NestCrudModule</span>, <span class="typ">AuditLogEntity</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">TypeOrmModule</span>.<span class="fn">forFeature</span>([<span class="typ">AuditLogEntity</span>]),
+    <span class="typ">NestCrudModule</span>, <span class="cm">// provides AuditService</span>
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+    </div>
+
+    <p><code>AuditLogEntity</code> columns: <code>id</code>, <code>tenantId</code>, <code>action</code>, <code>entity</code>, <code>entityId</code>, <code>userId</code>, <code>metadata</code> (jsonb), <code>ip</code>, <code>userAgent</code>, <code>createdAt</code>.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">audit usage</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">AuditService</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-crud'</span>;
+
+<span class="fn">constructor</span>(<span class="kw">private readonly</span> auditService: <span class="typ">AuditService</span>) {}
+
+<span class="kw">async</span> <span class="fn">track</span>() {
+  <span class="kw">await</span> <span class="kw">this</span>.auditService.<span class="fn">logEntityAction</span>(<span class="str">'export.run'</span>, <span class="str">'report'</span>, <span class="str">'42'</span>, {
+    userId: <span class="str">'u1'</span>,
+    metadata: { rows: <span class="num">100</span> },
+  });
+
+  <span class="cm">// page-based</span>
+  <span class="kw">const</span> { data, meta } = <span class="kw">await</span> <span class="kw">this</span>.auditService.<span class="fn">findAll</span>({ entity: <span class="str">'report'</span>, page: <span class="num">1</span>, limit: <span class="num">20</span> });
+
+  <span class="cm">// cursor-based</span>
+  <span class="kw">const</span> { data, meta } = <span class="kw">await</span> <span class="kw">this</span>.auditService.<span class="fn">findAllWithCursor</span>({ limit: <span class="num">20</span>, includeTotal: <span class="num">true</span> });
+}</pre>
+    </div>
+    <p><code>AuditService</code> methods: <code>log(input)</code>, <code>logEntityAction(action, entity, entityId?, options?)</code>, <code>findAll({ entity?, userId?, startDate?, endDate?, page?, limit? })</code>, <code>findAllWithCursor({ cursor?, limit?, includeTotal?, entity?, userId?, startDate?, endDate? })</code>.</p>
 
     <!-- ═══════════════════════════════════════════════════
          HELP NOTES

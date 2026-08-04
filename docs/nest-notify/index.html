@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@nest-util/nest-notify — FCM Push &amp; SMTP Email for NestJS</title>
+  <meta name="description" content="FCM push and SMTP email notifications for NestJS with device-token persistence, dead-token pruning, and per-user notification history.">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <a href="../index.html" class="nav-brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E0234E"/>
+        <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      Nest-Util
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#quickstart">Install</a></li>
+      <li><a href="#module">Module</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="#quickstart" class="nav-cta">Get Started</a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <ul>
+      <li class="sidebar-section">Getting Started</li>
+      <li><a href="#quickstart">Install</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li class="sidebar-section">Core</li>
+      <li><a href="#module">Module</a></li>
+      <li><a href="#controller">Controller</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li class="sidebar-section">Reference</li>
+      <li><a href="#service">Notify Service</a></li>
+      <li><a href="#entities">Entities</a></li>
+      <li><a href="#pruning">Dead-Token Pruning</a></li>
+      <li class="sidebar-section">Testing</li>
+      <li><a href="#testing">Testing</a></li>
+    </ul>
+  </aside>
+
+  <main class="doc-content">
+
+    <h1 id="features">nest-notify</h1>
+    <p class="subtitle">FCM push and SMTP email notifications with device-token persistence and per-user history.</p>
+
+    <div class="features-grid" style="margin-top:32px">
+      <div class="feature-card">
+        <div class="feature-icon red">&#128276;</div>
+        <h3>FCM Push</h3>
+        <p>Firebase Cloud Messaging delivery in batches of 500 with automatic dead-token pruning.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">&#9993;</div>
+        <h3>SMTP Email</h3>
+        <p>nodemailer-powered email with host/port config or a pre-built transport, and default sender.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">&#128203;</div>
+        <h3>Zero-Boilerplate Controller</h3>
+        <p>Module auto-registers a guarded controller. No controller class needed — just configure and go.</p>
+      </div>
+    </div>
+
+    <h2 id="quickstart">Install</h2>
+    <p>We recommend using <strong>pnpm</strong> as your package manager. <code>firebase-admin</code> and <code>nodemailer</code> are bundled as regular dependencies.</p>
+    <div class="install-box">
+      <code>pnpm add @nest-util/nest-notify</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-notify').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <p>Peer dependencies:</p>
+    <div class="install-box">
+      <code>pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator typeorm</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator typeorm').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <p>Required — for <code>JwtAuthGuard</code>, <code>PermissionsGuard</code>, and <code>@CurrentUser()</code>:</p>
+    <div class="install-box">
+      <code>pnpm add @nest-util/nest-auth</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth').then(()=>this.textContent='Copied!')">Copy</button>
+    </div>
+
+    <h2 id="module">Module</h2>
+    <p>Register <code>NestNotifyModule.forRoot()</code> in your root module. Endpoints are available immediately — no controller class needed.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">app.module.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">NestNotifyModule</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-notify'</span>;
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({ <span class="cm">/* ... */</span> }),  <span class="cm">// required: guards + @CurrentUser()</span>
+    <span class="typ">NestNotifyModule</span>.<span class="fn">forRoot</span>({
+      fcm: {
+        enabled: <span class="num">true</span>,
+        projectId: process.env.<span class="typ">FIREBASE_PROJECT_ID</span>,
+        clientEmail: process.env.<span class="typ">FIREBASE_CLIENT_EMAIL</span>,
+        privateKey: process.env.<span class="typ">FIREBASE_PRIVATE_KEY</span>,
+      },
+      smtp: {
+        enabled: <span class="num">true</span>,
+        host: process.env.<span class="typ">SMTP_HOST</span>,
+        port: <span class="num">587</span>,
+        user: process.env.<span class="typ">SMTP_USER</span>,
+        pass: process.env.<span class="typ">SMTP_PASS</span>,
+        from: { name: <span class="str">'My App'</span>, address: <span class="str">'no-reply@example.com'</span> },
+      },
+      controller: {
+        path: <span class="str">'notify'</span>,
+        permissions: {
+          devices: <span class="str">'notify.devices'</span>,
+          push: <span class="str">'notify.push'</span>,
+          email: <span class="str">'notify.email'</span>,
+          history: <span class="str">'notify.history'</span>,
+        },
+      },
+    }),
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+    </div>
+
+    <h3>Async Configuration</h3>
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">app.module.ts (async)</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">NestNotifyModule</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-notify'</span>;
+<span class="kw">import</span> { <span class="typ">ConfigService</span> } <span class="kw">from</span> <span class="str">'@nestjs/config'</span>;
+
+<span class="typ">NestNotifyModule</span>.<span class="fn">forRootAsync</span>({
+  useFactory: (config: <span class="typ">ConfigService</span>) =&gt; ({
+    fcm: {
+      enabled: <span class="num">true</span>,
+      projectId: config.<span class="fn">getOrThrow</span>(<span class="str">'FIREBASE_PROJECT_ID'</span>),
+      clientEmail: config.<span class="fn">getOrThrow</span>(<span class="str">'FIREBASE_CLIENT_EMAIL'</span>),
+      privateKey: config.<span class="fn">getOrThrow</span>(<span class="str">'FIREBASE_PRIVATE_KEY'</span>),
+    },
+    smtp: {
+      enabled: <span class="num">true</span>,
+      host: config.<span class="fn">getOrThrow</span>(<span class="str">'SMTP_HOST'</span>),
+      port: <span class="typ">Number</span>(config.<span class="fn">getOrThrow</span>(<span class="str">'SMTP_PORT'</span>)),
+      from: { address: config.<span class="fn">getOrThrow</span>(<span class="str">'SMTP_FROM'</span>) },
+    },
+  }),
+  inject: [<span class="typ">ConfigService</span>],
+})</pre>
+    </div>
+
+    <h3>Configuration Options</h3>
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>fcm.enabled</code></td>
+            <td><code>boolean</code></td>
+            <td>Enable push notifications. Default: <code>false</code></td>
+          </tr>
+          <tr>
+            <td><code>fcm.app</code></td>
+            <td><code>App</code></td>
+            <td>Pre-initialized <code>firebase-admin</code> App (alternative to service-account fields)</td>
+          </tr>
+          <tr>
+            <td><code>fcm.projectId</code></td>
+            <td><code>string</code></td>
+            <td>Firebase project ID (service account)</td>
+          </tr>
+          <tr>
+            <td><code>fcm.clientEmail</code></td>
+            <td><code>string</code></td>
+            <td>Service-account client email</td>
+          </tr>
+          <tr>
+            <td><code>fcm.privateKey</code></td>
+            <td><code>string</code></td>
+            <td>Service-account private key</td>
+          </tr>
+          <tr>
+            <td><code>smtp.enabled</code></td>
+            <td><code>boolean</code></td>
+            <td>Enable email notifications. Default: <code>false</code></td>
+          </tr>
+          <tr>
+            <td><code>smtp.transport</code></td>
+            <td><code>Transporter</code></td>
+            <td>Pre-built nodemailer transport (alternative to host/port)</td>
+          </tr>
+          <tr>
+            <td><code>smtp.host</code></td>
+            <td><code>string</code></td>
+            <td>SMTP host</td>
+          </tr>
+          <tr>
+            <td><code>smtp.port</code></td>
+            <td><code>number</code></td>
+            <td>SMTP port</td>
+          </tr>
+          <tr>
+            <td><code>smtp.secure</code></td>
+            <td><code>boolean</code></td>
+            <td>Use TLS (port 465). Default: <code>false</code></td>
+          </tr>
+          <tr>
+            <td><code>smtp.user</code></td>
+            <td><code>string</code></td>
+            <td>SMTP username</td>
+          </tr>
+          <tr>
+            <td><code>smtp.pass</code></td>
+            <td><code>string</code></td>
+            <td>SMTP password</td>
+          </tr>
+          <tr>
+            <td><code>smtp.from</code></td>
+            <td><code>{ name?, address }</code></td>
+            <td>Default sender. Required when SMTP is enabled via host/port</td>
+          </tr>
+          <tr>
+            <td><code>controller.enable</code></td>
+            <td><code>boolean</code></td>
+            <td>Auto-register controller. Default: <code>true</code></td>
+          </tr>
+          <tr>
+            <td><code>controller.path</code></td>
+            <td><code>string</code></td>
+            <td>Controller route path. Default: <code>'notify'</code></td>
+          </tr>
+          <tr>
+            <td><code>controller.permissions</code></td>
+            <td><code>object</code></td>
+            <td>RBAC permissions for devices, push, email, history endpoints</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Guardrails</h3>
+    <ul>
+      <li><code>fcm.enabled: true</code> throws at construction unless <code>fcm.app</code> OR (<code>fcm.projectId</code> + <code>fcm.clientEmail</code> + <code>fcm.privateKey</code>) is provided.</li>
+      <li><code>smtp.enabled: true</code> throws at construction unless <code>smtp.transport</code> OR (<code>smtp.host</code> + <code>smtp.port</code> + <code>smtp.from.address</code>) is provided.</li>
+    </ul>
+
+    <h2 id="controller">Controller</h2>
+    <p>The module auto-registers a notify controller by default — no manual class needed. It is guarded with <code>JwtAuthGuard</code> + <code>PermissionsGuard</code>. Configure it via the <code>controller</code> option.</p>
+
+    <h3>Custom Controller</h3>
+    <p>For custom routing, disable the auto-registered controller and use <code>CreateNotifyController()</code>:</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">notify.controller.ts</div>
+      </div>
+      <pre><span class="kw">import</span> { <span class="typ">Controller</span> } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { <span class="typ">CreateNotifyController</span>, <span class="typ">NotifyService</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-notify'</span>;
+
+<span class="kw">const</span> NotifyBase = <span class="fn">CreateNotifyController</span>({
+  permissions: {
+    devices: <span class="str">'notify.devices'</span>,
+    push: <span class="str">'notify.push'</span>,
+    email: <span class="str">'notify.email'</span>,
+    history: <span class="str">'notify.history'</span>,
+  },
+});
+
+<span class="dec">@Controller</span>(<span class="str">'custom-notify'</span>)
+<span class="kw">export class</span> <span class="typ">NotifyController</span> <span class="kw">extends</span> NotifyBase {
+  <span class="fn">constructor</span>(<span class="kw">override readonly</span> notifyService: <span class="typ">NotifyService</span>) {
+    <span class="kw">super</span>(notifyService);
+  }
+}</pre>
+    </div>
+
+    <h2 id="endpoints">Endpoints</h2>
+    <p>One controller factory produces a complete REST API. All endpoints are guarded with <code>JwtAuthGuard</code> + <code>PermissionsGuard</code>.</p>
+
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Description</th>
+            <th>Permission Key</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/notify/devices</code></td>
+            <td>Register an FCM device token <code>{ token, platform, deviceId? }</code></td>
+            <td><code>devices</code></td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/notify/devices</code></td>
+            <td>List the current user's device tokens</td>
+            <td><code>devices</code></td>
+          </tr>
+          <tr>
+            <td><span class="method delete">DELETE</span></td>
+            <td><code>/notify/devices</code></td>
+            <td>Unregister a device token</td>
+            <td><code>devices</code></td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/notify/push</code></td>
+            <td>Send a push <code>{ title, body, userId?, imageUrl?, clickAction?, data? }</code></td>
+            <td><code>push</code></td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/notify/email</code></td>
+            <td>Send an email <code>{ to, subject, text?, html?, cc?, bcc?, replyTo?, userId? }</code></td>
+            <td><code>email</code></td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/notify/history</code></td>
+            <td>Query notification history <code>{ channel?, page?, limit? }</code> (current user only)</td>
+            <td><code>history</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><code>push</code> and <code>email</code> default to the authenticated user when <code>userId</code> is omitted.</p>
+
+    <h2 id="service">Notify Service</h2>
+    <p>The <code>NotifyService</code> is exported and can be injected anywhere:</p>
+
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>registerDeviceToken(userId, token, platform, deviceId?)</code></td><td>Upsert a device token for a user</td></tr>
+          <tr><td><code>unregisterDeviceToken(userId, token)</code></td><td>Delete a user's device token</td></tr>
+          <tr><td><code>listDeviceTokens(userId)</code></td><td>List a user's device tokens</td></tr>
+          <tr><td><code>push(userId, payload)</code></td><td>Send a push to all of a user's tokens; records history; prunes dead tokens</td></tr>
+          <tr><td><code>pushToToken(token, payload)</code></td><td>Fire-and-forget push to a single token</td></tr>
+          <tr><td><code>email(payload, userId?)</code></td><td>Send an email; records history</td></tr>
+          <tr><td><code>getNotifications({ userId, channel?, page?, limit? })</code></td><td>Paginated notification history</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><code>push</code> returns <code>{ successCount, failureCount, results: [{ token, success, code? }] }</code>. FCM messages are sent in batches of 500.</p>
+
+    <h2 id="entities">Entities</h2>
+
+    <h3>DeviceTokenEntity (<code>device_tokens</code>)</h3>
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Column</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>UUID</code></td><td>Primary key</td></tr>
+          <tr><td><code>userId</code></td><td><code>string</code></td><td>Owner user ID (indexed)</td></tr>
+          <tr><td><code>token</code></td><td><code>string</code></td><td>FCM registration token (unique)</td></tr>
+          <tr><td><code>platform</code></td><td><code>'android' | 'ios' | 'web'</code></td><td>Device platform</td></tr>
+          <tr><td><code>deviceId</code></td><td><code>string?</code></td><td>Client-generated device identifier</td></tr>
+          <tr><td><code>lastUsedAt</code></td><td><code>Date?</code></td><td>Last successful delivery</td></tr>
+          <tr><td><code>createdAt</code> / <code>updatedAt</code></td><td><code>Date</code></td><td>Timestamps</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>NotificationEntity (<code>notifications</code>)</h3>
+    <div class="code-block">
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Column</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>UUID</code></td><td>Primary key</td></tr>
+          <tr><td><code>userId</code></td><td><code>string?</code></td><td>Recipient user ID (indexed)</td></tr>
+          <tr><td><code>channel</code></td><td><code>'push' | 'email'</code></td><td>Notification channel</td></tr>
+          <tr><td><code>provider</code></td><td><code>'fcm' | 'smtp'</code></td><td>Underlying provider</td></tr>
+          <tr><td><code>status</code></td><td><code>'sent' | 'failed'</code></td><td>Delivery outcome</td></tr>
+          <tr><td><code>title</code></td><td><code>string?</code></td><td>Push title / email subject</td></tr>
+          <tr><td><code>body</code></td><td><code>text?</code></td><td>Push body / email text summary</td></tr>
+          <tr><td><code>subject</code></td><td><code>string?</code></td><td>Email subject</td></tr>
+          <tr><td><code>to</code></td><td><code>string?</code></td><td>Email recipient or device token</td></tr>
+          <tr><td><code>error</code></td><td><code>text?</code></td><td>Error message on failure</td></tr>
+          <tr><td><code>metadata</code></td><td><code>jsonb?</code></td><td>Arbitrary metadata</td></tr>
+          <tr><td><code>sentAt</code></td><td><code>Date</code></td><td>When the send was attempted</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="pruning">Dead-Token Pruning</h2>
+    <p>After a batch send, responses carrying dead-token codes are collected and removed from the <code>device_tokens</code> table:</p>
+    <ul>
+      <li><code>messaging/registration-token-not-registered</code></li>
+      <li><code>messaging/invalid-registration-token</code></li>
+      <li><code>messaging/invalid-argument</code></li>
+      <li><code>messaging/mismatched-credential</code></li>
+    </ul>
+
+    <h2 id="testing">Testing</h2>
+    <p>Unit tests use mocked <code>firebase-admin</code> and <code>nodemailer</code> modules — no network calls.</p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="code-block-dots"><span></span><span></span><span></span></div>
+        <div class="code-block-title">fcm.service.spec.ts</div>
+      </div>
+      <pre><span class="kw">jest</span>.<span class="fn">mock</span>(<span class="str">'firebase-admin/app'</span>, () =&gt; ({
+  initializeApp: <span class="fn">jest.fn</span>(),
+  getApps: <span class="fn">jest.fn</span>(() =&gt; []),
+  cert: <span class="fn">jest.fn</span>((o) =&gt; ({ __credential: o })),
+}));
+<span class="kw">jest</span>.<span class="fn">mock</span>(<span class="str">'firebase-admin/messaging'</span>, () =&gt; ({
+  getMessaging: <span class="fn">jest.fn</span>(),
+}));</pre>
+    </div>
+
+    <p>Run the suite with <code>nx test nest-notify</code>.</p>
+
+  </main>
+</div>
+
+<footer>
+  <div class="container">
+    <p style="margin-bottom:12px">
+      <a href="../index.html">Back to Nest-Util</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/MIGRATION-GUIDE.md">Migration Guide</a>
+    </p>
+    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+  </div>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateToggleIcon(next);
+}
+function updateToggleIcon(theme) {
+  document.querySelector('.icon-sun').style.display = theme === 'light' ? 'none' : 'block';
+  document.querySelector('.icon-moon').style.display = theme === 'light' ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateToggleIcon(saved);
+  }
+})();
+</script>
+
+</body>
+</html>

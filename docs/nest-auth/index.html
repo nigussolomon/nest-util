@@ -60,6 +60,9 @@
       <li><a href="#auth-module">Auth Module</a></li>
       <li><a href="#password-reset">Password Reset</a></li>
       <li><a href="#otp">OTP Login</a></li>
+      <li><a href="#verification">Account Verification</a></li>
+      <li><a href="#onboarding">Assisted Onboarding</a></li>
+      <li><a href="#register-hooks">Register Hooks</a></li>
     </ul>
     <div class="sidebar-section">Usage</div>
     <ul>
@@ -81,7 +84,7 @@
          ═══════════════════════════════════════════════════════ -->
     <section id="overview">
       <h1>nest-auth</h1>
-      <p class="subtitle">JWT authentication with refresh token rotation, RBAC, OTP login, and password reset — ready out of the box.</p>
+      <p class="subtitle">JWT authentication with refresh token rotation, RBAC, OTP login, password reset, account verification, and assisted onboarding — ready out of the box.</p>
 
       <div class="features-grid" style="margin-top:32px">
         <div class="feature-card">
@@ -120,8 +123,8 @@
 
       <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
       <div class="install-box">
-        <code>pnpm add @nest-util/nest-auth@^1.1.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth@^1.1.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
+        <code>pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
 
       <h3>Prerequisites</h3>
@@ -336,7 +339,17 @@
             <tr>
               <td><code>permissionRegistry</code></td>
               <td>object</td>
-              <td>Map of permission keys to role sets</td>
+              <td><code>PermissionRegistryConfig</code> &mdash; <code>{ resources: [{ resource, permissions: [] }] }</code> describing all permission keys</td>
+            </tr>
+            <tr>
+              <td><code>identifierFields</code></td>
+              <td>string[]</td>
+              <td>Optional multi-field login lookup (e.g. <code>['email', 'phone']</code>). Takes precedence over <code>identifierField</code></td>
+            </tr>
+            <tr>
+              <td><code>refreshTokenHeaderName</code></td>
+              <td>string</td>
+              <td>Header to read the refresh token from. Default: <code>'x-refresh-token'</code></td>
             </tr>
             <tr>
               <td><code>disabledRoutes</code></td>
@@ -352,6 +365,21 @@
               <td><code>otp</code></td>
               <td>object</td>
               <td>OTP login configuration (see below)</td>
+            </tr>
+            <tr>
+              <td><code>verification</code></td>
+              <td>object</td>
+              <td>Post-register account verification (see below)</td>
+            </tr>
+            <tr>
+              <td><code>onboarding</code></td>
+              <td>object</td>
+              <td>Agent-assisted onboarding (see below)</td>
+            </tr>
+            <tr>
+              <td><code>registerHooks</code></td>
+              <td>object</td>
+              <td><code>beforeRegister</code>/<code>afterRegister</code> hooks, atomic with user creation</td>
             </tr>
             <tr>
               <td><code>apiKey</code></td>
@@ -422,6 +450,24 @@
               <td><code>/auth/me/permissions</code></td>
               <td>Get current user's resolved permissions</td>
               <td>Required</td>
+            </tr>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/permissions</code></td>
+              <td>Registered permission catalog (admin-protected)</td>
+              <td>Admin</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/verify</code></td>
+              <td>Verify account with the emailed code</td>
+              <td>Public</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/verify/resend</code></td>
+              <td>Resend the verification code (cooldown enforced)</td>
+              <td>Public</td>
             </tr>
             <tr>
               <td><span class="method post">POST</span></td>
@@ -544,6 +590,42 @@
           </tbody>
         </table>
       </div>
+
+      <h3>Assisted Onboarding</h3>
+      <p>When onboarding is enabled, an agent can create a user on behalf of an invitee using a single-purpose onboarding JWT:</p>
+
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+              <th>Auth</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/onboarding/start</code></td>
+              <td>Agent starts the flow &mdash; sends an OTP to the invitee</td>
+              <td><code>onboarding.start</code></td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/onboarding/complete</code></td>
+              <td>Agent enters the invitee's code &mdash; returns a single-use <code>onboarding_token</code></td>
+              <td><code>onboarding.complete</code></td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/onboarding/user</code></td>
+              <td>Creates the user from the onboarding attempt (runs <code>registerHooks</code>, sets <code>verifiedAt</code>)</td>
+              <td>OnboardingJwtGuard</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════
@@ -551,7 +633,16 @@
          ═══════════════════════════════════════════════════════ -->
     <section id="guards">
       <h2>Guards</h2>
-      <p>Protect your endpoints with <code>JwtAuthGuard</code> for authentication (JWT or API key) and <code>PermissionsGuard</code> for authorization. Use the <code>@CurrentUser()</code> and <code>@Permissions()</code> decorators to access the authenticated user and enforce permissions.</p>
+      <p>The package exports these guards and strategies:</p>
+      <ul>
+        <li><code>JwtAuthGuard</code> &mdash; authentication via JWT Bearer token or (when enabled) <code>x-api-key</code> header. Skips <code>@Public()</code> routes.</li>
+        <li><code>PermissionsGuard</code> &mdash; authorization against <code>@Permissions(...)</code> metadata.</li>
+        <li><code>RouteDisabledGuard</code> &mdash; blocks routes listed in <code>disabledRoutes</code> (403).</li>
+        <li><code>OnboardingJwtGuard</code> &mdash; validates the single-purpose onboarding JWT (used by <code>POST /auth/onboarding/user</code>).</li>
+        <li><code>ApiKeyGuard</code> &mdash; standalone API key guard; normally unnecessary because <code>JwtAuthGuard</code> auto-detects the API key header.</li>
+        <li><code>JwtStrategy</code> &mdash; Passport JWT strategy with nonce validation.</li>
+      </ul>
+      <p>Use <code>@UseGuards(JwtAuthGuard, PermissionsGuard)</code> to protect endpoints. Example:</p>
 
       <div class="code-block">
         <div class="code-block-header">
@@ -611,7 +702,12 @@
             <tr>
               <td><code>@Public()</code></td>
               <td>None</td>
-              <td>Marks a route as public (skips JWT validation)</td>
+              <td>Marks a route (or whole controller) as public &mdash; skips JWT validation</td>
+            </tr>
+            <tr>
+              <td><code>@AuthOptions()</code></td>
+              <td>None</td>
+              <td>Injects the <code>AUTH_OPTIONS</code> token (the resolved <code>AuthModuleOptions</code>)</td>
             </tr>
           </tbody>
         </table>
@@ -757,14 +853,49 @@
           <tr><td><code>auth.user.register.success</code></td><td>User created</td></tr>
           <tr><td><code>auth.user.register.conflict</code></td><td>User already exists</td></tr>
           <tr><td><code>auth.user.login.success</code></td><td>Password login successful</td></tr>
-          <tr><td><code>auth.user.login.failed.*</code></td><td>Login failed (user_not_found, invalid_password)</td></tr>
-          <tr><td><code>auth.otp.request.*</code></td><td>OTP request (success, locked, cooldown, delivery_failed)</td></tr>
-          <tr><td><code>auth.otp.login.*</code></td><td>OTP login (success, expired, invalid, max_attempts, locked)</td></tr>
+          <tr><td><code>auth.user.login.failed.*</code></td><td>Login failed (user_not_found, invalid_password, unverified)</td></tr>
+          <tr><td><code>auth.otp.request.*</code></td><td>OTP request (success, locked, cooldown, delivery_failed, user_not_found)</td></tr>
+          <tr><td><code>auth.otp.login.*</code></td><td>OTP login (success, expired, invalid, max_attempts, locked, user_not_found, not_requested)</td></tr>
           <tr><td><code>auth.token.refresh.success</code></td><td>New tokens issued</td></tr>
           <tr><td><code>auth.token.refresh.failed</code></td><td>Invalid refresh token</td></tr>
           <tr><td><code>auth.user.logout.success</code></td><td>Sessions cleared</td></tr>
-          <tr><td><code>auth.password.change.*</code></td><td>Password change (success, failed)</td></tr>
-          <tr><td><code>auth.password.reset.*</code></td><td>Password reset (request, success, expired, invalid_token)</td></tr>
+          <tr><td><code>auth.user.logout.failed</code></td><td>Logout for a non-existent user</td></tr>
+          <tr><td><code>auth.password.change.*</code></td><td>Password change (success, failed: user_not_found, current_password_wrong, no_password_set)</td></tr>
+          <tr><td><code>auth.password.reset.*</code></td><td>Password reset (request success, delivery_failed, user_not_found, expired, invalid_token)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Verification Events</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>auth.verification.verify.success</code></td><td>Account verified</td></tr>
+          <tr><td><code>auth.verification.verify.failed.*</code></td><td>Verification failed (user_not_found, locked, not_requested, expired, max_attempts, invalid)</td></tr>
+          <tr><td><code>auth.verification.resend.success</code></td><td>Code re-sent</td></tr>
+          <tr><td><code>auth.verification.resend.failed.*</code></td><td>Resend failed (user_not_found, cooldown, delivery)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Onboarding Events</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>auth.onboarding.start.success</code></td><td>Attempt started, OTP delivered</td></tr>
+          <tr><td><code>auth.onboarding.start.failed.*</code></td><td>Start failed (locked, cooldown, delivery, user_exists)</td></tr>
+          <tr><td><code>auth.onboarding.complete.success</code></td><td>Code verified, onboarding token issued</td></tr>
+          <tr><td><code>auth.onboarding.complete.failed.*</code></td><td>Complete failed (not_found, locked, not_requested, expired, invalid, max_attempts)</td></tr>
+          <tr><td><code>auth.onboarding.user.create.success</code></td><td>User created from onboarding</td></tr>
+          <tr><td><code>auth.onboarding.denied</code></td><td>Onboarding JWT guard rejected a request</td></tr>
         </tbody>
       </table>
 
@@ -846,7 +977,7 @@
         <div class="step">
           <div class="step-number">1</div>
           <h3>Install the package</h3>
-          <p>Run <code>pnpm add @nest-util/nest-auth@^1.1.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code> and ensure TypeORM is configured with a User entity.</p>
+          <p>Run <code>pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code> and ensure TypeORM is configured with a User entity.</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>
@@ -1011,6 +1142,150 @@
       </div>
     </section>
 
+    <section id="verification">
+      <h2>Account Verification</h2>
+      <p>Enable post-register account verification (email/phone code) by adding the <code>verification</code> option to <code>AuthModule.forRoot()</code>. When enabled, <code>register</code> no longer returns tokens &mdash; the user must verify first.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts (verification config)</div>
+        </div>
+        <pre><span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+  <span class="cm">// ... other options</span>
+  verification: {
+    enabled: <span class="num">true</span>,
+    codeLength: <span class="num">6</span>,
+    ttlSeconds: <span class="num">600</span>,
+    cooldownSeconds: <span class="num">60</span>,
+    maxAttempts: <span class="num">5</span>,
+    lockSeconds: <span class="num">300</span>,
+    channel: <span class="str">'email'</span>,
+    <span class="cm">// Optional DB field overrides (defaults shown)</span>
+    verifiedField: <span class="str">'isVerified'</span>,
+    verifiedAtField: <span class="str">'verifiedAt'</span>,
+    codeHashField: <span class="str">'verificationCodeHash'</span>,
+    expiresAtField: <span class="str">'verificationExpiresAt'</span>,
+    attemptsField: <span class="str">'verificationAttempts'</span>,
+    lastSentAtField: <span class="str">'verificationLastSentAt'</span>,
+    lockUntilField: <span class="str">'verificationLockUntil'</span>,
+    inputCodeField: <span class="str">'verificationCode'</span>, <span class="cm">// DTO field for the submitted code</span>
+    deliverCode: <span class="kw">async</span> ({ identifier, code, expiresAt }) =&gt; {
+      <span class="cm">// Send email/SMS with the verification code</span>
+    },
+  },
+})</pre>
+      </div>
+
+      <h3>Endpoints</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/verify</code></td>
+              <td>Accepts <code>{ email, code }</code>. Verifies the account; subsequent login returns tokens.</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/verify/resend</code></td>
+              <td>Accepts <code>{ email }</code>. Re-sends the code (respects <code>cooldownSeconds</code>).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="onboarding">
+      <h2>Assisted Onboarding</h2>
+      <p>Enable agent-assisted onboarding so an admin/agent can create a user on behalf of an invitee. The agent confirms the invitee's email via an OTP, receives a single-purpose onboarding JWT, then creates the user with that token.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts (onboarding config)</div>
+        </div>
+        <pre><span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+  <span class="cm">// ... other options</span>
+  onboarding: {
+    enabled: <span class="num">true</span>,
+    startDto: <span class="fn">class</span> extends <span class="typ">OnboardingStartDto</span> {},
+    completeDto: <span class="fn">class</span> extends <span class="typ">OnboardingCompleteDto</span> {},
+    createUserDto: <span class="fn">class</span> extends <span class="typ">OnboardingCreateUserDto</span> {},
+    metadata: { channel: <span class="str">'email'</span> },
+    buildDeliveryContext: <span class="kw">async</span> ({ attempt }) =&gt; ({ <span class="cm">/* delivery context */</span> }),
+    sendCode: <span class="kw">async</span> ({ identifier, code, expiresAt }) =&gt; {
+      <span class="cm">// Send email/SMS with the onboarding OTP</span>
+    },
+  },
+})</pre>
+      </div>
+
+      <h3>Endpoints</h3>
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Auth</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/onboarding/start</code></td>
+              <td><code>onboarding.start</code></td>
+              <td>Sends an OTP to the invitee's email/phone.</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/onboarding/complete</code></td>
+              <td><code>onboarding.complete</code></td>
+              <td>Validates the invitee's code and returns a single-use <code>onboarding_token</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/onboarding/user</code></td>
+              <td>OnboardingJwtGuard</td>
+              <td>Creates the user (runs <code>registerHooks</code>, sets <code>verifiedAt</code>). Throws <code>ConflictException</code> if the user already exists.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="register-hooks">
+      <h2>Register Hooks</h2>
+      <p><code>registerHooks</code> let you run logic around user creation, atomically with the DB transaction that inserts the user:</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts (register hooks)</div>
+        </div>
+        <pre><span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
+  <span class="cm">// ... other options</span>
+  registerHooks: {
+    beforeRegister: <span class="kw">async</span> ({ email }) =&gt; {
+      <span class="cm">// Runs before the user is created (e.g. validate, enrich)</span>
+    },
+    afterRegister: <span class="kw">async</span> ({ email, user }) =&gt; {
+      <span class="cm">// Runs after the user is created, inside the same transaction</span>
+    },
+  },
+})</pre>
+      </div>
+    </section>
+
     <!-- ═══════════════════════════════════════════════════════
          HELP NOTES
          ═══════════════════════════════════════════════════════ -->
@@ -1020,9 +1295,14 @@
         <li><strong>Refresh token field:</strong> The <code>/auth/refresh</code> endpoint currently expects <code>refreshToken</code> in the request body.</li>
         <li><strong>Nonce validation:</strong> Access and refresh tokens are validated against hashed nonce values stored in the database, enabling single-session token rotation. Each refresh rotates both tokens.</li>
         <li><strong>Relations requirement:</strong> If you enable RBAC, ensure <code>relations</code> includes the role relations needed during JWT validation (e.g. <code>['userRoles', 'userRoles.role']</code>).</li>
-        <li><strong>disabledRoutes:</strong> Use <code>disabledRoutes</code> to hard-disable selected auth endpoints (e.g. <code>['register', 'otp/request']</code>). Disabled routes return 404.</li>
+        <li><strong>disabledRoutes:</strong> Use <code>disabledRoutes</code> to hard-disable selected auth endpoints (e.g. <code>['register', 'otp/request']</code>). Disabled routes return <strong>403 Forbidden</strong>.</li>
         <li><strong>superAdminPermission:</strong> Set <code>rbac.superAdminPermission</code> to grant full permission bypass to super admins. Users with this permission skip all <code>@Permissions()</code> checks.</li>
         <li><strong>API key auto-detection:</strong> <code>JwtAuthGuard</code> auto-detects <code>x-api-key</code> header and delegates to <code>ApiKeyService</code> — no separate <code>ApiKeyGuard</code> needed.</li>
+        <li><strong>Refresh token header:</strong> The refresh token is sent via the <code>x-refresh-token</code> header (configurable with <code>refreshTokenHeaderName</code>).</li>
+        <li><strong>identifierFields:</strong> To allow login/register via multiple fields (e.g. email or phone), set <code>identifierFields</code> — it takes precedence over <code>identifierField</code>.</li>
+        <li><strong>Defaults:</strong> <code>expiresIn</code> defaults to <code>'1h'</code>, <code>refreshTokenExpiresIn</code> to <code>'7d'</code>, <code>onboardingTokenExpiresIn</code> to <code>'15m'</code>.</li>
+        <li><strong>RBAC evaluation:</strong> Permission resolution uses <code>directPermissionsKey</code> and <code>rolePermissionsKey</code>; <code>requireAllPermissions</code> toggles AND vs OR, and a custom <code>permissionEvaluator</code> can override the default matcher.</li>
+        <li><strong>Dual auth:</strong> JWT and API key auth can be enabled simultaneously — API key calls automatically bypass JWT validation.</li>
       </ul>
     </section>
 

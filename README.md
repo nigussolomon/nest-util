@@ -123,7 +123,7 @@ A dynamic and flexible authentication library:
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 @nest-util/nest-payment typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 

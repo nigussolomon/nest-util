@@ -45,6 +45,7 @@
       <li class="sidebar-section">Core</li>
       <li><a href="#module">Module</a></li>
       <li><a href="#controller">Controller</a></li>
+      <li><a href="#services">Services</a></li>
       <li><a href="#upload-flow">Upload Flow</a></li>
       <li><a href="#endpoints">Endpoints</a></li>
       <li class="sidebar-section">Reference</li>
@@ -287,6 +288,127 @@
 }</pre>
     </div>
 
+    <h2 id="services">Services</h2>
+    <p>Two injectable services are exported for programmatic use.</p>
+
+    <h3>FileService</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Params</th>
+          <th>Returns</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>requestUpload</code></td>
+          <td><code>(dto: RequestUploadDto, userId: string)</code></td>
+          <td><code>Promise&lt;PresignedUploadResult&gt;</code> (<code>uploadUrl</code>, <code>key</code>, <code>fileId</code>)</td>
+        </tr>
+        <tr>
+          <td><code>confirmUpload</code></td>
+          <td><code>(dto: ConfirmUploadDto)</code></td>
+          <td><code>Promise&lt;FileEntity&gt;</code></td>
+        </tr>
+        <tr>
+          <td><code>getDownloadUrl</code></td>
+          <td><code>(fileId: string)</code></td>
+          <td><code>Promise&lt;string&gt;</code> (presigned URL)</td>
+        </tr>
+        <tr>
+          <td><code>getFile</code></td>
+          <td><code>(fileId: string)</code></td>
+          <td><code>Promise&lt;FileEntity&gt;</code></td>
+        </tr>
+        <tr>
+          <td><code>deleteFile</code></td>
+          <td><code>(fileId: string)</code></td>
+          <td><code>Promise&lt;boolean&gt;</code></td>
+        </tr>
+        <tr>
+          <td><code>findAll</code></td>
+          <td><code>(query?)</code></td>
+          <td><code>Promise&lt;{ data, meta }&gt;</code> (paginated)</td>
+        </tr>
+        <tr>
+          <td><code>findMine</code></td>
+          <td><code>(userId, query?)</code></td>
+          <td><code>Promise&lt;{ data, meta }&gt;</code> (user-scoped, paginated)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>S3Service</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>generatePresignedUploadUrl({ key, contentType, expiresIn? })</code></td>
+          <td>Presigned <code>PUT</code> URL for direct client upload</td>
+        </tr>
+        <tr>
+          <td><code>generatePresignedDownloadUrl(key, expiresIn?)</code></td>
+          <td>Presigned <code>GET</code> URL</td>
+        </tr>
+        <tr>
+          <td><code>uploadBuffer(key, buffer, contentType)</code></td>
+          <td>Server-side upload of a buffer; returns <code>{ key, url }</code></td>
+        </tr>
+        <tr>
+          <td><code>deleteObject(key)</code></td>
+          <td>Delete an object from the bucket</td>
+        </tr>
+        <tr>
+          <td><code>objectExists(key)</code></td>
+          <td>Head-object existence check</td>
+        </tr>
+        <tr>
+          <td><code>getClient()</code> / <code>getBucket()</code></td>
+          <td>Raw <code>S3Client</code> and bucket name accessors</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Helpers</h3>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Helper</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>generateStoredName(fileName)</code></td>
+          <td>Sanitizes + timestamps a filename (e.g. <code>1712345678901-photo.jpg</code>)</td>
+        </tr>
+        <tr>
+          <td><code>generateS3Key(storedName, pathPrefix?)</code></td>
+          <td>Builds the S3 key, defaulting to <code>uploads/</code> prefix</td>
+        </tr>
+        <tr>
+          <td><code>isImageMime(mimeType)</code></td>
+          <td>True for <code>image/*</code> MIME types</td>
+        </tr>
+        <tr>
+          <td><code>getMimeTypeExtension(mimeType)</code></td>
+          <td>Maps common MIME types to file extensions (fallback <code>'bin'</code>)</td>
+        </tr>
+        <tr>
+          <td><code>IMAGE_MIME_PREFIXES</code></td>
+          <td><code>['image/']</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p><code>NEST_FILE_OPTIONS</code> is the injection token for the resolved <code>NestFileOptions</code>. Result interfaces: <code>PresignedUploadResult { uploadUrl, key, fileId }</code>, <code>PresignedDownloadResult { downloadUrl }</code>, and <code>FileMetadata { originalName, storedName, mimeType, size, bucket, key, url, userId, metadata? }</code>.</p>
+
     <h2 id="upload-flow">Upload Flow</h2>
     <p>Files are uploaded directly to S3 via presigned URLs — they never touch your server.</p>
 
@@ -302,6 +424,7 @@
   body: <span class="typ">JSON</span>.<span class="fn">stringify</span>({
     fileName: <span class="str">'photo.jpg'</span>,
     mimeType: <span class="str">'image/jpeg'</span>,
+    folder: <span class="str">'avatars'</span>,   <span class="cm">// optional: overrides upload.pathPrefix → avatars/&lt;storedName&gt;</span>
   }),
 }).<span class="fn">then</span>(r =&gt; r.<span class="fn">json</span>());
 
@@ -402,30 +525,31 @@
     </div>
 
     <h2 id="testing">Testing</h2>
-    <p>Use the testing entry point for mock factories.</p>
+    <p>Use the testing entry point for mock factories and generated test suites.</p>
 
+    <h3>Generated Test Suites</h3>
     <div class="code-block">
       <div class="code-block-header">
         <div class="code-block-dots"><span></span><span></span><span></span></div>
         <div class="code-block-title">file.service.spec.ts</div>
       </div>
-      <pre><span class="kw">import</span> { <span class="typ">Test</span>, <span class="typ">TestingModule</span> } <span class="kw">from</span> <span class="str">'@nestjs/testing'</span>;
-<span class="kw">import</span> { <span class="fn">getRepositoryToken</span> } <span class="kw">from</span> <span class="str">'@nestjs/typeorm'</span>;
-<span class="kw">import</span> {
-  <span class="typ">FileService</span>,
-  <span class="typ">FileEntity</span>,
-  <span class="fn">createMockRepository</span>,
-  <span class="fn">createMockS3Service</span>,
-} <span class="kw">from</span> <span class="str">'@nest-util/nest-file/testing'</span>;
+      <pre><span class="kw">import</span> { <span class="fn">fileServiceTests</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-file/testing'</span>;
+<span class="kw">import</span> { <span class="typ">FileService</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-file'</span>;
+<span class="kw">import</span> { <span class="typ">FileEntity</span> } <span class="kw">from</span> <span class="str">'./file.entity'</span>;
 
-<span class="kw">const</span> module: <span class="typ">TestingModule</span> = <span class="kw">await</span> <span class="typ">Test</span>.<span class="fn">createTestingModule</span>({
-  providers: [
-    <span class="typ">FileService</span>,
-    { provide: <span class="fn">getRepositoryToken</span>(<span class="typ">FileEntity</span>), useValue: <span class="fn">createMockRepository</span>() },
-    { provide: <span class="typ">S3Service</span>, useValue: <span class="fn">createMockS3Service</span>() },
-  ],
-}).<span class="fn">compile</span>();</pre>
+<span class="fn">describe</span>(<span class="str">'FileService'</span>, () =&gt; {
+  <span class="fn">fileServiceTests</span>({
+    serviceClass: <span class="typ">FileService</span>,
+    entity: <span class="typ">FileEntity</span>,
+    test: {
+      requestUploadPayload: { fileName: <span class="str">'photo.jpg'</span>, mimeType: <span class="str">'image/jpeg'</span> },
+      confirmUploadPayload: { fileId: <span class="str">'00000000-0000-0000-0000-000000000001'</span>, key: <span class="str">'uploads/photo.jpg'</span> },
+    },
+  });
+});</pre>
     </div>
+
+    <p>Config types: <code>FileServiceTestConfig</code> (<code>serviceClass</code>, <code>entity</code>, <code>options?</code>, <code>test?</code>) and <code>FileControllerTestConfig</code> (<code>controllerClass</code>, <code>serviceClass</code>, <code>entity</code>, <code>options?</code>, <code>test?</code>). A <code>FileTestContext</code> exposes <code>{ service, repository, s3Service }</code> mocks.</p>
 
     <h3>Mock Utilities</h3>
     <table class="endpoints-table">

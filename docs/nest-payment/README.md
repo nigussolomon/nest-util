@@ -23,14 +23,12 @@ pnpm add @nest-util/nest-auth
 No SDK is bundled. You implement `PaymentProvider` and register it via DI.
 
 ```typescript
-import { PaymentProvider, PaymentCheckoutResult, PaymentStatusResult } from '@nest-util/nest-payment';
+import { PaymentProvider, CheckoutSessionResult, PaymentStatus } from '@nest-util/nest-payment';
 
 export class ChapaProvider implements PaymentProvider {
-  readonly name = 'chapa';
-  readonly supportsSubscriptions = false;
-  readonly supportsRefunds = false;
+  readonly id = 'chapa';
 
-  async createCheckout(input): Promise<PaymentCheckoutResult> {
+  async createCheckoutSession(input): Promise<CheckoutSessionResult> {
     const tx_ref = `tx_${Date.now()}_${randomBytes(8).toString('hex')}`;
     const response = await chapa.initialize({
       amount: input.amount,
@@ -39,19 +37,21 @@ export class ChapaProvider implements PaymentProvider {
       tx_ref,
     });
     return {
-      providerPaymentId: response.tx_ref,
+      providerReference: response.tx_ref,
       checkoutUrl: response.checkout_url,
-      status: 'pending',
+      metadata: { tx_ref },
     };
   }
 
-  async getPaymentStatus(providerPaymentId): Promise<PaymentStatusResult> {
-    const result = await chapa.verify(providerPaymentId);
-    return { status: result.status === 'success' ? 'succeeded' : 'pending' };
+  async parseWebhookEvent(rawBody, headers): Promise<WebhookEvent> {
+    // Parse the raw body into a normalized WebhookEvent
+    const payload = JSON.parse(rawBody.toString());
+    return { provider: this.id, type: 'chapa.checkout.completed', providerPaymentId: payload.tx_ref, status: 'succeeded' };
   }
 
-  async refund(providerPaymentId, amount) {
-    throw new Error('Chapa does not support refunds');
+  async getPaymentStatus(providerPaymentId): Promise<PaymentStatus | null> {
+    const result = await chapa.verify(providerPaymentId);
+    return result.status === 'success' ? 'succeeded' : 'pending';
   }
 }
 ```
@@ -65,10 +65,21 @@ import { ChapaProvider } from './chapa.provider';
 @Module({
   imports: [
     NestPaymentModule.forRoot({
-      provider: new ChapaProvider(),
+      providers: [new ChapaProvider()],   // array of providers
       entities: [Payment, Subscription, Refund],
-      webhookSecret: process.env.WEBHOOK_SECRET,
-      webhookTtlMs: 300_000, // 5 min dedup window
+      webhook: {
+        enable: true,
+        path: 'webhook',        // default
+        rawBody: true,          // default — raw body for signature checks
+        deduplicate: true,      // default — in-memory dedup
+        deduplicationTtlMs: 300_000, // 5 min window
+      },
+      onWebhook: async (event, rawBody) => {
+        // Optional hook fired after each processed webhook event
+      },
+      onReconciliationMismatch: async (payment, providerStatus) => {
+        // Optional hook when reconciliation finds a mismatch
+      },
       controller: {
         path: 'payments',
         permissions: {
@@ -85,14 +96,16 @@ import { ChapaProvider } from './chapa.provider';
 export class AppModule {}
 ```
 
+The module is registered with `global: true`, so `PaymentService`, `SubscriptionService`, `RefundService`, and the `PAYMENT_OPTIONS` token are available app-wide without re-importing.
+
 ### Step 3: Async Configuration
 
 ```typescript
 NestPaymentModule.forRootAsync({
   useFactory: (config: ConfigService) => ({
-    provider: new ChapaProvider(),
+    providers: [new ChapaProvider()],
     entities: [Payment, Subscription, Refund],
-    webhookSecret: config.getOrThrow('WEBHOOK_SECRET'),
+    webhook: { enable: true, path: 'webhook' },
   }),
   inject: [ConfigService],
 })
@@ -102,35 +115,124 @@ NestPaymentModule.forRootAsync({
 
 | Option | Type | Description |
 |---|---|---|
-| `provider` | `PaymentProvider` | Your payment gateway implementation |
+| `providers` | `PaymentProvider[]` | Your payment gateway implementations (array) |
 | `entities` | `Entity[]` | TypeORM entities for Payment, Subscription, Refund |
-| `webhookSecret` | `string` | Secret for verifying webhook signatures |
-| `webhookTtlMs` | `number` | In-memory dedup window (default: `300_000` = 5 min) |
+| `webhook.enable` | `boolean` | Enable webhook endpoint (default: `true`) |
+| `webhook.path` | `string` | Webhook route segment (default: `'webhook'`) |
+| `webhook.rawBody` | `boolean` | Use raw body for signature verification (default: `true`) |
+| `webhook.deduplicate` | `boolean` | In-memory event dedup (default: `true`) |
+| `webhook.deduplicationTtlMs` | `number` | Dedup window (default: `300_000` = 5 min) |
 | `reconciliation.enable` | `boolean` | Enable stale payment reconciliation (default: `true`) |
 | `reconciliation.staleAfterMs` | `number` | Stale threshold in ms (default: `600_000` = 10 min) |
+| `onWebhook` | `(event, rawBody) => void` | Called after each processed webhook event |
+| `onReconciliationMismatch` | `(payment, providerStatus) => void` | Called when reconciliation finds a mismatch |
 | `controller.path` | `string` | Controller route path (default: `'payments'`) |
 | `controller.permissions` | `object` | RBAC permissions for checkout, refund, subscription |
 | `controller.enable` | `boolean` | Auto-register controller (default: `true`) |
+
+## Interfaces
+
+### PaymentStatus
+
+```ts
+type PaymentStatus =
+  | 'pending' | 'processing' | 'succeeded'
+  | 'failed' | 'refunded' | 'canceled';
+```
+
+### PaymentProvider
+
+Required: `id: string`, `createCheckoutSession(params): Promise<CheckoutSessionResult>`, `parseWebhookEvent(rawBody, headers): Promise<WebhookEvent>`.
+
+Optional (feature detection): `createSubscription?`, `cancelSubscription?`, `createRefund?`, `verifyWebhookSignature?`, `getPaymentStatus?`. Set `supportsSubscriptions` / `supportsRefunds` is **not** part of the interface — implement the optional method to enable the feature.
+
+### Params & Result Types
+
+```ts
+interface CreateCheckoutParams {
+  amount: number;               // smallest currency unit (e.g. cents)
+  currency: string;             // ISO 4217, e.g. 'ETB', 'USD'
+  customerEmail: string;
+  customerName?: string;
+  customerLastName?: string;
+  orderId?: string;
+  description?: string;
+  idempotencyKey?: string;      // prevents duplicate charges
+  callbackUrl?: string;
+  returnUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+interface CheckoutSessionResult {
+  providerReference: string;
+  checkoutUrl: string;
+  providerPaymentId?: string;
+  metadata?: Record<string, unknown>;
+}
+interface CreateSubscriptionParams {
+  amount: number;
+  currency: string;
+  customerEmail: string;
+  customerName?: string;
+  customerLastName?: string;
+  interval: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  intervalCount?: number;
+  description?: string;
+  idempotencyKey?: string;
+  callbackUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+interface SubscriptionResult {
+  providerReference: string;
+  providerSubscriptionId: string;
+  status: PaymentStatus;
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
+  metadata?: Record<string, unknown>;
+}
+interface CreateRefundParams {
+  providerPaymentId: string;
+  amount?: number;              // partial refund if provided
+  reason?: string;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
+}
+interface RefundResult {
+  providerReference: string;
+  providerRefundId: string;
+  status: PaymentStatus;
+  metadata?: Record<string, unknown>;
+}
+interface WebhookEvent {
+  provider: string;
+  type: string;
+  providerPaymentId?: string;
+  providerSubscriptionId?: string;
+  providerRefundId?: string;
+  status?: PaymentStatus;
+  amount?: number;
+  currency?: string;
+  isSubscriptionEvent?: boolean;
+  isRefundEvent?: boolean;
+  metadata?: Record<string, unknown>;
+  timestamp?: Date;
+}
+```
+
+`PAYMENT_OPTIONS` is the injection token for the resolved `NestPaymentOptions`.
 
 ## Architecture
 
 ### Webhook-First Design
 
-The webhook/callback is the source of truth for payment status — **not** the API response. Providers like Chapa use `callback_url` (redirect-based), while others like Stripe use signature-verified webhooks.
+The webhook/callback is the source of truth for payment status — **not** the API response. The single endpoint `POST /payments/webhook/:provider` handles both provider webhooks and Chapa-style `callback_url` redirects. It verifies the signature (if the provider implements `verifyWebhookSignature`), parses the body via `parseWebhookEvent`, deduplicates, and dispatches to `paymentService.handleWebhook(event)` / `subscriptionService.handleWebhook(event)` / `refundService.handleWebhook(event)`, then fires the `onWebhook` callback.
 
 ```typescript
-// Callback endpoint (Chapa-style redirect)
-app.use('/payments/callback', async (req, res) => {
-  await paymentService.handleCallback({ providerPaymentId: req.query.tx_ref });
-  res.redirect('/success');
-});
+// Chapa-style: point callback_url at the endpoint, which responds 200 and
+// your provider redirects the user to returnUrl
+POST /payments/webhook/chapa
 
-// Webhook endpoint (Stripe-style)
-app.use('/payments/webhook', async (req, res) => {
-  const event = stripe.webhooks.constructEvent(req.body, sig, secret);
-  await paymentService.handleWebhook({ providerPaymentId: event.data.object.id });
-  res.sendStatus(200);
-});
+// Stripe-style: signature-verified webhook, same endpoint
+POST /payments/webhook/stripe
 ```
 
 ### Status Transitions
@@ -167,6 +269,32 @@ Stale payments in `pending`, `processing`, or `succeeded` status are checked aga
 | `POST` | `/payments/reconcile` | Bulk reconcile stale payments | Required |
 | `POST` | `/payments/reconcile/:id` | Reconcile a single payment | Required |
 
+## Services
+
+### PaymentService
+
+- `createCheckout(userId, dto: CreateCheckoutDto)` → `{ payment, checkoutUrl?, error? }` — creates a `pending` record first, then calls the provider; on provider failure the payment stays `pending` with an `error` (never marked failed). Idempotent when `idempotencyKey` is supplied.
+- `handleWebhook(event: WebhookEvent)` → `PaymentEntity` — applies forward-only status transitions, or creates a record for unknown payments.
+- `findOne(id)` / `findByProviderPaymentId(provider, providerPaymentId)`
+- `findAll({ page?, limit?, orderBy?, orderDirection?, provider?, status? })` → `{ data, meta }`
+- `findMine(userId, query?)` → `{ data, meta }` (user-scoped)
+- `reconcilePayment(id)` → `PaymentEntity` — reconciles a single reconcilable payment; orphaned payments (no `providerPaymentId`) are marked `failed`.
+- `reconcileStalePayments({ staleAfterMs? })` → `{ checked, updated, failed }` — bulk reconciliation of `pending`/`processing`/`succeeded` payments older than the threshold.
+- `getProvider(providerId)` → `PaymentProvider` — resolves a provider by `id`.
+
+### SubscriptionService
+
+- `create(userId, dto: CreateSubscriptionDto)` → `{ subscription, error? }`
+- `cancel(subscriptionId)` → `SubscriptionEntity` — cancels an active subscription (requires provider `cancelSubscription`)
+- `handleWebhook(event)` → `SubscriptionEntity | null`
+- `findOne(id)` / `findAll(query?)` / `findMine(userId, query?)`
+
+### RefundService
+
+- `create(userId, dto: CreateRefundDto)` → `{ refund, error? }` (requires provider `createRefund`)
+- `handleWebhook(event)` → `RefundEntity | null`
+- `findOne(id)` / `findByPaymentId(paymentId)` / `findAll(query?)`
+
 ## Testing
 
 Use the testing entry point for mock factories and reusable test suites.
@@ -202,7 +330,7 @@ describe('PaymentService', () => {
 
 Chapa is the first reference implementation. Key differences from other providers:
 
-- Uses `callback_url` (user redirect) instead of webhooks
-- Status check via `chapa.verify(tx_ref)` — polled by reconciliation
-- No native subscription or refund support — set `supportsSubscriptions: false`, `supportsRefunds: false`
+- Uses `callback_url` (user redirect) instead of webhooks — point it at `POST /payments/webhook/chapa`
+- Status check via `chapa.verify(tx_ref)` — polled by reconciliation via `getPaymentStatus`
+- No native subscription or refund support — simply omit `createSubscription` / `cancelSubscription` / `createRefund`; the checkout/refund endpoints then return a "feature not supported" error
 - Currency: `ETB` (Ethiopian Birr) or `USD`

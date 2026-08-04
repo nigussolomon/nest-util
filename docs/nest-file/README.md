@@ -121,9 +121,95 @@ NestFileModule.forRootAsync({
 
 ## Upload Flow
 
-1. **Request URL** — `POST /files/upload-url` with `{ fileName, mimeType }`
+1. **Request URL** — `POST /files/upload-url` with `{ fileName, mimeType, folder? }`
 2. **Upload to S3** — `PUT` the file directly to the presigned URL
 3. **Confirm** — `POST /files/confirm` with `{ fileId, key }` to finalize
+
+`RequestUploadDto` accepts an optional `folder` field that overrides `upload.pathPrefix` for the S3 key (e.g. `avatars/1712345678901-photo.jpg`).
+
+## Services
+
+### FileService
+
+Injectable service for programmatic file management:
+
+```ts
+// (dto: RequestUploadDto, userId: string) => Promise<PresignedUploadResult>
+const { uploadUrl, key, fileId } = await fileService.requestUpload(dto, 'user-1');
+
+// (dto: ConfirmUploadDto) => Promise<FileEntity>
+const entity = await fileService.confirmUpload({ fileId, key });
+
+// (fileId: string) => Promise<string>  — presigned download URL
+const url = await fileService.getDownloadUrl(fileId);
+
+// (fileId: string) => Promise<FileEntity>
+const file = await fileService.getFile(fileId);
+
+// (fileId: string) => Promise<boolean>
+await fileService.deleteFile(fileId);
+
+// ({ page?, limit?, orderBy?, orderDirection? }) => Promise<{ data, meta }>
+const { data, meta } = await fileService.findAll({ page: 1, limit: 20 });
+
+// (userId, query?) => Promise<{ data, meta }>  — user-scoped
+const { data, meta } = await fileService.findMine('user-1', { page: 1 });
+```
+
+### S3Service
+
+```ts
+// Presigned PUT URL for direct client upload
+const { uploadUrl, key } = await s3Service.generatePresignedUploadUrl({ key, contentType });
+
+// Presigned GET URL
+const url = await s3Service.generatePresignedDownloadUrl(key);
+
+// Server-side buffer upload → { key, url }
+const { key, url } = await s3Service.uploadBuffer(key, buffer, 'image/jpeg');
+
+// Object lifecycle + checks
+await s3Service.deleteObject(key);
+const exists = await s3Service.objectExists(key);
+const bucket = s3Service.getBucket();
+const client = s3Service.getClient(); // raw S3Client
+```
+
+### Helpers
+
+```ts
+import {
+  generateStoredName,      // sanitize + timestamp a filename
+  generateS3Key,           // prefix + stored name → S3 key (default 'uploads/')
+  isImageMime,             // true for 'image/*'
+  getMimeTypeExtension,    // 'image/jpeg' → 'jpg' (fallback 'bin')
+  IMAGE_MIME_PREFIXES,     // ['image/']
+} from '@nest-util/nest-file';
+```
+
+### Result & Metadata Interfaces
+
+```ts
+interface PresignedUploadResult { uploadUrl: string; key: string; fileId: string; }
+interface PresignedDownloadResult { downloadUrl: string; }
+interface FileMetadata {
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  size: number;
+  bucket: string;
+  key: string;
+  url: string;
+  userId: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
+`NEST_FILE_OPTIONS` is the injection token for the resolved `NestFileOptions`.
+
+### UpdateFileDto
+
+`UpdateFileDto` accepts optional `description` and `tags` (comma-separated) fields for file metadata updates.
 
 ## FileEntity
 
@@ -175,6 +261,31 @@ export class FilesController extends FileBase {
 ```
 
 ## Testing
+
+Use the `@nest-util/nest-file/testing` entry point for mock factories and generated test suites.
+
+### Generated Test Suites
+
+```typescript
+import { fileServiceTests } from '@nest-util/nest-file/testing';
+import { FileService } from '@nest-util/nest-file';
+import { FileEntity } from './file.entity';
+
+describe('FileService', () => {
+  fileServiceTests({
+    serviceClass: FileService,
+    entity: FileEntity,
+    test: {
+      requestUploadPayload: { fileName: 'photo.jpg', mimeType: 'image/jpeg' },
+      confirmUploadPayload: { fileId: '00000000-0000-0000-0000-000000000001', key: 'uploads/photo.jpg' },
+    },
+  });
+});
+```
+
+Config types: `FileServiceTestConfig` (`serviceClass`, `entity`, `options?`, `test?`) and `FileControllerTestConfig` (`controllerClass`, `serviceClass`, `entity`, `options?`, `test?`). A `FileTestContext` exposes `{ service, repository, s3Service }` mocks.
+
+### Manual Setup with Mocks
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';

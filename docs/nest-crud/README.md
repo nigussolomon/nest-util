@@ -7,7 +7,7 @@ This guide reflects the implementation in `libs/nest-crud`.
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.0.7 @nest-util/nest-auth@^1.1.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 ```
 
 `@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.
@@ -105,6 +105,26 @@ export class PostController extends PostCrudControllerBase {
 }
 ```
 
+### Response & Entity Decorators
+
+```ts
+import { Message, EntityName } from '@nest-util/nest-crud';
+
+@ApiTags('post')
+@Controller('post')
+@EntityName('post')           // entity name used by @Audit()/AuditInterceptor when not supplied
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+export class PostController extends PostCrudControllerBase {
+  @Message('Post published successfully')  // custom response message on success
+  @Post(':id/publish')
+  publish(@Param('id') id: string) { /* ... */ }
+}
+```
+
+- `@Message(message)` sets the response message metadata (`Message` accepts a string).
+- `@EntityName('post')` or `@EntityName({ singular: 'post', plural: 'posts' })` names the resource; the singular form is used when `@Audit()` omits `entity`.
+
 ## 4) Available CRUD Endpoints
 
 Generated controller includes:
@@ -158,6 +178,45 @@ GET /posts?cursor=eyJpZCI6MTB9&limit=10&includeTotal=true
 
 Integer PKs use `id > cursor`. UUID PKs use composite `(createdAt, id)` cursors.
 
+### Cursor Helpers
+
+Low-level cursor utilities are exported for custom pagination logic:
+
+```ts
+import {
+  base64UrlEncode,
+  base64UrlDecode,
+  decodeCursor,
+  applyCursorFilter,
+  buildNextCursor,
+  detectCursorStrategy,
+} from '@nest-util/nest-crud';
+
+// Encode/decode opaque cursors (base64url JSON)
+const cursor = base64UrlEncode({ id: 42, createdAt: '2024-01-01T00:00:00Z' });
+const payload = base64UrlDecode(cursor);
+
+// Decode against a strategy ({ type: 'integer' } | { type: 'uuid', timestampColumn })
+const decoded = decodeCursor(cursor, { type: 'uuid', timestampColumn: 'createdAt' });
+
+// Mutate a TypeORM SelectQueryBuilder with the cursor filter
+applyCursorFilter(qb, decoded, strategy, 'DESC');
+
+// Build the next cursor from the last page of results
+const next = buildNextCursor(results, strategy);
+
+// Auto-detect integer vs uuid strategy from a repository's PK metadata
+const strategy = detectCursorStrategy(repo);
+```
+
+Strategy types:
+
+```ts
+type CursorStrategy =
+  | { type: 'integer' }
+  | { type: 'uuid'; timestampColumn: string };
+```
+
 ## 7) findMine (User-Scoped Records)
 
 Simple column match:
@@ -181,7 +240,124 @@ super({
 });
 ```
 
-## 8) Testing Factory
+## 8) Audit Logging
+
+Two complementary audit mechanisms are built in: **event-based** (real-time streams) and **DB-backed** (persistent audit trail).
+
+### Event-Based Audit Events
+
+`AuditEventModule.forRoot()` subscribes to all events emitted by `@nestjs/event-emitter` and dispatches matching ones to your handlers:
+
+```ts
+import { Module } from '@nestjs/common';
+import { AuditEventModule, ConsoleHandler } from '@nest-util/nest-crud';
+
+@Module({
+  imports: [
+    AuditEventModule.forRoot({
+      handlers: [new ConsoleHandler()], // built-in: colorized stdout logging
+      include: ['crud.*'],             // glob patterns to forward (default: ['*'])
+      exclude: [],                     // glob patterns to drop
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+A handler implements `AuditEventHandler`:
+
+```ts
+import { AuditEvent, AuditEventHandler } from '@nest-util/nest-crud';
+
+export class PostHogHandler implements AuditEventHandler {
+  handle(event: AuditEvent): void | Promise<void> {
+    // event.action, event.entity, event.entityId, event.userId,
+    // event.ip, event.userAgent, event.tenantId, event.timestamp, event.metadata
+  }
+}
+```
+
+`AuditEvent` shape:
+
+```ts
+interface AuditEvent {
+  action: string;            // dot-separated, e.g. 'crud.post.create.success'
+  entity: string;            // 'post', 'user', ...
+  entityId?: string | number;
+  userId?: string | number;
+  ip?: string;
+  userAgent?: string;
+  tenantId?: string;
+  timestamp: Date;
+  metadata?: Record<string, unknown>;
+}
+```
+
+### `@Audit()` Decorator + `AuditInterceptor`
+
+The controller factory already decorates its endpoints, but you can audit any custom endpoint:
+
+```ts
+import { Audit } from '@nest-util/nest-crud';
+
+@Audit({ action: 'publish', entity: 'post' })
+@Post(':id/publish')
+publish(@Param('id') id: string) { /* ... */ }
+```
+
+`AuditInterceptor` records the action via `AuditService` (if the entity is in TypeORM) and emits:
+
+- `crud.<entity>.<action>.success` on success
+- `crud.<entity>.<action>.error` on failure
+
+Entity name resolves from `@Audit()`, the controller's `@EntityName()`, or the repository metadata (falls back to `'Resource'`).
+
+### DB-Backed Audit Trail
+
+Register `NestCrudModule` to get a persistent `audit_logs` table and the `AuditService`:
+
+```ts
+import { NestCrudModule } from '@nest-util/nest-crud';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([AuditLogEntity]), // ensure the entity is registered
+    NestCrudModule,                             // provides AuditService
+  ],
+})
+export class AppModule {}
+```
+
+`AuditLogEntity` columns: `id`, `tenantId`, `action`, `entity`, `entityId`, `userId`, `metadata` (jsonb), `ip`, `userAgent`, `createdAt`.
+
+Use the service:
+
+```ts
+import { Inject } from '@nestjs/common';
+import { AuditService } from '@nest-util/nest-crud';
+
+export class MyService {
+  constructor(private readonly auditService: AuditService) {}
+
+  async track() {
+    // log(action, entity, entityId, options)
+    await this.auditService.logEntityAction('export.run', 'report', '42', {
+      userId: 'u1',
+      metadata: { rows: 100 },
+    });
+
+    // page-based queries
+    const { data, meta } = await this.auditService.findAll({ entity: 'report', page: 1, limit: 20 });
+
+    // cursor-based queries
+    const { data, meta } = await this.auditService.findAllWithCursor({ limit: 20, includeTotal: true });
+  }
+}
+```
+
+`CreateAuditLogInput` fields: `action`, `tenantId?`, `entity?`, `entityId?`, `userId?`, `metadata?`, `ip?`, `userAgent?`.
+
+## 9) Testing Factory
 
 Generate complete test suites for your CRUD service and controller with zero boilerplate.
 
@@ -287,20 +463,20 @@ const qb = createMockQb();
 const mock = createDefaultMockEntity(Post);
 ```
 
-## 9) Global Response and DB Error Handling
+## 10) Global Response and DB Error Handling
 
 Add these in bootstrap:
 
 - `ResponseInterceptor` as global interceptor for consistent response shape.
 - `TypeOrmExceptionFilter` as global filter for DB errors (including duplicate keys).
 
-## 10) Filtering and Pagination Notes
+## 11) Filtering and Pagination Notes
 
 - Filtering uses `filter[field_operator]=value` format.
 - Supported operators: `eq`, `ne`, `cont`, `notcont`, `starts`, `ends`, `gte`, `lte`, `gt`, `lt`, `in`, `nin`, `isnull`.
 - Express query parser should be `extended` for deep object query parsing.
 
-## 11) Help Notes
+## 12) Help Notes
 
 - Use `disabledEndpoints` in service options to hide generated routes without rewriting controllers.
 - `relations` option lets you resolve `propertyId` payload fields into related entities.
