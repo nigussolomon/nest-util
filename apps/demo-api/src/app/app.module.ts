@@ -116,6 +116,11 @@ import { NotifyModule } from './notify/notify.module';
         rolesKey: 'userRoles',
         nestedRoleKey: 'role',
       },
+      userManagement: {
+        enabled: true,
+        createFields: ['name'],
+        updateFields: ['name', 'email'],
+      },
       permissionRegistry,
       onboarding: {
         enabled: true,

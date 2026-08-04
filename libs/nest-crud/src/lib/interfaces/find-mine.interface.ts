@@ -33,4 +33,12 @@ export interface FindMineConfig<TEntity extends ObjectLiteral> {
    * Takes precedence alongside ownershipBypassPermissions.
    */
   ownershipBypass?: (user: OwnershipUser) => boolean;
+
+  /**
+   * Permission string that grants full access and bypasses ownership checks,
+   * mirroring `rbac.superAdminPermission` from @nest-util/nest-auth. When the
+   * user's resolved permissions (direct or via roles) include this string,
+   * ownership checks are skipped. Example: 'admin.access'.
+   */
+  superAdminPermission?: string;
 }

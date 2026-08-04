@@ -549,6 +549,58 @@
         </table>
       </div>
 
+      <h3>User Management</h3>
+      <p>When a <code>userManagement</code> block is configured, admin-protected user lifecycle endpoints are available:</p>
+
+      <div class="code-block">
+        <table class="endpoints-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/users?page=1&amp;limit=20&amp;q=...&amp;active=true</code></td>
+              <td>Paginated user list</td>
+            </tr>
+            <tr>
+              <td><span class="method get">GET</span></td>
+              <td><code>/auth/users/:id</code></td>
+              <td>Fetch one user</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/users</code></td>
+              <td>Create a user (password hashed with bcrypt)</td>
+            </tr>
+            <tr>
+              <td><span class="method patch">PATCH</span></td>
+              <td><code>/auth/users/:id</code></td>
+              <td>Update allowed fields</td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/users/:id/activate</code></td>
+              <td>Set the active field to <code>true</code></td>
+            </tr>
+            <tr>
+              <td><span class="method post">POST</span></td>
+              <td><code>/auth/users/:id/deactivate</code></td>
+              <td>Set the active field to <code>false</code></td>
+            </tr>
+            <tr>
+              <td><span class="method delete">DELETE</span></td>
+              <td><code>/auth/users/:id</code></td>
+              <td>Delete a user</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <h3>API Key Management</h3>
       <p>When API key auth is enabled, admin-protected endpoints for key lifecycle management are available:</p>
 

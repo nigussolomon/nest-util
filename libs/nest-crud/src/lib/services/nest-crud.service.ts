@@ -68,6 +68,7 @@ export class NestCrudService<
   protected readonly enforceOwnership: boolean;
   protected readonly ownershipBypassPermissions: readonly string[];
   protected readonly ownershipBypass?: (user: OwnershipUser) => boolean;
+  protected readonly superAdminPermission?: string;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -88,6 +89,7 @@ export class NestCrudService<
     this.enforceOwnership = options.enforceOwnership ?? false;
     this.ownershipBypassPermissions = options.ownershipBypassPermissions ?? [];
     this.ownershipBypass = options.ownershipBypass;
+    this.superAdminPermission = options.superAdminPermission;
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
@@ -225,17 +227,52 @@ export class NestCrudService<
     return Boolean(this.userOwnershipField || this.findMineQuery);
   }
 
+  private resolveUserPermissions(user: OwnershipUser): string[] {
+    const out = new Set<string>();
+    const add = (value: unknown) => {
+      if (Array.isArray(value)) {
+        value
+          .filter((item): item is string => typeof item === 'string')
+          .forEach((permission) => out.add(permission));
+      }
+    };
+
+    add(user.permissions);
+
+    for (const rolesKey of ['userRoles', 'roles']) {
+      const rows = user[rolesKey];
+      if (!Array.isArray(rows)) continue;
+
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') continue;
+        const roleLike = row as Record<string, unknown>;
+        add(roleLike.permissions);
+        const nested = roleLike.role;
+        if (nested && typeof nested === 'object') {
+          add((nested as Record<string, unknown>).permissions);
+        }
+      }
+    }
+
+    return [...out];
+  }
+
   private canBypassOwnership(user?: OwnershipUser): boolean {
     if (!user) return false;
+
+    if (this.superAdminPermission) {
+      const resolved = this.resolveUserPermissions(user);
+      if (resolved.includes(this.superAdminPermission)) {
+        return true;
+      }
+    }
 
     if (this.ownershipBypass && this.ownershipBypass(user)) {
       return true;
     }
 
     if (this.ownershipBypassPermissions.length > 0) {
-      const userPermissions = Array.isArray(user.permissions)
-        ? user.permissions
-        : [];
+      const userPermissions = this.resolveUserPermissions(user);
       return this.ownershipBypassPermissions.some((permission) =>
         userPermissions.includes(permission)
       );

@@ -153,6 +153,15 @@ export class DataController {
 - `DELETE /auth/users/:userId/roles/:roleId`
 - `GET /auth/users/:userId/roles`
 
+### User Management (admin-protected, when `userManagement` is configured)
+- `GET /auth/users?page=1&limit=20&q=...&active=true` — paginated user list
+- `GET /auth/users/:id` — fetch one user
+- `POST /auth/users` — create a user (password hashed with bcrypt)
+- `PATCH /auth/users/:id` — update allowed fields
+- `POST /auth/users/:id/activate` — set the active field to `true`
+- `POST /auth/users/:id/deactivate` — set the active field to `false`
+- `DELETE /auth/users/:id` — delete a user
+
 ### API Keys (admin-protected)
 - `POST /auth/api-keys`
 - `GET /auth/api-keys`
@@ -169,7 +178,35 @@ export class DataController {
 - `POST /auth/verify` — verify account with the emailed code
 - `POST /auth/verify/resend` — resend the verification code
 
-## 6) Example DTOs
+## 6) User Management
+
+Enable admin user management by adding a `userManagement` block to `AuthModule.forRoot`. Because the user entity is consumer-provided, the library cannot know its columns ahead of time, so the fields you may set on create/update are controlled by whitelists.
+
+```ts
+AuthModule.forRoot({
+  // ...
+  userManagement: {
+    enabled: true,                       // default true when the block is present
+    permission: 'admin.access',          // guards every route (default)
+    activeField: 'isActive',             // active/inactive column (default)
+    listFields: ['email', 'name'],       // columns returned in list/get responses (optional)
+    createFields: ['name'],              // keys allowed in POST /auth/users (optional)
+    updateFields: ['name', 'email'],     // keys allowed in PATCH /auth/users/:id (optional)
+    relations: ['userRoles'],            // eager-loaded relations (default: AuthModule relations)
+    allowPassword: true,                 // accept a password on create, hashed with bcrypt (default)
+    maxLimit: 100,                       // max page size (default)
+  },
+})
+```
+
+Notes:
+- The routes are `GET/POST /auth/users`, `GET/PATCH/DELETE /auth/users/:id`, and `POST /auth/users/:id/activate|deactivate`, all guarded by `JwtAuthGuard` + `PermissionsGuard` with `permission` (`admin.access` by default).
+- New users default to `activeField = true`.
+- Without `createFields`/`updateFields`, any key except sensitive fields (password, refresh/access tokens, OTP/verification/password-reset columns) is accepted; with a whitelist, unknown keys are rejected with `400`.
+- Passwords are never returned by list/get responses and cannot be updated via `PATCH` (admin password reset is intentionally out of scope).
+- Identifier fields (e.g. `email`) are always accepted on create/update and checked for uniqueness on create.
+
+## 7) Example DTOs
 
 ```ts
 import { ApiProperty } from '@nestjs/swagger';
@@ -188,7 +225,7 @@ export class RefreshDto {
 }
 ```
 
-## 7) Update Password
+## 8) Update Password
 
 Users can update their own password by providing their current password and a new password.
 
@@ -201,7 +238,7 @@ Users can update their own password by providing their current password and a ne
 }
 ```
 
-## 8) Password Reset (Token-based)
+## 9) Password Reset (Token-based)
 
 To enable password reset, configure the `passwordReset` option in `AuthModule.forRoot`. You must provide a `deliverToken` callback to send the reset link/token to the user.
 
@@ -229,7 +266,7 @@ AuthModule.forRoot({
 - `POST /auth/password-reset/request`: Accepts `{ email: "user@example.com" }`. Returns success even if the user doesn't exist to prevent account enumeration.
 - `POST /auth/password-reset/reset`: Accepts `{ token: "reset_token", newPassword: "new_password" }`. Invalidates all existing sessions upon success.
 
-## 9) OTP Login
+## 10) OTP Login
 
 To enable One-Time Password (OTP) login, configure the `otp` option in `AuthModule.forRoot`. You must provide a `deliverCode` callback.
 
@@ -268,7 +305,7 @@ AuthModule.forRoot({
 - `POST /auth/otp/request`: Accepts `{ email: "user@example.com" }`. Triggers the `deliverCode` callback.
 - `POST /auth/otp/login`: Accepts `{ email: "user@example.com", otpCode: "123456" }`. Validates the code and returns auth tokens.
 
-## 10) Assisted Onboarding
+## 11) Assisted Onboarding
 
 To enable agent-assisted onboarding, configure the `onboarding` option in `AuthModule.forRoot`. An agent starts the flow on behalf of an invitee (OTP is sent to the invitee), then enters the invitee's OTP to complete it and receives a **single-purpose onboarding JWT** that only works on `POST /auth/onboarding/user` to create the user. No password is ever set; created users log in with OTP.
 
@@ -305,7 +342,7 @@ AuthModule.forRoot({
 
 Permissions `onboarding.start` and `onboarding.complete` are the fixed convention — register them in your permission registry.
 
-## 11) Account Verification
+## 12) Account Verification
 
 To require email/phone verification after registration, configure the `verification` option. A code is delivered to the new user (defaults to the first identifier field in the registration payload); they must verify before the account is considered active. Optionally combine with `loginDto`/OTP to reject logins from unverified accounts.
 
@@ -344,7 +381,7 @@ AuthModule.forRoot({
 - `POST /auth/verify`: Accepts `{ code: "123456" }` (optionally the identifier). Marks the account verified. Rate-limited and locked like OTP.
 - `POST /auth/verify/resend`: Re-sends the code (cooldown enforced). Returns success whether or not the account exists to prevent enumeration.
 
-## 12) Register Hooks
+## 13) Register Hooks
 
 `registerHooks` lets you mutate the registration payload or run side effects atomically with user creation — everything runs inside a transaction, so a throwing hook rolls back the whole registration.
 
@@ -364,7 +401,7 @@ AuthModule.forRoot({
 
 **Hook context** (`RegisterHookContext`): `payload` (mutable DTO — mutations flow into the saved user), `entity` + `userId` (afterRegister only), `manager` (transaction-scoped `EntityManager`), `assignRole` (afterRegister only; accepts a role id or name).
 
-## 13) Multi-Identifier Login
+## 14) Multi-Identifier Login
 
 `identifierFields` lets users log in with any of several fields (e.g. email OR phone):
 
@@ -376,7 +413,7 @@ AuthModule.forRoot({
 })
 ```
 
-## 14) API Key Configuration
+## 15) API Key Configuration
 
 API key auth auto-registers admin endpoints. Configure via the `apiKey` option:
 
@@ -394,7 +431,7 @@ AuthModule.forRoot({
 
 `JwtAuthGuard` automatically detects the API key header and delegates to `ApiKeyService` — no separate guard needed. Admin API-key endpoints (`POST /auth/api-keys`, etc.) are only registered when `apiKey.enabled: true`.
 
-## 15) Public API Reference
+## 16) Public API Reference
 
 **Guards**: `JwtAuthGuard`, `PermissionsGuard`, `RouteDisabledGuard`, `ApiKeyGuard`, `OnboardingJwtGuard`, `JwtStrategy`.
 
@@ -410,7 +447,7 @@ AuthModule.forRoot({
 
 **`AuthService` methods**: `register`, `login`, `requestOtp`, `loginWithOtp`, `refresh`, `logout`, `changePassword`, `requestPasswordReset`, `resetPassword`, `verifyAccount`, `resendVerificationCode`, `startOnboarding`, `completeOnboarding`, `createUserFromOnboarding`, `createRole`, `assignRoleToUser`, `assignPermissionsToRole`, `removePermissionsFromRole`, `removeRoleFromUser`, `getUserRoles`, `getAllRoles`, `validateUser`.
 
-## 16) Help Notes
+## 17) Help Notes
 
 - `refresh` currently expects `refreshToken` in request body (or in the `refreshTokenHeaderName` header, default `x-refresh-token`).
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.

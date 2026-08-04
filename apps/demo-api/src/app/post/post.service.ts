@@ -22,6 +22,7 @@ export class PostService extends NestCrudService<
       userOwnershipField: 'authorId',
       enforceOwnership: true,
       ownershipBypassPermissions: ['admin.access'],
+      superAdminPermission: 'admin.access',
     });
   }
 }

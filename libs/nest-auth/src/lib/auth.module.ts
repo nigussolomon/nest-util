@@ -11,6 +11,7 @@ import { CreatePermissionsController } from './controllers/permissions.controlle
 import { CreateRolesController } from './controllers/roles.controller';
 import { CreateUserRolesController } from './controllers/user-roles.controller';
 import { CreateApiKeysController } from './controllers/api-keys.controller';
+import { CreateUserManagementController } from './controllers/user-management.controller';
 import { JwtStrategy } from './guards/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
@@ -35,6 +36,9 @@ export class AuthModule {
       CreateRolesController(options),
       CreateUserRolesController(options),
       ...(apiKeyEnabled ? [CreateApiKeysController(options)] : []),
+      ...(options.userManagement
+        ? [CreateUserManagementController(options)]
+        : []),
     ];
     const apiKeyEntities = apiKeyEnabled
       ? [ApiKeyEntity, ApiKeyRoleEntity]

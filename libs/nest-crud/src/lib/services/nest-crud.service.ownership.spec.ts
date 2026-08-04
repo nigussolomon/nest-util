@@ -15,6 +15,14 @@ describe('NestCrudService - ownership enforcement', () => {
 
   const ownUser = { id: 7, permissions: ['posts.read'] };
   const adminUser = { id: 7, permissions: ['posts.read', 'admin.access'] };
+  const roleAdminUser = {
+    id: 7,
+    userRoles: [{ role: { permissions: ['posts.read', 'admin.access'] } }],
+  };
+  const unrelatedRoleUser = {
+    id: 7,
+    userRoles: [{ role: { permissions: ['posts.read', 'billing.read'] } }],
+  };
 
   function buildService(overrides: Record<string, unknown> = {}) {
     return new NestCrudService<
@@ -82,6 +90,63 @@ describe('NestCrudService - ownership enforcement', () => {
 
       expect(repo.findOne).toHaveBeenCalled();
       expect(result).toEqual(owned);
+    });
+
+    it('bypasses ownership when the bypass permission comes from a role', async () => {
+      const service = buildService({
+        ownershipBypassPermissions: ['admin.access'],
+      });
+
+      const result = await service.findOne(2, roleAdminUser);
+
+      expect(repo.findOne).toHaveBeenCalled();
+      expect(result).toEqual(owned);
+    });
+
+    it('does not bypass ownership when the role grants an unrelated permission', async () => {
+      const qb = repo.createQueryBuilder() as any;
+      qb.getMany.mockResolvedValue([]);
+      const service = buildService({
+        ownershipBypassPermissions: ['admin.access'],
+      });
+
+      await expect(service.findOne(2, unrelatedRoleUser)).rejects.toThrow(
+        NotFoundException
+      );
+    });
+
+    it('bypasses ownership when superAdminPermission matches direct permissions', async () => {
+      const service = buildService({
+        superAdminPermission: 'admin.access',
+      });
+
+      const result = await service.findOne(2, adminUser);
+
+      expect(repo.findOne).toHaveBeenCalled();
+      expect(result).toEqual(owned);
+    });
+
+    it('bypasses ownership when superAdminPermission matches role permissions', async () => {
+      const service = buildService({
+        superAdminPermission: 'admin.access',
+      });
+
+      const result = await service.findOne(2, roleAdminUser);
+
+      expect(repo.findOne).toHaveBeenCalled();
+      expect(result).toEqual(owned);
+    });
+
+    it('does not bypass ownership when superAdminPermission is not held', async () => {
+      const qb = repo.createQueryBuilder() as any;
+      qb.getMany.mockResolvedValue([]);
+      const service = buildService({
+        superAdminPermission: 'admin.access',
+      });
+
+      await expect(service.findOne(2, ownUser)).rejects.toThrow(
+        NotFoundException
+      );
     });
 
     it('bypasses ownership via custom predicate', async () => {

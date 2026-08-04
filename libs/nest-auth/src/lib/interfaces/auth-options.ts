@@ -3,6 +3,7 @@ import { AuthRbacOptions } from './rbac-options.interface';
 import { PermissionRegistryConfig } from './permission-registry.interface';
 import { ApiKeyModuleOptions } from './api-key-options';
 import { AuthRegisterHooks } from './register-hooks.interface';
+import { UserManagementOptions } from './user-management-options.interface';
 
 export interface OtpDeliveryPayload {
   identifier: string;
@@ -216,6 +217,13 @@ export interface AuthModuleOptions {
   passwordReset?: AuthPasswordResetOptions;
 
   apiKey?: ApiKeyModuleOptions;
+
+  /**
+   * Admin user management endpoints (list, get, create, update, activate,
+   * deactivate, delete) registered under `auth/users`. Config-driven because
+   * the user entity is consumer-provided.
+   */
+  userManagement?: UserManagementOptions;
 
   verification?: AuthVerificationOptions;
 

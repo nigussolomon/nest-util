@@ -9,7 +9,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { DataSource, IsNull } from 'typeorm';
+import { DataSource, IsNull, Like } from 'typeorm';
 import type { Repository, EntityManager } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -27,6 +27,11 @@ import { RoleEntity } from '../entities/role.entity';
 import { UserRoleEntity } from '../entities/user-role.entity';
 import { OnboardingAttemptEntity } from '../entities/onboarding-attempt.entity';
 import { CreateRoleDto } from '../dtos/create-role.dto';
+import {
+  UserListParams,
+  UserListResult,
+  UserManagementOptions,
+} from '../interfaces/user-management-options.interface';
 
 interface AuditEvent {
   action: string;
@@ -1026,6 +1031,286 @@ export class AuthService {
     return await this.roleRepository.find({
       order: { id: 'ASC' },
     });
+  }
+
+  async listUsers(params: UserListParams = {}): Promise<UserListResult> {
+    const config = this.resolveUserManagementConfig();
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(config.maxLimit, Math.max(1, params.limit ?? 20));
+
+    const baseFilter: Record<string, unknown> = {};
+    if (typeof params.active === 'boolean') {
+      baseFilter[config.activeField] = params.active;
+    }
+
+    const searchFilters: Record<string, unknown>[] = [];
+    const query = params.q?.trim();
+    if (query) {
+      for (const field of this.getIdentifierFields()) {
+        searchFilters.push({ ...baseFilter, [field]: Like(`%${query}%`) });
+      }
+    } else if (Object.keys(baseFilter).length > 0) {
+      searchFilters.push(baseFilter);
+    }
+
+    const findOptions: Record<string, unknown> = {
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { id: 'ASC' },
+    };
+    if (searchFilters.length > 0) {
+      findOptions.where = searchFilters;
+    }
+    if (config.relations?.length) {
+      findOptions.relations = config.relations;
+    }
+
+    const [items, total] = await this.userRepository.findAndCount(
+      findOptions as never
+    );
+
+    return {
+      items: items.map((item) => this.toUserResponse(item)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async getUserById(id: number): Promise<Record<string, unknown>> {
+    return this.toUserResponse(await this.getUserByIdInternal(id));
+  }
+
+  async createUserByAdmin(
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const config = this.resolveUserManagementConfig();
+
+    const presentIdentifiers = this.getPresentIdentifiers(data);
+    if (presentIdentifiers.length === 0) {
+      throw new BadRequestException(
+        `${this.getIdentifierLabel()} is required`
+      );
+    }
+
+    const existingUser = await this.userRepository.findOne({
+      where: presentIdentifiers.map(({ field, value }) => ({
+        [field]: value.trim(),
+      })) as never,
+    });
+    if (existingUser) {
+      throw new ConflictException('User already exists');
+    }
+
+    const allowed = new Set<string>(config.createFields ?? []);
+    const payload: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(data)) {
+      const isIdentifier = this.getIdentifierFields().includes(key);
+      const isPassword =
+        config.allowPassword !== false && key === this.options.passkeyField;
+
+      if (config.createFields?.length) {
+        if (allowed.has(key) || isIdentifier || isPassword) {
+          payload[key] = value;
+          continue;
+        }
+        throw new BadRequestException(
+          `Field '${key}' is not allowed in the user payload`
+        );
+      }
+
+      if (isPassword) {
+        payload[key] = value;
+        continue;
+      }
+      if (this.isSensitiveField(key)) {
+        throw new BadRequestException(`Field '${key}' is not allowed`);
+      }
+      payload[key] = value;
+    }
+
+    if (payload[config.activeField] === undefined) {
+      payload[config.activeField] = true;
+    }
+
+    const password = payload[this.options.passkeyField];
+    delete payload[this.options.passkeyField];
+
+    const hashedPassword =
+      typeof password === 'string' && password.length > 0
+        ? await bcrypt.hash(password, 10)
+        : undefined;
+
+    const saved = await this.createUserWithHooks(payload, {
+      hashedPassword,
+    });
+
+    return this.toUserResponse(saved);
+  }
+
+  async updateUser(
+    id: number,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const config = this.resolveUserManagementConfig();
+
+    await this.getUserByIdInternal(id);
+
+    const allowed = new Set<string>(config.updateFields ?? []);
+    const patch: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(data)) {
+      if (key === this.options.passkeyField) {
+        throw new BadRequestException(
+          `Field '${key}' is not allowed via user update`
+        );
+      }
+
+      const isIdentifier = this.getIdentifierFields().includes(key);
+
+      if (config.updateFields?.length) {
+        if (allowed.has(key) || isIdentifier) {
+          patch[key] = value;
+          continue;
+        }
+        throw new BadRequestException(
+          `Field '${key}' is not allowed in the user update`
+        );
+      }
+
+      if (this.isSensitiveField(key)) {
+        throw new BadRequestException(`Field '${key}' is not allowed`);
+      }
+      patch[key] = value;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw new BadRequestException('No updatable fields provided');
+    }
+
+    await this.userRepository.update(id, patch as never);
+
+    return this.toUserResponse(await this.getUserByIdInternal(id));
+  }
+
+  async setUserActive(
+    id: number,
+    active: boolean
+  ): Promise<Record<string, unknown>> {
+    const config = this.resolveUserManagementConfig();
+
+    await this.getUserByIdInternal(id);
+
+    await this.userRepository.update(id, {
+      [config.activeField]: active,
+    } as never);
+
+    return this.toUserResponse(await this.getUserByIdInternal(id));
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    await this.getUserByIdInternal(id);
+
+    await this.userRepository.delete(id);
+
+    return true;
+  }
+
+  private resolveUserManagementConfig(): Required<
+    Pick<
+      UserManagementOptions,
+      'enabled' | 'permission' | 'activeField' | 'allowPassword' | 'maxLimit'
+    >
+  > &
+    Pick<UserManagementOptions, 'listFields' | 'createFields' | 'updateFields' | 'relations'> {
+    const config = this.options.userManagement ?? {};
+    return {
+      enabled: config.enabled ?? true,
+      permission: config.permission ?? 'admin.access',
+      activeField: config.activeField ?? 'isActive',
+      listFields: config.listFields,
+      createFields: config.createFields,
+      updateFields: config.updateFields,
+      relations: config.relations ?? this.options.relations,
+      allowPassword: config.allowPassword ?? true,
+      maxLimit: config.maxLimit ?? 100,
+    };
+  }
+
+  private getSensitiveFields(): string[] {
+    const otp = this.options.otp ?? {};
+    const verification = this.options.verification ?? {};
+    const passwordReset = this.options.passwordReset ?? {};
+
+    return [
+      this.options.passkeyField,
+      this.options.refreshTokenField || 'refreshToken',
+      this.options.accessTokenField || 'accessToken',
+      otp.codeField,
+      otp.expiresAtField,
+      otp.attemptsField,
+      otp.lastSentAtField,
+      otp.lockUntilField,
+      verification.verifiedField,
+      verification.verifiedAtField,
+      verification.codeHashField,
+      verification.expiresAtField,
+      verification.attemptsField,
+      verification.lastSentAtField,
+      verification.lockUntilField,
+      passwordReset.tokenField,
+      passwordReset.expiresAtField,
+    ].filter(
+      (field): field is string =>
+        typeof field === 'string' && field.trim().length > 0
+    );
+  }
+
+  private isSensitiveField(key: string): boolean {
+    return this.getSensitiveFields().includes(key);
+  }
+
+  private toUserResponse(user: Record<string, unknown>): Record<string, unknown> {
+    const config = this.resolveUserManagementConfig();
+
+    if (config.listFields?.length) {
+      const out: Record<string, unknown> = { id: user.id };
+      for (const field of config.listFields) {
+        if (user[field] !== undefined) {
+          out[field] = user[field];
+        }
+      }
+      return out;
+    }
+
+    const sensitive = new Set(this.getSensitiveFields());
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(user)) {
+      if (!sensitive.has(key)) {
+        out[key] = value;
+      }
+    }
+    return out;
+  }
+
+  private async getUserByIdInternal(
+    id: number
+  ): Promise<Record<string, unknown>> {
+    const config = this.resolveUserManagementConfig();
+
+    const user = await this.userRepository.findOne({
+      where: { id } as never,
+      ...(config.relations?.length
+        ? { relations: config.relations as never }
+        : {}),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 
   private async generateTokens(

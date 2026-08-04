@@ -159,6 +159,43 @@ AuthModule.forRoot({
 })
 ```
 
+## User Management
+
+Enable admin user lifecycle endpoints by adding a `userManagement` block to `AuthModule.forRoot`. Because the user entity is consumer-provided, the fields accepted on create/update are controlled by whitelists.
+
+```typescript
+AuthModule.forRoot({
+  // ... other options
+  userManagement: {
+    enabled: true,                       // default true when the block is present
+    permission: 'admin.access',          // guards every route (default)
+    activeField: 'isActive',             // active/inactive column (default)
+    listFields: ['email', 'name'],       // columns returned in list/get responses (optional)
+    createFields: ['name'],              // keys allowed in POST /auth/users (optional)
+    updateFields: ['name', 'email'],     // keys allowed in PATCH /auth/users/:id (optional)
+    relations: ['userRoles'],            // eager-loaded relations (default: AuthModule relations)
+    allowPassword: true,                 // accept a password on create, hashed with bcrypt (default)
+    maxLimit: 100,                       // max page size (default)
+  },
+})
+```
+
+- New users default to `activeField = true`.
+- Without `createFields`/`updateFields`, any key except sensitive fields (password, refresh/access tokens, OTP/verification/password-reset columns) is accepted; with a whitelist, unknown keys are rejected with `400`.
+- Passwords are never returned by list/get responses and cannot be updated via `PATCH`.
+
+### User Management Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/auth/users?page=1&limit=20&q=...&active=true` | Paginated user list | Yes (admin) |
+| GET | `/auth/users/:id` | Fetch one user | Yes (admin) |
+| POST | `/auth/users` | Create a user | Yes (admin) |
+| PATCH | `/auth/users/:id` | Update allowed fields | Yes (admin) |
+| POST | `/auth/users/:id/activate` | Activate a user | Yes (admin) |
+| POST | `/auth/users/:id/deactivate` | Deactivate a user | Yes (admin) |
+| DELETE | `/auth/users/:id` | Delete a user | Yes (admin) |
+
 ## Authentication Endpoints
 
 | Method | Endpoint | Description | Auth Required |
