@@ -26,6 +26,7 @@ const mockAuthService = {
   getUserById: jest.fn(),
   createUserByAdmin: jest.fn(),
   updateUser: jest.fn(),
+  updateProfile: jest.fn(),
   setUserActive: jest.fn(),
   deleteUser: jest.fn(),
 };
@@ -137,6 +138,18 @@ describe('CreateUserManagementController', () => {
     });
   });
 
+  describe('updateOwnProfile', () => {
+    it('calls authService.updateProfile with the current user id and body', async () => {
+      mockAuthService.updateProfile.mockResolvedValue({ id: 1, name: 'Alice' });
+      const user = { id: 7, email: 'a@b.com' };
+      const result = await controller.updateOwnProfile(user, { name: 'New' });
+      expect(mockAuthService.updateProfile).toHaveBeenCalledWith(7, {
+        name: 'New',
+      });
+      expect(result).toEqual({ id: 1, name: 'Alice' });
+    });
+  });
+
   describe('activateUser / deactivateUser', () => {
     it('calls setUserActive(true)', async () => {
       await controller.activateUser(3);
@@ -207,5 +220,40 @@ describe('user management route permissions', () => {
       (controller as any).listUsers
     ) as string[];
     expect(requiredPermissions).toEqual(['users.manage']);
+  });
+
+  it('guards updateOwnProfile with profile.edit by default', () => {
+    const controller = new (CreateUserManagementController(
+      mockOptions as never
+    ) as unknown as new (...args: unknown[]) => unknown)(
+      mockAuthService,
+      mockOptions
+    );
+
+    const requiredPermissions = Reflect.getMetadata(
+      PERMISSIONS_KEY,
+      (controller as any).updateOwnProfile
+    ) as string[];
+    expect(requiredPermissions).toEqual(['profile.edit']);
+  });
+
+  it('uses the configured profilePermission when provided', () => {
+    const customOptions = {
+      ...mockOptions,
+      userManagement: { profilePermission: 'users.self' },
+    };
+
+    const controller = new (CreateUserManagementController(
+      customOptions as never
+    ) as unknown as new (...args: unknown[]) => unknown)(
+      mockAuthService,
+      customOptions
+    );
+
+    const requiredPermissions = Reflect.getMetadata(
+      PERMISSIONS_KEY,
+      (controller as any).updateOwnProfile
+    ) as string[];
+    expect(requiredPermissions).toEqual(['users.self']);
   });
 });

@@ -45,7 +45,7 @@ export interface CrudControllerTestConfig<
   > {
   controllerFactory: () => Type<any>;
   serviceClass: Type<any>;
-  permissions?: Record<CrudEndpoint, string | string[]>;
+  permissions?: Partial<Record<CrudEndpoint, string | string[]>>;
   authOptions?: Record<string, unknown>;
 }
 

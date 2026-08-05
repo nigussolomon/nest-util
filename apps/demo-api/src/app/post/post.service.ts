@@ -23,6 +23,27 @@ export class PostService extends NestCrudService<
       enforceOwnership: true,
       ownershipBypassPermissions: ['admin.access'],
       superAdminPermission: 'admin.access',
+      statusPipeline: {
+        field: 'status',
+        initial: 'draft',
+        transitions: [
+          { from: 'draft', to: ['pending'] },
+          { from: 'pending', to: ['approved', 'rejected'] },
+          {
+            from: 'approved',
+            to: ['published'],
+            action: async ({ id, entity }) => {
+              console.log(`Post ${id} published at ${entity.status}`);
+            },
+          },
+          { from: 'rejected', to: ['pending'] },
+        ],
+        onTransition: async ({ id, from, to, user }) => {
+          console.log(
+            `Post ${id} transitioned ${from} -> ${to} by ${user?.id ?? 'anonymous'}`
+          );
+        },
+      },
     });
   }
 }

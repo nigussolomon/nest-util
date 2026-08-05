@@ -161,6 +161,7 @@ export class DataController {
 - `POST /auth/users/:id/activate` — set the active field to `true`
 - `POST /auth/users/:id/deactivate` — set the active field to `false`
 - `DELETE /auth/users/:id` — delete a user
+- `PATCH /auth/me` — self-service profile update (guarded by `profilePermission`, see below)
 
 ### API Keys (admin-protected)
 - `POST /auth/api-keys`
@@ -192,6 +193,8 @@ AuthModule.forRoot({
     listFields: ['email', 'name'],       // columns returned in list/get responses (optional)
     createFields: ['name'],              // keys allowed in POST /auth/users (optional)
     updateFields: ['name', 'email'],     // keys allowed in PATCH /auth/users/:id (optional)
+    profilePermission: 'profile.edit',   // guards PATCH /auth/me (default)
+    profileFields: ['name'],             // keys a user may edit on PATCH /auth/me (optional)
     relations: ['userRoles'],            // eager-loaded relations (default: AuthModule relations)
     allowPassword: true,                 // accept a password on create, hashed with bcrypt (default)
     maxLimit: 100,                       // max page size (default)
@@ -205,6 +208,21 @@ Notes:
 - Without `createFields`/`updateFields`, any key except sensitive fields (password, refresh/access tokens, OTP/verification/password-reset columns) is accepted; with a whitelist, unknown keys are rejected with `400`.
 - Passwords are never returned by list/get responses and cannot be updated via `PATCH` (admin password reset is intentionally out of scope).
 - Identifier fields (e.g. `email`) are always accepted on create/update and checked for uniqueness on create.
+
+### Self-service profile editing (`PATCH /auth/me`)
+
+A user can edit their own profile with `PATCH /auth/me`. The target user is taken from the JWT (`@CurrentUser()`), never from the request body, so a user structurally cannot edit anyone else's profile. The route is guarded by `JwtAuthGuard` + `PermissionsGuard` with `profilePermission` (`'profile.edit'` by default) — assign this permission to a role so users can use it.
+
+- Allowed keys come from `profileFields`, falling back to `updateFields`, then to any non-sensitive key.
+- Password, the active flag, and all sensitive columns (tokens, OTP/verification/password-reset) are always rejected.
+- When `profileFields` is set, identifiers are only editable if explicitly listed.
+
+Example role assignment via the demo RBAC endpoints:
+
+```http
+POST /auth/roles        {"name": "User", "permissions": ["profile.edit"]}
+POST /auth/users/1/roles/1
+```
 
 ## 7) Example DTOs
 

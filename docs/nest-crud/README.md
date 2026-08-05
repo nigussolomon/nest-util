@@ -10,7 +10,7 @@ We recommend using **pnpm** as your package manager.
 pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 ```
 
-`@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.
+`@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination, findMine, status pipelines, and a testing factory — all built-in.
 
 ## 2) Build a Service with `NestCrudService`
 
@@ -60,6 +60,7 @@ interface CrudServiceOptions<Entity, ResponseDto> {
   transactionConfig?: TransactionConfig;    // isolation level for hooks
   userOwnershipField?: keyof Entity;        // enables findMine
   findMineQuery?: (qb, userId) => void;     // custom findMine query
+  statusPipeline?: StatusPipelineConfig<Entity>;  // status transition rules
 }
 ```
 
@@ -136,8 +137,88 @@ Generated controller includes:
 - `PATCH /resource/:id`
 - `DELETE /resource/:id`
 - `GET /resource/auditlogs` (if `service.findAuditLogs` exists)
+- `POST /resource/:id/status` (if a `statusPipeline` is configured)
 
-## 5) Lifecycle Hooks
+## 5) Status Pipeline
+
+Enforce a status field with a declared transition graph. Configure on the service:
+
+```ts
+super({
+  repository,
+  statusPipeline: {
+    field: 'status',
+    initial: 'draft',
+    transitions: [
+      { from: 'draft', to: ['pending'] },
+      { from: 'pending', to: ['approved', 'rejected'] },
+      { from: 'rejected', to: ['pending'] },
+      { from: 'approved', to: ['published'] },
+    ],
+  },
+});
+```
+
+Transitions can also be written as a plain map, and edges may carry a permission and/or an action:
+
+```ts
+statusPipeline: {
+  field: 'status',
+  initial: 'draft',
+  transitions: {
+    draft: ['pending'],
+    pending: ['approved', 'rejected'],
+  },
+},
+// or with a required permission / side-effect action per edge:
+// transitions: [
+//   { from: 'pending', to: ['approved'], permission: 'posts.approve' },
+//   { from: 'approved', to: ['published'], action: async (ctx) => { /* notify */ } },
+// ]
+```
+
+### Actions
+
+Run side effects when a status transitions. Each edge may define an `action`, and the pipeline may define a global `onTransition` that runs after every transition:
+
+```ts
+statusPipeline: {
+  field: 'status',
+  initial: 'draft',
+  transitions: [
+    { from: 'draft', to: ['pending'] },
+    { from: 'pending', to: ['approved', 'rejected'] },
+    {
+      from: 'approved',
+      to: ['published'],
+      action: async ({ id, entity }) => {
+        await notifySubscribers(id);
+      },
+    },
+  ],
+  onTransition: async ({ id, from, to, user }) => {
+    await auditLog.write({ id, from, to, user: user?.id });
+  },
+},
+```
+
+The context is `{ id, entity, from, to, user }`:
+
+- `entity` — the saved entity (the status field already reflects the new value)
+- `from` / `to` — the previous and new status values
+- `user` — the authenticated user who triggered the transition (undefined when unauthenticated)
+
+Behavior:
+
+- **Create**: the status is auto-set to `initial` (after validation, before `beforeCreate`). Explicit statuses are rejected (400) unless listed in `allowCreateStatuses` (`initial` is always allowed).
+- **Update**: a status change must be a registered edge (`from` → `to`); otherwise a `400` with the allowed target statuses is returned. Edges with a `permission` require the caller to hold it (403 via the existing ownership/permission resolver).
+- **`POST /:id/status`**: dedicated endpoint mirroring update semantics (404 when no pipeline is configured or the endpoint is disabled). Body: `{ "status": "approved" }`.
+- Status validation runs **after** `beforeUpdate` hooks, so hook-driven mutations are also validated.
+- **Actions** run **after** the transition is saved (edge `action` first, then global `onTransition`), and are awaited. They never fire for same-status no-ops, missing status fields, or rejected transitions.
+
+Permission gating: grant `posts.changeStatus` (or map the action via `endpointActions` when building permissions) and use `@ApiBearerAuth` + `PermissionsGuard` as in section 3.
+
+## 6) Lifecycle Hooks
 
 Configure hooks in your service for before/after actions:
 
@@ -161,7 +242,7 @@ super({
 
 Available hooks: `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeRemove`, `afterRemove`, `beforeFindOne`, `afterFindOne`.
 
-## 6) Cursor Pagination
+## 7) Cursor Pagination
 
 Pass `?cursor=<opaque>` to `GET /` for cursor-based pagination:
 
@@ -217,7 +298,7 @@ type CursorStrategy =
   | { type: 'uuid'; timestampColumn: string };
 ```
 
-## 7) findMine (User-Scoped Records)
+## 8) findMine (User-Scoped Records)
 
 Simple column match:
 
@@ -240,7 +321,7 @@ super({
 });
 ```
 
-## 8) Audit Logging
+## 9) Audit Logging
 
 Two complementary audit mechanisms are built in: **event-based** (real-time streams) and **DB-backed** (persistent audit trail).
 
@@ -357,7 +438,7 @@ export class MyService {
 
 `CreateAuditLogInput` fields: `action`, `tenantId?`, `entity?`, `entityId?`, `userId?`, `metadata?`, `ip?`, `userAgent?`.
 
-## 9) Testing Factory
+## 10) Testing Factory
 
 Generate complete test suites for your CRUD service and controller with zero boilerplate.
 
@@ -463,22 +544,23 @@ const qb = createMockQb();
 const mock = createDefaultMockEntity(Post);
 ```
 
-## 10) Global Response and DB Error Handling
+## 11) Global Response and DB Error Handling
 
 Add these in bootstrap:
 
 - `ResponseInterceptor` as global interceptor for consistent response shape.
 - `TypeOrmExceptionFilter` as global filter for DB errors (including duplicate keys).
 
-## 11) Filtering and Pagination Notes
+## 12) Filtering and Pagination Notes
 
 - Filtering uses `filter[field_operator]=value` format.
 - Supported operators: `eq`, `ne`, `cont`, `notcont`, `starts`, `ends`, `gte`, `lte`, `gt`, `lt`, `in`, `nin`, `isnull`.
 - Express query parser should be `extended` for deep object query parsing.
 
-## 12) Help Notes
+## 13) Help Notes
 
 - Use `disabledEndpoints` in service options to hide generated routes without rewriting controllers.
 - `relations` option lets you resolve `propertyId` payload fields into related entities.
 - If `findAuditLogs` is not implemented in service, `/auditlogs` returns not found by design.
+- `POST /:id/status` returns 404 unless a `statusPipeline` is configured on the service and the endpoint is not disabled.
 - `findMine` returns 404 unless `enableFindMine: true` is set on the controller and `userOwnershipField`/`findMineQuery` is configured on the service.

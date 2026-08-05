@@ -2,12 +2,14 @@ import { FilterDto } from '../dtos/filter.dto';
 import { PaginationDto } from '../dtos/pagination.dto';
 import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { OwnershipUser } from './find-mine.interface';
+import { StatusValue } from './status-pipeline.interface';
 
 export type CrudEndpoint =
   | 'findAll'
   | 'findOne'
   | 'create'
   | 'update'
+  | 'changeStatus'
   | 'remove'
   | 'findAuditLogs'
   | 'findMine';
@@ -47,6 +49,12 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   create(dto: CreateDto, user?: OwnershipUser): Promise<ResponseDto>;
 
   update(id: number, dto: UpdateDto, user?: OwnershipUser): Promise<ResponseDto>;
+
+  changeStatus?(
+    id: number,
+    status: StatusValue,
+    user?: OwnershipUser
+  ): Promise<ResponseDto>;
 
   remove(id: number, user?: OwnershipUser): Promise<boolean>;
 

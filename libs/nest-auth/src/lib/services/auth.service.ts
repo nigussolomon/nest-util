@@ -1062,7 +1062,7 @@ export class AuthService {
       findOptions.where = searchFilters;
     }
     if (config.relations?.length) {
-      findOptions.relations = config.relations;
+      findOptions.relations = this.buildRelationsObject(config.relations);
     }
 
     const [items, total] = await this.userRepository.findAndCount(
@@ -1157,33 +1157,10 @@ export class AuthService {
 
     await this.getUserByIdInternal(id);
 
-    const allowed = new Set<string>(config.updateFields ?? []);
-    const patch: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(data)) {
-      if (key === this.options.passkeyField) {
-        throw new BadRequestException(
-          `Field '${key}' is not allowed via user update`
-        );
-      }
-
-      const isIdentifier = this.getIdentifierFields().includes(key);
-
-      if (config.updateFields?.length) {
-        if (allowed.has(key) || isIdentifier) {
-          patch[key] = value;
-          continue;
-        }
-        throw new BadRequestException(
-          `Field '${key}' is not allowed in the user update`
-        );
-      }
-
-      if (this.isSensitiveField(key)) {
-        throw new BadRequestException(`Field '${key}' is not allowed`);
-      }
-      patch[key] = value;
-    }
+    const patch = this.buildPatch(data, config.updateFields, {
+      rejectPassword: true,
+      target: 'update',
+    });
 
     if (Object.keys(patch).length === 0) {
       throw new BadRequestException('No updatable fields provided');
@@ -1192,6 +1169,34 @@ export class AuthService {
     await this.userRepository.update(id, patch as never);
 
     return this.toUserResponse(await this.getUserByIdInternal(id));
+  }
+
+  async updateProfile(
+    userId: number,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const config = this.resolveUserManagementConfig();
+
+    await this.getUserByIdInternal(userId);
+
+    const patch = this.buildPatch(
+      data,
+      config.profileFields ?? config.updateFields,
+      {
+        forbid: [config.activeField],
+        rejectPassword: true,
+        allowIdentifiers: config.profileFields?.length ? false : true,
+        target: 'profile update',
+      }
+    );
+
+    if (Object.keys(patch).length === 0) {
+      throw new BadRequestException('No updatable fields provided');
+    }
+
+    await this.userRepository.update(userId, patch as never);
+
+    return this.toUserResponse(await this.getUserByIdInternal(userId));
   }
 
   async setUserActive(
@@ -1220,18 +1225,32 @@ export class AuthService {
   private resolveUserManagementConfig(): Required<
     Pick<
       UserManagementOptions,
-      'enabled' | 'permission' | 'activeField' | 'allowPassword' | 'maxLimit'
+      | 'enabled'
+      | 'permission'
+      | 'profilePermission'
+      | 'activeField'
+      | 'allowPassword'
+      | 'maxLimit'
     >
   > &
-    Pick<UserManagementOptions, 'listFields' | 'createFields' | 'updateFields' | 'relations'> {
+    Pick<
+      UserManagementOptions,
+      | 'listFields'
+      | 'createFields'
+      | 'updateFields'
+      | 'profileFields'
+      | 'relations'
+    > {
     const config = this.options.userManagement ?? {};
     return {
       enabled: config.enabled ?? true,
       permission: config.permission ?? 'admin.access',
+      profilePermission: config.profilePermission ?? 'profile.edit',
       activeField: config.activeField ?? 'isActive',
       listFields: config.listFields,
       createFields: config.createFields,
       updateFields: config.updateFields,
+      profileFields: config.profileFields,
       relations: config.relations ?? this.options.relations,
       allowPassword: config.allowPassword ?? true,
       maxLimit: config.maxLimit ?? 100,
@@ -1302,15 +1321,83 @@ export class AuthService {
     const user = await this.userRepository.findOne({
       where: { id } as never,
       ...(config.relations?.length
-        ? { relations: config.relations as never }
+        ? { relations: this.buildRelationsObject(config.relations) }
         : {}),
-    });
+    } as never);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
     return user;
+  }
+
+  private buildRelationsObject(
+    relations: readonly string[]
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const relation of relations) {
+      const parts = relation.split('.');
+      let current = result;
+      for (let i = 0; i < parts.length; i++) {
+        const isLast = i === parts.length - 1;
+        if (isLast) {
+          current[parts[i]] = true;
+        } else {
+          if (!(parts[i] in current) || current[parts[i]] === true) {
+            current[parts[i]] = {};
+          }
+          current = current[parts[i]] as Record<string, unknown>;
+        }
+      }
+    }
+    return result;
+  }
+
+  private buildPatch(
+    data: Record<string, unknown>,
+    whitelist: readonly string[] | undefined,
+    options: {
+      forbid?: readonly string[];
+      rejectPassword?: boolean;
+      allowIdentifiers?: boolean;
+      target?: string;
+    } = {}
+  ): Record<string, unknown> {
+    const target = options.target ?? 'update';
+    const allowed = new Set<string>(whitelist ?? []);
+    const allowIdentifiers = options.allowIdentifiers ?? true;
+    const patch: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(data)) {
+      if (options.rejectPassword && key === this.options.passkeyField) {
+        throw new BadRequestException(
+          `Field '${key}' is not allowed via user ${target}`
+        );
+      }
+      if (options.forbid?.includes(key)) {
+        throw new BadRequestException(`Field '${key}' is not allowed`);
+      }
+
+      const isIdentifier = this.getIdentifierFields().includes(key);
+
+      if (whitelist?.length) {
+        if (allowed.has(key) || (allowIdentifiers && isIdentifier)) {
+          patch[key] = value;
+          continue;
+        }
+        throw new BadRequestException(
+          `Field '${key}' is not allowed in the user ${target}`
+        );
+      }
+
+      if (this.isSensitiveField(key)) {
+        throw new BadRequestException(`Field '${key}' is not allowed`);
+      }
+      patch[key] = value;
+    }
+
+    return patch;
   }
 
   private async generateTokens(

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nest-crud — @nest-util/nest-crud Documentation</title>
-  <meta name="description" content="CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory for NestJS.">
+  <meta name="description" content="CRUD scaffolding, audit logging, lifecycle hooks, status pipelines, cursor pagination, findMine, and a testing factory for NestJS.">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
@@ -55,6 +55,7 @@
       <li><a href="#endpoints">Endpoints</a></li>
       <li class="sidebar-section">Features</li>
       <li><a href="#hooks">Lifecycle Hooks</a></li>
+      <li><a href="#status">Status Pipeline</a></li>
       <li><a href="#cursor">Cursor Pagination</a></li>
       <li><a href="#findmine">findMine</a></li>
       <li><a href="#filtering">Filtering</a></li>
@@ -72,7 +73,7 @@
          HERO
          ═══════════════════════════════════════════════════ -->
     <h1 id="features">nest-crud</h1>
-    <p class="subtitle">CRUD scaffolding, audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all in one package.</p>
+    <p class="subtitle">CRUD scaffolding, audit logging, lifecycle hooks, status pipelines, cursor pagination, findMine, and a testing factory — all in one package.</p>
 
     <!-- ═══════════════════════════════════════════════════
          INSTALL
@@ -83,7 +84,7 @@
       <code>pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt</code>
       <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
-    <p><code>@nest-util/nest-crud</code> includes audit logging, lifecycle hooks, cursor pagination, findMine, and a testing factory — all built-in.</p>
+    <p><code>@nest-util/nest-crud</code> includes audit logging, lifecycle hooks, status pipelines, cursor pagination, findMine, and a testing factory — all built-in.</p>
 
     <!-- ═══════════════════════════════════════════════════
          SERVICE
@@ -154,6 +155,7 @@
   transactionConfig?: <span class="typ">TransactionConfig</span>;    <span class="cm">// isolation level for hooks</span>
   userOwnershipField?: <span class="kw">keyof</span> <span class="typ">Entity</span>;        <span class="cm">// enables findMine</span>
   findMineQuery?: (<span class="fn">qb</span>, <span class="fn">userId</span>) =&gt; <span class="kw">void</span>;     <span class="cm">// custom findMine query</span>
+  statusPipeline?: <span class="typ">StatusPipelineConfig</span>&lt;<span class="typ">Entity</span>&gt;;  <span class="cm">// status transition rules</span>
 }</pre>
     </div>
 
@@ -359,7 +361,7 @@
          ENDPOINTS
          ═══════════════════════════════════════════════════ -->
     <h2 id="endpoints">Endpoints</h2>
-    <p>One controller factory produces a complete REST API with 7 endpoints.</p>
+    <p>One controller factory produces a complete REST API with 8 endpoints.</p>
 
     <div class="code-block">
       <table class="endpoints-table">
@@ -414,9 +416,91 @@
             <td>Query audit trail</td>
             <td>Optional</td>
           </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/resource/:id/status</code></td>
+            <td>Change status (requires <code>statusPipeline</code>)</td>
+            <td>Optional</td>
+          </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         STATUS PIPELINE
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="status">Status Pipeline</h2>
+    <p>Enforce a status field with a declared transition graph. Configure on the service:</p>
+
+    <div class="code-block">
+      <div class="code-block-title">post.service.ts (statusPipeline)</div>
+      <pre><code><span class="kw">super</span>({
+  repository,
+  statusPipeline: {
+    field: <span class="str">'status'</span>,
+    initial: <span class="str">'draft'</span>,
+    transitions: [
+      { from: <span class="str">'draft'</span>, to: [<span class="str">'pending'</span>] },
+      { from: <span class="str">'pending'</span>, to: [<span class="str">'approved'</span>, <span class="str">'rejected'</span>] },
+      { from: <span class="str">'rejected'</span>, to: [<span class="str">'pending'</span>] },
+      { from: <span class="str">'approved'</span>, to: [<span class="str">'published'</span>] },
+    ],
+  },
+});</code></pre>
+    </div>
+
+    <p>Transitions can also be written as a plain map, and edges may carry a permission and/or an action:</p>
+
+    <div class="code-block">
+      <div class="code-block-title">post.service.ts (transitions forms)</div>
+      <pre><code>transitions: {
+  draft: [<span class="str">'pending'</span>],
+  pending: [<span class="str">'approved'</span>, <span class="str">'rejected'</span>],
+},
+<span class="cm">// or with a required permission / side-effect action per edge:</span>
+<span class="cm">// transitions: [</span>
+<span class="cm">//   { from: 'pending', to: ['approved'], permission: 'posts.approve' },</span>
+<span class="cm">//   { from: 'approved', to: ['published'], action: async (ctx) => { /* notify */ } },</span>
+<span class="cm">// ]</span></code></pre>
+    </div>
+
+    <h3>Actions</h3>
+    <p>Run side effects when a status transitions. Each edge may define an <code>action</code>, and the pipeline may define a global <code>onTransition</code> that runs after every transition:</p>
+
+    <div class="code-block">
+      <div class="code-block-title">post.service.ts (actions)</div>
+      <pre><code>statusPipeline: {
+  field: <span class="str">'status'</span>,
+  initial: <span class="str">'draft'</span>,
+  transitions: [
+    { from: <span class="str">'draft'</span>, to: [<span class="str">'pending'</span>] },
+    { from: <span class="str">'pending'</span>, to: [<span class="str">'approved'</span>, <span class="str">'rejected'</span>] },
+    {
+      from: <span class="str">'approved'</span>,
+      to: [<span class="str">'published'</span>],
+      action: <span class="kw">async</span> ({ id, entity }) =&gt; {
+        <span class="kw">await</span> <span class="fn">notifySubscribers</span>(id);
+      },
+    },
+  ],
+  onTransition: <span class="kw">async</span> ({ id, from, to, user }) =&gt; {
+    <span class="kw">await</span> <span class="fn">auditLog</span>.<span class="fn">write</span>({ id, from, to, user: user?.id });
+  },
+},</code></pre>
+    </div>
+
+    <p>The action context is <code>{ id, entity, from, to, user }</code> — <code>entity</code> is the saved entity (status already reflects the new value), <code>from</code>/<code>to</code> are the previous and new status values, and <code>user</code> is the authenticated user who triggered the transition.</p>
+
+    <h3>Behavior</h3>
+    <ul>
+      <li><strong>Create:</strong> status is auto-set to <code>initial</code> (after validation, before <code>beforeCreate</code>). Explicit statuses are rejected (400) unless listed in <code>allowCreateStatuses</code> (<code>initial</code> is always allowed).</li>
+      <li><strong>Update:</strong> a status change must be a registered edge (<code>from</code> → <code>to</code>); otherwise a 400 with the allowed target statuses is returned. Edges with a <code>permission</code> require the caller to hold it (403 via the existing ownership/permission resolver).</li>
+      <li><strong><code>POST /:id/status</code>:</strong> dedicated endpoint mirroring update semantics (404 when no pipeline is configured or the endpoint is disabled). Body: <code>{ "status": "approved" }</code>.</li>
+      <li><strong>Hooks:</strong> status validation runs <strong>after</strong> <code>beforeUpdate</code> hooks, so hook-driven mutations are also validated.</li>
+      <li><strong>Actions:</strong> run <strong>after</strong> the transition is saved (edge <code>action</code> first, then global <code>onTransition</code>) and are awaited. They never fire for same-status no-ops, missing status fields, or rejected transitions.</li>
+    </ul>
+
+    <p>Permission gating: grant <code>posts.changeStatus</code> (or map the action via <code>endpointActions</code> when building permissions) and use <code>@ApiBearerAuth</code> + <code>PermissionsGuard</code> as in the controller section.</p>
 
     <!-- ═══════════════════════════════════════════════════
          LIFECYCLE HOOKS
@@ -975,6 +1059,7 @@
       <li><strong>disabledEndpoints:</strong> Use <code>disabledEndpoints</code> in service options to hide generated routes without rewriting controllers.</li>
       <li><strong>relations:</strong> The <code>relations</code> option lets you resolve <code>propertyId</code> payload fields into related entities automatically.</li>
       <li><strong>findAuditLogs:</strong> If <code>findAuditLogs</code> is not implemented in your service, <code>/auditlogs</code> returns not found by design.</li>
+      <li><strong>changeStatus:</strong> <code>POST /:id/status</code> returns 404 unless a <code>statusPipeline</code> is configured on the service and the endpoint is not disabled.</li>
       <li><strong>findMine requirements:</strong> <code>findMine</code> returns 404 unless <code>enableFindMine: true</code> is set on the controller <em>and</em> <code>userOwnershipField</code> or <code>findMineQuery</code> is configured on the service.</li>
       <li><strong>Express query parser:</strong> Set <code>app.set('query parser', 'extended')</code> in bootstrap for deep object query parsing (required for filter syntax).</li>
     </ul>

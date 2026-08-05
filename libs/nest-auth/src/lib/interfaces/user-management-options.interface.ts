@@ -36,6 +36,20 @@ export interface UserManagementOptions {
   updateFields?: string[];
 
   /**
+   * Permission string guarding the self-service PATCH /auth/me route. Assign
+   * this permission to a role so regular users can edit their own profile.
+   * @default 'profile.edit'
+   */
+  profilePermission?: string;
+
+  /**
+   * Whitelist of keys a user may edit on their own profile via PATCH /auth/me.
+   * When omitted, falls back to `updateFields`, then to any key except
+   * sensitive ones and the active flag.
+   */
+  profileFields?: string[];
+
+  /**
    * Relations to eager-load in list/get responses.
    * @default AuthModuleOptions.relations
    */

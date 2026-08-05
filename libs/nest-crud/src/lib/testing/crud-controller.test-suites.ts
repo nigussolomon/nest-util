@@ -29,6 +29,7 @@ export function crudControllerTests<
       findOne: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      changeStatus: jest.fn(),
       remove: jest.fn(),
       findAuditLogs: jest.fn(),
       findMine: jest.fn(),
@@ -134,6 +135,27 @@ export function crudControllerTests<
 
       expect(service.update).toHaveBeenCalledWith(1, dto, undefined);
       expect(result).toEqual(expectedResult);
+    });
+  });
+
+  describe('changeStatus', () => {
+    it('should call service.changeStatus with id and status', async () => {
+      const dto = { status: 'approved' } as any;
+      const expectedResult = { id: 1, status: 'approved' } as any;
+      (service.changeStatus as jest.Mock).mockResolvedValue(expectedResult);
+
+      const result = await controller.changeStatus?.(1, dto);
+
+      expect(service.changeStatus).toHaveBeenCalledWith(1, 'approved', undefined);
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('should throw when status endpoint is not available', () => {
+      service.changeStatus = undefined as any;
+
+      expect(() => controller.changeStatus?.(1, { status: 'x' } as any)).toThrow(
+        NotFoundException
+      );
     });
   });
 

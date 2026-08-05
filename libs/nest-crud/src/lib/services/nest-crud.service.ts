@@ -11,6 +11,14 @@ import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
 import { CrudHookConfig, CrudHooks, TransactionConfig } from '../interfaces/hooks.interface';
 import { FindMineConfig, OwnershipUser } from '../interfaces/find-mine.interface';
 import {
+  StatusPipelineConfig,
+  StatusTransitions,
+  StatusTransitionEdge,
+  StatusTransitionAction,
+  StatusTransitionContext,
+  StatusValue,
+} from '../interfaces/status-pipeline.interface';
+import {
   applyCursorFilter,
   buildNextCursor,
   decodeCursor,
@@ -35,6 +43,7 @@ export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto>
   cursorStrategy?: CursorStrategy;
   hooks?: CrudHooks<Entity, any, any>;
   transactionConfig?: TransactionConfig;
+  statusPipeline?: StatusPipelineConfig<Entity>;
 }
 
 @Injectable()
@@ -69,6 +78,18 @@ export class NestCrudService<
   protected readonly ownershipBypassPermissions: readonly string[];
   protected readonly ownershipBypass?: (user: OwnershipUser) => boolean;
   protected readonly superAdminPermission?: string;
+  protected readonly statusField?: keyof Entity;
+  protected readonly statusInitial?: StatusValue;
+  protected readonly statusCreateAllow: readonly StatusValue[];
+  protected readonly statusOnTransition?: StatusTransitionAction<Entity>;
+  protected readonly statusTransitions: Map<
+    StatusValue,
+    {
+      to: Set<StatusValue>;
+      permission?: string;
+      action?: StatusTransitionAction<Entity>;
+    }
+  > = new Map();
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -90,6 +111,75 @@ export class NestCrudService<
     this.ownershipBypassPermissions = options.ownershipBypassPermissions ?? [];
     this.ownershipBypass = options.ownershipBypass;
     this.superAdminPermission = options.superAdminPermission;
+    this.statusField = options.statusPipeline?.field;
+    this.statusInitial = options.statusPipeline?.initial;
+    this.statusOnTransition = options.statusPipeline?.onTransition;
+    this.statusCreateAllow = [
+      ...(options.statusPipeline?.initial !== undefined
+        ? [options.statusPipeline.initial]
+        : []),
+      ...(options.statusPipeline?.allowCreateStatuses ?? []),
+    ];
+    if (options.statusPipeline?.transitions) {
+      this.statusTransitions = this.normalizeStatusTransitions(
+        options.statusPipeline.transitions
+      );
+    }
+  }
+
+  private normalizeStatusTransitions(
+    transitions: StatusTransitions<Entity>
+  ): Map<
+    StatusValue,
+    {
+      to: Set<StatusValue>;
+      permission?: string;
+      action?: StatusTransitionAction<Entity>;
+    }
+  > {
+    const result = new Map<
+      StatusValue,
+      {
+        to: Set<StatusValue>;
+        permission?: string;
+        action?: StatusTransitionAction<Entity>;
+      }
+    >();
+
+    const addEdge = (
+      from: StatusValue,
+      to: readonly StatusValue[],
+      permission?: string,
+      action?: StatusTransitionAction<Entity>
+    ) => {
+      const existing = result.get(from) ?? {
+        to: new Set<StatusValue>(),
+        permission: undefined,
+        action: undefined,
+      };
+      for (const target of to) {
+        existing.to.add(target);
+      }
+      if (permission !== undefined) {
+        existing.permission = permission;
+      }
+      if (action !== undefined) {
+        existing.action = action;
+      }
+      result.set(from, existing);
+    };
+
+    if (Array.isArray(transitions)) {
+      for (const edge of transitions as readonly StatusTransitionEdge<Entity>[]) {
+        addEdge(edge.from, edge.to, edge.permission, edge.action);
+      }
+    } else {
+      for (const [from, to] of Object.entries(transitions)) {
+        addEdge(from, to);
+      }
+    }
+
+    return result;
   }
 
   private async resolveRelations<T extends ObjectLiteral>(
@@ -321,6 +411,122 @@ export class NestCrudService<
     return rows[0] ?? null;
   }
 
+  private isStatusPipelineConfigured(): boolean {
+    return Boolean(this.statusField);
+  }
+
+  private applyInitialStatus(payload: Record<string, unknown>): void {
+    if (!this.isStatusPipelineConfigured()) {
+      return;
+    }
+
+    const field = String(this.statusField);
+    const requested = payload[field];
+
+    if (requested === undefined) {
+      if (this.statusInitial !== undefined) {
+        payload[field] = this.statusInitial;
+      }
+      return;
+    }
+
+    if (
+      this.statusCreateAllow.length > 0 &&
+      !this.statusCreateAllow.includes(requested as StatusValue)
+    ) {
+      throw new BadRequestException(
+        `Invalid initial status '${String(requested)}'. Allowed: ${this.statusCreateAllow
+          .map(String)
+          .join(', ') || 'none'}`
+      );
+    }
+  }
+
+  private validateStatusTransition(
+    existing: Entity,
+    payload: Record<string, unknown>,
+    user?: OwnershipUser
+  ): { from: StatusValue; to: StatusValue; action?: StatusTransitionAction<Entity> } | null {
+    if (!this.isStatusPipelineConfigured()) {
+      return null;
+    }
+
+    const field = String(this.statusField);
+    const requested = payload[field];
+
+    if (requested === undefined) {
+      return null;
+    }
+
+    const current = (existing as unknown as Record<string, unknown>)[field];
+    const requestedValue = requested as StatusValue;
+
+    if (current === requestedValue) {
+      return null;
+    }
+
+    const entry = this.statusTransitions.get(current as StatusValue);
+
+    if (!entry) {
+      throw new BadRequestException(
+        `Invalid status transition: '${String(current)}' -> '${String(
+          requestedValue
+        )}'. Status '${String(current)}' has no allowed transitions`
+      );
+    }
+
+    if (!entry.to.has(requestedValue)) {
+      throw new BadRequestException(
+        `Invalid status transition: '${String(current)}' -> '${String(
+          requestedValue
+        )}'. Allowed: ${[...entry.to].map(String).join(', ')}`
+      );
+    }
+
+    if (entry.permission && !this.canBypassOwnershipForTransition(user, entry.permission)) {
+      throw new ForbiddenException(
+        `Missing required permission '${entry.permission}' for status transition`
+      );
+    }
+
+    return {
+      from: current as StatusValue,
+      to: requestedValue,
+      action: entry.action,
+    };
+  }
+
+  private async runTransitionActions(
+    transition: { from: StatusValue; to: StatusValue; action?: StatusTransitionAction<Entity> },
+    id: number,
+    entity: Entity,
+    user?: OwnershipUser
+  ): Promise<void> {
+    const context: StatusTransitionContext<Entity> = {
+      id,
+      entity,
+      from: transition.from,
+      to: transition.to,
+      user,
+    };
+
+    if (transition.action) {
+      await transition.action(context);
+    }
+
+    if (this.statusOnTransition) {
+      await this.statusOnTransition(context);
+    }
+  }
+
+  private canBypassOwnershipForTransition(
+    user: OwnershipUser | undefined,
+    permission: string
+  ): boolean {
+    if (!user) return false;
+    return this.resolveUserPermissions(user).includes(permission);
+  }
+
   async findAll(query: PaginationDto & FilterDto) {
     const qb = this.repo.createQueryBuilder('e');
 
@@ -509,6 +715,8 @@ export class NestCrudService<
       }
     }
 
+    this.applyInitialStatus(payload as unknown as Record<string, unknown>);
+
     await this.executeHook(this.hooks.beforeCreate, { payload });
 
     const payloadSnapshot = { ...payload };
@@ -528,6 +736,28 @@ export class NestCrudService<
   }
 
   async update(id: number, payload: UpdateDto, user?: OwnershipUser) {
+    return this.applyUpdateCore(id, payload, user);
+  }
+
+  async changeStatus(
+    id: number,
+    status: StatusValue,
+    user?: OwnershipUser
+  ): Promise<ResponseDto> {
+    if (!this.isStatusPipelineConfigured()) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    const payload = { [String(this.statusField)]: status } as unknown as UpdateDto;
+
+    return this.applyUpdateCore(id, payload, user);
+  }
+
+  private async applyUpdateCore(
+    id: number,
+    payload: UpdateDto,
+    user?: OwnershipUser
+  ): Promise<ResponseDto> {
     let existing: Entity | null;
 
     if (this.enforceOwnershipFor(user)) {
@@ -544,6 +774,12 @@ export class NestCrudService<
 
     await this.executeHook(this.hooks.beforeUpdate, { payload, entity: existing, id });
 
+    const transition = this.validateStatusTransition(
+      existing,
+      payload as unknown as Record<string, unknown>,
+      user
+    );
+
     const payloadSnapshot = { ...payload };
     const resolved = await this.resolveRelations(
       payload as unknown as ObjectLiteral
@@ -555,6 +791,10 @@ export class NestCrudService<
     const result = await this.findOne(id, user);
 
     await this.executeHook(this.hooks.afterUpdate, { entity: result as any, payload: payloadSnapshot, id });
+
+    if (transition) {
+      await this.runTransitionActions(transition, id, existing, user);
+    }
 
     return result;
   }

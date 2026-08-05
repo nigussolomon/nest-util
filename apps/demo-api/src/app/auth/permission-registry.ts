@@ -16,7 +16,7 @@ export const permissionRegistry: PermissionRegistryConfig = {
     },
     {
       resource: 'posts',
-      permissions: ['read', 'create', 'update', 'delete', 'audit'],
+      permissions: ['read', 'create', 'update', 'delete', 'audit', 'changeStatus'],
     },
     {
       resource: 'payments',
@@ -29,6 +29,10 @@ export const permissionRegistry: PermissionRegistryConfig = {
     {
       resource: 'notify',
       permissions: ['push', 'email', 'devices', 'history'],
+    },
+    {
+      resource: 'profile',
+      permissions: ['edit'],
     },
   ],
 };

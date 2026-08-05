@@ -173,6 +173,8 @@ AuthModule.forRoot({
     listFields: ['email', 'name'],       // columns returned in list/get responses (optional)
     createFields: ['name'],              // keys allowed in POST /auth/users (optional)
     updateFields: ['name', 'email'],     // keys allowed in PATCH /auth/users/:id (optional)
+    profilePermission: 'profile.edit',   // guards PATCH /auth/me (default)
+    profileFields: ['name'],             // keys a user may edit on PATCH /auth/me (optional)
     relations: ['userRoles'],            // eager-loaded relations (default: AuthModule relations)
     allowPassword: true,                 // accept a password on create, hashed with bcrypt (default)
     maxLimit: 100,                       // max page size (default)
@@ -183,6 +185,10 @@ AuthModule.forRoot({
 - New users default to `activeField = true`.
 - Without `createFields`/`updateFields`, any key except sensitive fields (password, refresh/access tokens, OTP/verification/password-reset columns) is accepted; with a whitelist, unknown keys are rejected with `400`.
 - Passwords are never returned by list/get responses and cannot be updated via `PATCH`.
+
+### Self-service profile editing
+
+`PATCH /auth/me` lets a user edit their own profile. The target user comes from the JWT (`@CurrentUser()`), never from the body, so ownership is enforced structurally. Guarded by `JwtAuthGuard` + `PermissionsGuard` with `profilePermission` (`'profile.edit'` by default) — assign it to a role so users can use it. Allowed keys come from `profileFields` (falls back to `updateFields`, then any non-sensitive key); password, the active flag, and sensitive columns are always rejected.
 
 ### User Management Endpoints
 
@@ -195,6 +201,7 @@ AuthModule.forRoot({
 | POST | `/auth/users/:id/activate` | Activate a user | Yes (admin) |
 | POST | `/auth/users/:id/deactivate` | Deactivate a user | Yes (admin) |
 | DELETE | `/auth/users/:id` | Delete a user | Yes (admin) |
+| PATCH | `/auth/me` | Update own profile | Yes (`profile.edit`) |
 
 ## Authentication Endpoints
 

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePostDto {
   @ApiProperty({ required: true })
@@ -6,4 +6,7 @@ export class CreatePostDto {
 
   @ApiProperty({ required: true })
   content!: string;
+
+  @ApiPropertyOptional({ example: 'draft' })
+  status?: string;
 }

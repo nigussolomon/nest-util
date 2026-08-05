@@ -18,6 +18,7 @@ import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
 import { Audit } from '../decorators/audit-log.decorator';
 import { ListAuditLogsDto } from '../dtos/list-audit-logs.dto';
+import { StatusChangeDto } from '../dtos/status-change.dto';
 import { CurrentUser } from '@nest-util/nest-auth';
 import type { OwnershipUser } from '../interfaces/find-mine.interface';
 
@@ -42,6 +43,11 @@ export interface IBaseController<CD, UD, RD> {
   findOne(id: number, user?: OwnershipUser): Promise<RD>;
   create(dto: CD, user?: OwnershipUser): Promise<RD>;
   update(id: number, dto: UD, user?: OwnershipUser): Promise<RD>;
+  changeStatus?(
+    id: number,
+    dto: StatusChangeDto,
+    user?: OwnershipUser
+  ): Promise<RD>;
   remove(id: number, user?: OwnershipUser): Promise<boolean>;
   findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
 }
@@ -202,6 +208,25 @@ export function CreateNestedCrudController<CD, UD, RD>(
     ) {
       this.ensureEndpointEnabled('update');
       return this.service.update(id, dto, user);
+    }
+
+    @Post(':id/status')
+    @Message('updated')
+    @Audit({ action: 'UPDATE' })
+    @ApiBody({ type: StatusChangeDto })
+    @ApiResponse({ type: responseDto })
+    changeStatus(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: StatusChangeDto,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('changeStatus');
+
+      if (!this.service.changeStatus) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.changeStatus(id, dto.status, user);
     }
 
     @Delete(':id')

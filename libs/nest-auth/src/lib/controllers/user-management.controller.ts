@@ -23,9 +23,11 @@ import {
 import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
+import { AuthUser } from '../interfaces/user.interface';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { Permissions } from '../decorators/permissions';
+import { CurrentUser } from '../decorators/current-user';
 
 interface ListUsersQuery {
   page?: string;
@@ -46,6 +48,8 @@ export function CreateUserManagementController(
   options: AuthModuleOptions
 ): Type<unknown> {
   const permission = options.userManagement?.permission ?? 'admin.access';
+  const profilePermission =
+    options.userManagement?.profilePermission ?? 'profile.edit';
 
   @ApiTags('User Management')
   @Controller('auth')
@@ -101,6 +105,22 @@ export function CreateUserManagementController(
     @ApiResponse({ status: 409, description: 'User already exists' })
     async createUser(@Body() data: Record<string, unknown>) {
       return await this.authService.createUserByAdmin(data);
+    }
+
+    @UseGuards(JwtAuthGuard, PermissionsGuard)
+    @Permissions(profilePermission)
+    @Patch('me')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Update own profile' })
+    @ApiBody({ schema: { type: 'object' } })
+    @ApiResponse({ status: 200, description: 'Profile successfully updated' })
+    @ApiResponse({ status: 400, description: 'Invalid profile payload' })
+    @ApiResponse({ status: 404, description: 'User not found' })
+    async updateOwnProfile(
+      @CurrentUser() user: AuthUser,
+      @Body() data: Record<string, unknown>
+    ) {
+      return await this.authService.updateProfile(user.id as number, data);
     }
 
     @UseGuards(JwtAuthGuard, PermissionsGuard)

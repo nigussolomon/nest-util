@@ -14,4 +14,7 @@ export class Post {
   @Index()
   @Column({ nullable: true })
   authorId?: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  status?: string;
 }

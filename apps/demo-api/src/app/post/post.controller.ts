@@ -21,9 +21,12 @@ const PostCrudControllerBase = CreateNestedCrudController(
   UpdatePostDto,
   Post,
   {
-    permissions: buildCrudPermissionsFromRegistry(permissionRegistry, {
-      resource: 'posts',
-    }),
+    permissions: {
+      ...buildCrudPermissionsFromRegistry(permissionRegistry, {
+        resource: 'posts',
+      }),
+      changeStatus: 'posts.changeStatus',
+    },
     enableFindMine: true,
   }
 ) as abstract new (service: PostService) => IBaseController<

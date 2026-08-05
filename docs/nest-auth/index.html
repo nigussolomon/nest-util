@@ -597,6 +597,11 @@
               <td><code>/auth/users/:id</code></td>
               <td>Delete a user</td>
             </tr>
+            <tr>
+              <td><span class="method patch">PATCH</span></td>
+              <td><code>/auth/me</code></td>
+              <td>Self-service profile update (guarded by <code>profilePermission</code>, target from JWT)</td>
+            </tr>
           </tbody>
         </table>
       </div>

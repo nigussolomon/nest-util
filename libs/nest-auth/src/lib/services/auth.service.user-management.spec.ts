@@ -162,6 +162,26 @@ describe('AuthService - user management', () => {
       const [query] = repository.findAndCount.mock.calls[0];
       expect(query.take).toBe(50);
     });
+
+    it('converts string-array relations to nested object syntax', async () => {
+      mockOptions.relations = ['userRoles', 'userRoles.role'];
+      repository.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.listUsers();
+
+      const [query] = repository.findAndCount.mock.calls[0];
+      expect(query.relations).toEqual({ userRoles: { role: true } });
+    });
+
+    it('handles nested-only relations paths', async () => {
+      mockOptions.relations = ['userRoles.role'];
+      repository.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.listUsers();
+
+      const [query] = repository.findAndCount.mock.calls[0];
+      expect(query.relations).toEqual({ userRoles: { role: true } });
+    });
   });
 
   describe('getUserById', () => {
@@ -178,6 +198,25 @@ describe('AuthService - user management', () => {
       repository.findOne.mockResolvedValue(undefined);
 
       await expect(service.getUserById(99)).rejects.toThrow(NotFoundException);
+    });
+
+    it('converts string-array relations to nested object syntax', async () => {
+      mockOptions.relations = ['userRoles', 'userRoles.role'];
+      repository.findOne.mockResolvedValue(userRow);
+
+      await service.getUserById(1);
+
+      expect(repository.findOne.mock.calls[0][0].relations).toEqual({
+        userRoles: { role: true },
+      });
+    });
+
+    it('omits relations when none are configured', async () => {
+      repository.findOne.mockResolvedValue(userRow);
+
+      await service.getUserById(1);
+
+      expect(repository.findOne.mock.calls[0][0].relations).toBeUndefined();
     });
   });
 
@@ -287,6 +326,94 @@ describe('AuthService - user management', () => {
       await expect(service.updateUser(99, { name: 'Bob' })).rejects.toThrow(
         NotFoundException
       );
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('updates whitelisted profileFields and returns the fresh user', async () => {
+      mockOptions.userManagement = { profileFields: ['name'] };
+      repository.findOne.mockResolvedValue({ ...userRow });
+      repository.update.mockResolvedValue({ affected: 1 });
+
+      const result = await service.updateProfile(1, { name: 'Bob' });
+
+      expect(repository.update).toHaveBeenCalledWith(1, { name: 'Bob' });
+      expect(result.name).toBe('Alice');
+    });
+
+    it('rejects updating the password field', async () => {
+      repository.findOne.mockResolvedValue(userRow);
+
+      await expect(
+        service.updateProfile(1, { password: 'new-password' })
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects toggling the active flag', async () => {
+      mockOptions.userManagement = { profileFields: ['name'] };
+      repository.findOne.mockResolvedValue(userRow);
+
+      await expect(
+        service.updateProfile(1, { isActive: false })
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects changing the identifier when profileFields is configured', async () => {
+      mockOptions.userManagement = { profileFields: ['name'] };
+      repository.findOne.mockResolvedValue(userRow);
+
+      await expect(
+        service.updateProfile(1, { email: 'b@b.com' })
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('falls back to updateFields when profileFields is not configured', async () => {
+      mockOptions.userManagement = { updateFields: ['name'] };
+      repository.findOne.mockResolvedValue({ ...userRow });
+      repository.update.mockResolvedValue({ affected: 1 });
+
+      await service.updateProfile(1, { name: 'Bob' });
+
+      expect(repository.update).toHaveBeenCalledWith(1, { name: 'Bob' });
+    });
+
+    it('accepts non-sensitive fields when no whitelist is configured', async () => {
+      repository.findOne.mockResolvedValue({ ...userRow });
+      repository.update.mockResolvedValue({ affected: 1 });
+
+      const result = await service.updateProfile(1, { name: 'Bob' });
+
+      expect(repository.update).toHaveBeenCalledWith(1, { name: 'Bob' });
+      expect(result).not.toHaveProperty('password');
+    });
+
+    it('rejects sensitive fields when no whitelist is configured', async () => {
+      repository.findOne.mockResolvedValue(userRow);
+
+      await expect(
+        service.updateProfile(1, { refreshToken: 'attacker-controlled' })
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when no updatable fields remain', async () => {
+      mockOptions.userManagement = { profileFields: ['name'] };
+      repository.findOne.mockResolvedValue(userRow);
+
+      await expect(service.updateProfile(1, {})).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      repository.findOne.mockResolvedValue(undefined);
+
+      await expect(
+        service.updateProfile(99, { name: 'Bob' })
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

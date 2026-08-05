@@ -120,6 +120,7 @@ import { NotifyModule } from './notify/notify.module';
         enabled: true,
         createFields: ['name'],
         updateFields: ['name', 'email'],
+        profileFields: ['name'],
       },
       permissionRegistry,
       onboarding: {
