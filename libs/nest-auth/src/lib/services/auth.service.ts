@@ -65,6 +65,20 @@ interface ResolvedPasswordResetOptions {
   tokenTtlSeconds: number;
   tokenField: string;
   expiresAtField: string;
+  cooldownSeconds: number;
+  maxAttempts: number;
+  lockSeconds: number;
+  attemptsField: string;
+  lockUntilField: string;
+  lastRequestAtField: string;
+}
+
+interface ResolvedLoginAttemptOptions {
+  enabled: boolean;
+  maxAttempts: number;
+  lockSeconds: number;
+  attemptsField: string;
+  lockUntilField: string;
 }
 
 interface ResolvedVerificationOptions {
@@ -245,6 +259,7 @@ export class AuthService {
 
   async login(credentials: Record<string, unknown>): Promise<AuthTokens> {
     const password = credentials[this.options.passkeyField] as string;
+    const loginConfig = this.getLoginAttemptOptions();
 
     const presentIdentifiers = this.getPresentIdentifiers(credentials);
     if (presentIdentifiers.length === 0) {
@@ -258,11 +273,24 @@ export class AuthService {
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect(`user.${this.options.passkeyField}`)
+      .addSelect(`user.${loginConfig.attemptsField}`)
+      .addSelect(`user.${loginConfig.lockUntilField}`)
       .where(this.buildIdentifierOrCondition('user'), { identifier })
       .getOne();
 
     if (!user) {
       this.emitAuthEvent('auth.user.login.failed.user_not_found', { metadata: { identifier } });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const now = new Date();
+    const lockUntil = this.toDate(user[loginConfig.lockUntilField]);
+    if (loginConfig.enabled && lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.user.login.failed.locked', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier, lockUntil },
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -286,12 +314,36 @@ export class AuthService {
       : false;
 
     if (!isPasswordValid) {
+      if (loginConfig.enabled) {
+        const currentAttempts = this.toNumber(user[loginConfig.attemptsField]);
+        const nextAttempts = currentAttempts + 1;
+
+        const updatePayload: Record<string, unknown> = {
+          [loginConfig.attemptsField]: nextAttempts,
+        };
+
+        if (nextAttempts >= loginConfig.maxAttempts) {
+          updatePayload[loginConfig.lockUntilField] = new Date(
+            now.getTime() + loginConfig.lockSeconds * 1000
+          );
+        }
+
+        await this.updateLoginState(user.id as string | number, updatePayload);
+      }
+
       this.emitAuthEvent('auth.user.login.failed.invalid_password', {
         entityId: user.id,
         userId: user.id,
         metadata: { identifier },
       });
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (loginConfig.enabled) {
+      await this.updateLoginState(user.id as string | number, {
+        [loginConfig.attemptsField]: 0,
+        [loginConfig.lockUntilField]: null,
+      });
     }
 
     this.emitAuthEvent('auth.user.login.success', {
@@ -705,6 +757,9 @@ export class AuthService {
       .createQueryBuilder('user')
       .addSelect(`user.${resetConfig.tokenField}`)
       .addSelect(`user.${resetConfig.expiresAtField}`)
+      .addSelect(`user.${resetConfig.attemptsField}`)
+      .addSelect(`user.${resetConfig.lockUntilField}`)
+      .addSelect(`user.${resetConfig.lastRequestAtField}`)
       .where(this.buildIdentifierOrCondition('user'), {
         identifier: normalizedIdentifier,
       })
@@ -718,6 +773,31 @@ export class AuthService {
         message:
           'Password reset instructions have been sent if the account exists',
       };
+    }
+
+    const now = new Date();
+    const lockUntil = this.toDate(user[resetConfig.lockUntilField]);
+    if (lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.password.reset.request.locked', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier, lockUntil },
+      });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const lastRequestAt = this.toDate(user[resetConfig.lastRequestAtField]);
+    if (
+      lastRequestAt &&
+      now.getTime() - lastRequestAt.getTime() <
+        resetConfig.cooldownSeconds * 1000
+    ) {
+      this.emitAuthEvent('auth.password.reset.request.cooldown', {
+        entityId: user.id,
+        userId: user.id,
+        metadata: { identifier: normalizedIdentifier },
+      });
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     const token = crypto
@@ -735,6 +815,9 @@ export class AuthService {
       .set({
         [resetConfig.tokenField]: hashedToken,
         [resetConfig.expiresAtField]: expiresAt,
+        [resetConfig.attemptsField]: 0,
+        [resetConfig.lockUntilField]: null,
+        [resetConfig.lastRequestAtField]: now,
       })
       .where('id = :id', {
         id: user.id as string | number,
@@ -798,6 +881,9 @@ export class AuthService {
       .createQueryBuilder('user')
       .addSelect(`user.${resetConfig.tokenField}`)
       .addSelect(`user.${resetConfig.expiresAtField}`)
+      .addSelect(`user.${resetConfig.attemptsField}`)
+      .addSelect(`user.${resetConfig.lockUntilField}`)
+      .addSelect(`user.${resetConfig.lastRequestAtField}`)
       .getMany();
 
     const now = new Date();
@@ -824,9 +910,25 @@ export class AuthService {
       throw new BadRequestException('Invalid reset token');
     }
 
+    const lockUntil = this.toDate(matchedUser[resetConfig.lockUntilField]);
+    if (lockUntil && lockUntil > now) {
+      this.emitAuthEvent('auth.password.reset.failed.locked', {
+        entityId: matchedUser.id,
+        userId: matchedUser.id,
+        metadata: { reason: 'Account temporarily locked' },
+      });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     const expiresAt = this.toDate(matchedUser[resetConfig.expiresAtField]);
 
     if (!expiresAt || expiresAt <= now) {
+      await this.recordFailedPasswordReset(
+        matchedUser.id as string | number,
+        matchedUser,
+        resetConfig,
+        now
+      );
       await this.clearPasswordResetState(
         matchedUser.id as string | number,
         resetConfig
@@ -849,6 +951,9 @@ export class AuthService {
         [this.options.passkeyField]: hashedPassword,
         [resetConfig.tokenField]: null,
         [resetConfig.expiresAtField]: null,
+        [resetConfig.attemptsField]: 0,
+        [resetConfig.lockUntilField]: null,
+        [resetConfig.lastRequestAtField]: null,
         [this.options.refreshTokenField ?? 'refreshToken']: null,
         [this.options.accessTokenField ?? 'accessToken']: null,
       })
@@ -1261,11 +1366,14 @@ export class AuthService {
     const otp = this.options.otp ?? {};
     const verification = this.options.verification ?? {};
     const passwordReset = this.options.passwordReset ?? {};
+    const loginAttempts = this.options.loginAttempts ?? {};
 
     return [
       this.options.passkeyField,
       this.options.refreshTokenField || 'refreshToken',
       this.options.accessTokenField || 'accessToken',
+      loginAttempts.attemptsField,
+      loginAttempts.lockUntilField,
       otp.codeField,
       otp.expiresAtField,
       otp.attemptsField,
@@ -1280,6 +1388,9 @@ export class AuthService {
       verification.lockUntilField,
       passwordReset.tokenField,
       passwordReset.expiresAtField,
+      passwordReset.attemptsField,
+      passwordReset.lockUntilField,
+      passwordReset.lastRequestAtField,
     ].filter(
       (field): field is string =>
         typeof field === 'string' && field.trim().length > 0
@@ -1518,7 +1629,81 @@ export class AuthService {
       tokenTtlSeconds: config.tokenTtlSeconds ?? 3600,
       tokenField: config.tokenField ?? 'passwordResetTokenHash',
       expiresAtField: config.expiresAtField ?? 'passwordResetTokenExpiresAt',
+      cooldownSeconds: config.cooldownSeconds ?? 60,
+      maxAttempts: config.maxAttempts ?? 5,
+      lockSeconds: config.lockSeconds ?? 300,
+      attemptsField: config.attemptsField ?? 'passwordResetAttempts',
+      lockUntilField: config.lockUntilField ?? 'passwordResetLockedUntil',
+      lastRequestAtField:
+        config.lastRequestAtField ?? 'passwordResetLastRequestedAt',
     };
+  }
+
+  // ── Login Attempt Helpers ──────────────────────────────────────
+
+  private getLoginAttemptOptions(): ResolvedLoginAttemptOptions {
+    const config = this.options.loginAttempts ?? {};
+    return {
+      enabled: config.enabled ?? true,
+      maxAttempts: config.maxAttempts ?? 5,
+      lockSeconds: config.lockSeconds ?? 300,
+      attemptsField: config.attemptsField ?? 'loginAttempts',
+      lockUntilField: config.lockUntilField ?? 'loginLockedUntil',
+    };
+  }
+
+  private async updateLoginState(
+    userId: string | number,
+    state: Record<string, unknown>
+  ): Promise<void> {
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set(state)
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+  }
+
+  private async updatePasswordResetState(
+    userId: string | number,
+    state: Record<string, unknown>
+  ): Promise<void> {
+    const updateResult = await this.userRepository
+      .createQueryBuilder()
+      .update(this.options.userEntity)
+      .set(state)
+      .where('id = :id', { id: userId })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      throw new InternalServerErrorException('Failed to update reset state');
+    }
+  }
+
+  private async recordFailedPasswordReset(
+    userId: string | number,
+    user: Record<string, unknown>,
+    config: ResolvedPasswordResetOptions,
+    now: Date
+  ): Promise<void> {
+    const currentAttempts = this.toNumber(user[config.attemptsField]);
+    const nextAttempts = currentAttempts + 1;
+
+    const updatePayload: Record<string, unknown> = {
+      [config.attemptsField]: nextAttempts,
+    };
+
+    if (nextAttempts >= config.maxAttempts) {
+      updatePayload[config.lockUntilField] = new Date(
+        now.getTime() + config.lockSeconds * 1000
+      );
+    }
+
+    await this.updatePasswordResetState(userId, updatePayload);
   }
 
   // ── Onboarding Helpers ─────────────────────────────────────────
@@ -2043,13 +2228,25 @@ export class AuthService {
 
     const normalizedCode = code.trim();
 
-    const attempt = await this.onboardingAttemptRepository.findOne({
-      where: presentIdentifiers.map(({ field: f, value: v }) => ({
-        identifierField: f,
-        identifier: v.trim(),
-        consumedAt: IsNull(),
-      })) as never,
-    });
+    const conditions = presentIdentifiers.map(
+      ({ field: f, value: v }) =>
+        `(oa.identifierField = :field_${f} AND oa.identifier = :val_${f} AND oa.consumedAt IS NULL)`
+    );
+    const params: Record<string, unknown> = {};
+    for (const { field: f, value: v } of presentIdentifiers) {
+      params[`field_${f}`] = f;
+      params[`val_${f}`] = v.trim();
+    }
+
+    const attempt = await this.onboardingAttemptRepository
+      .createQueryBuilder('oa')
+      .addSelect('oa.codeHash')
+      .addSelect('oa.codeExpiresAt')
+      .addSelect('oa.attempts')
+      .addSelect('oa.lastSentAt')
+      .addSelect('oa.lockedUntil')
+      .where(`(${conditions.join(' OR ')})`, params)
+      .getOne();
 
     if (!attempt) {
       this.emitAuthEvent('auth.onboarding.complete.failed.not_found', {
@@ -2279,6 +2476,12 @@ export class AuthService {
     delete userData[refreshTokenField];
     delete userData[accessTokenField];
 
+    if (this.options.loginAttempts) {
+      const loginConfig = this.getLoginAttemptOptions();
+      delete userData[loginConfig.attemptsField];
+      delete userData[loginConfig.lockUntilField];
+    }
+
     if (this.options.otp?.enabled) {
       const otpConfig = this.resolveOtpOptions(this.options.otp);
       delete userData[otpConfig.codeField];
@@ -2295,6 +2498,17 @@ export class AuthService {
       delete userData[verif.attemptsField];
       delete userData[verif.lastSentAtField];
       delete userData[verif.lockUntilField];
+    }
+
+    if (this.options.passwordReset?.enabled) {
+      const resetConfig = this.resolvePasswordResetOptions(
+        this.options.passwordReset
+      );
+      delete userData[resetConfig.tokenField];
+      delete userData[resetConfig.expiresAtField];
+      delete userData[resetConfig.attemptsField];
+      delete userData[resetConfig.lockUntilField];
+      delete userData[resetConfig.lastRequestAtField];
     }
 
     return userData as AuthUser;

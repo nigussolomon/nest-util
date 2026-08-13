@@ -48,6 +48,36 @@ export interface AuthPasswordResetOptions {
   tokenTtlSeconds?: number;
   tokenField?: string;
   expiresAtField?: string;
+  /**
+   * Minimum seconds between password reset requests for the same identifier.
+   * @default 60
+   */
+  cooldownSeconds?: number;
+  /**
+   * Max failed password reset attempts before the account is locked.
+   * @default 5
+   */
+  maxAttempts?: number;
+  /**
+   * Seconds the account is locked after reaching `maxAttempts`.
+   * @default 300
+   */
+  lockSeconds?: number;
+  /**
+   * DB field on the user entity tracking failed reset attempts.
+   * @default 'passwordResetAttempts'
+   */
+  attemptsField?: string;
+  /**
+   * DB field on the user entity tracking when the account was locked.
+   * @default 'passwordResetLockedUntil'
+   */
+  lockUntilField?: string;
+  /**
+   * DB field on the user entity tracking the last reset request time.
+   * @default 'passwordResetLastRequestedAt'
+   */
+  lastRequestAtField?: string;
   requestDto?: Type<unknown>;
   resetDto?: Type<unknown>;
   buildResetContext?: (params: {
@@ -61,6 +91,88 @@ export interface AuthPasswordResetOptions {
     metadata?: Record<string, unknown>;
     context?: Record<string, unknown>;
   }) => Promise<void>;
+}
+
+/**
+ * IP-based rate limiting applied to sensitive auth endpoints. Uses
+ * `@nestjs/throttler` with an in-memory sliding window (per process).
+ */
+export interface AuthRateLimitOptions {
+  /**
+   * Master switch. Set to `false` to disable endpoint rate limiting.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * Fallback limit for all other auth routes.
+   * @default 30 requests / 60s
+   */
+  global?: { ttlSeconds?: number; limit?: number };
+  /**
+   * `POST /auth/login`
+   * @default 10 requests / 60s
+   */
+  login?: { ttlSeconds?: number; limit?: number };
+  /**
+   * `POST /auth/register`
+   * @default 5 requests / 3600s
+   */
+  register?: { ttlSeconds?: number; limit?: number };
+  /**
+   * `POST /auth/otp/request`
+   * @default 3 requests / 60s
+   */
+  otpRequest?: { ttlSeconds?: number; limit?: number };
+  /**
+   * `POST /auth/otp/login`
+   * @default 5 requests / 60s
+   */
+  otpLogin?: { ttlSeconds?: number; limit?: number };
+  /**
+   * `POST /auth/password-reset/request`
+   * @default 3 requests / 60s
+   */
+  passwordResetRequest?: { ttlSeconds?: number; limit?: number };
+  /**
+   * `POST /auth/password-reset/reset`
+   * @default 10 requests / 3600s
+   */
+  passwordResetReset?: { ttlSeconds?: number; limit?: number };
+  /**
+   * Custom key generator. Receives the raw request and must return the
+   * bucket key (normally the client IP). Defaults to the first entry of
+   * `req.ips` (trust-proxy aware) falling back to `req.ip`.
+   */
+  keyGenerator?: (req: Record<string, unknown>) => string | Promise<string>;
+}
+
+/**
+ * Per-account failed login lockout. Counters live on the user row (DB-backed,
+ * survive restarts). Only applies when an account with that identifier exists;
+ * unknown identifiers are covered by the IP-based rate limit.
+ */
+export interface AuthLoginAttemptOptions {
+  enabled?: boolean;
+  /**
+   * Failed password attempts before the account is locked.
+   * @default 5
+   */
+  maxAttempts?: number;
+  /**
+   * Seconds the account is locked after reaching `maxAttempts`.
+   * @default 300
+   */
+  lockSeconds?: number;
+  /**
+   * DB field on the user entity tracking failed login attempts.
+   * @default 'loginAttempts'
+   */
+  attemptsField?: string;
+  /**
+   * DB field on the user entity tracking when the account was locked.
+   * @default 'loginLockedUntil'
+   */
+  lockUntilField?: string;
 }
 
 export interface AuthOnboardingOptions {
@@ -215,6 +327,17 @@ export interface AuthModuleOptions {
   otp?: AuthOtpOptions;
 
   passwordReset?: AuthPasswordResetOptions;
+
+  /**
+   * IP-based rate limits for sensitive auth endpoints (login, register,
+   * OTP request/login, password reset). Requires `@nestjs/throttler`.
+   */
+  rateLimit?: AuthRateLimitOptions;
+
+  /**
+   * Per-account failed login lockout (DB-backed on the user entity).
+   */
+  loginAttempts?: AuthLoginAttemptOptions;
 
   apiKey?: ApiKeyModuleOptions;
 

@@ -19,6 +19,9 @@ import { NestNotifyModule } from '@nest-util/nest-notify';
           history: 'notify.history',
         },
       },
+      socket: {
+        enable: true,
+      },
     }),
   ],
 })

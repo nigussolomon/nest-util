@@ -16,6 +16,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
@@ -26,10 +27,45 @@ import { OnboardingJwtGuard } from '../guards/onboarding-jwt.guard';
 import { OnboardingAttemptEntity } from '../entities/onboarding-attempt.entity';
 import { CurrentUser } from '../decorators/current-user';
 import { AuthUser, AuthTokens } from '../interfaces/user.interface';
+import { AuthThrottlerGuard } from '../guards/auth-throttler.guard';
+
+type RateLimitKey =
+  | 'global'
+  | 'login'
+  | 'register'
+  | 'otpRequest'
+  | 'otpLogin'
+  | 'passwordResetRequest'
+  | 'passwordResetReset';
+
+const DEFAULT_RATE_LIMITS: Record<RateLimitKey, { ttlSeconds: number; limit: number }> = {
+  global: { ttlSeconds: 60, limit: 30 },
+  login: { ttlSeconds: 60, limit: 10 },
+  register: { ttlSeconds: 3600, limit: 5 },
+  otpRequest: { ttlSeconds: 60, limit: 3 },
+  otpLogin: { ttlSeconds: 60, limit: 5 },
+  passwordResetRequest: { ttlSeconds: 60, limit: 3 },
+  passwordResetReset: { ttlSeconds: 3600, limit: 10 },
+};
 
 export function CreateAuthController(
   options: AuthModuleOptions
 ): Type<unknown> {
+  const rateLimitEnabled = options.rateLimit?.enabled !== false;
+
+  const throttleFor = (
+    key: RateLimitKey
+  ): Record<string, { limit: number; ttl: number }> => {
+    const configured = options.rateLimit?.[key];
+    const fallback = DEFAULT_RATE_LIMITS[key];
+    return {
+      default: {
+        limit: configured?.limit ?? fallback.limit,
+        ttl: (configured?.ttlSeconds ?? fallback.ttlSeconds) * 1000,
+      },
+    };
+  };
+
   const loginDto =
     options.loginDto ||
     class LoginDto {
@@ -100,6 +136,7 @@ export function CreateAuthController(
 
   @ApiTags('Authentication')
   @Controller('auth')
+  @(rateLimitEnabled ? UseGuards(AuthThrottlerGuard) : () => undefined)
   class AuthController {
     constructor(
       protected readonly authService: AuthService,
@@ -107,6 +144,7 @@ export function CreateAuthController(
     ) {}
 
     @Post('register')
+    @Throttle(throttleFor('register'))
     @ApiOperation({ summary: 'Register a new user' })
     @ApiBody({ type: registerDto })
     @ApiResponse({ status: 201, description: 'User successfully registered' })
@@ -117,6 +155,7 @@ export function CreateAuthController(
     }
 
     @Post('login')
+    @Throttle(throttleFor('login'))
     @ApiOperation({ summary: 'Login user and get tokens' })
     @ApiBody({ type: loginDto })
     @ApiResponse({ status: 200, description: 'User successfully logged in' })
@@ -129,6 +168,7 @@ export function CreateAuthController(
     }
 
     @Post('otp/request')
+    @Throttle(throttleFor('otpRequest'))
     @ApiOperation({ summary: 'Request one-time code for OTP login' })
     @ApiBody({ type: otpRequestDto })
     @ApiResponse({ status: 200, description: 'OTP request accepted' })
@@ -139,6 +179,7 @@ export function CreateAuthController(
     }
 
     @Post('otp/login')
+    @Throttle(throttleFor('otpLogin'))
     @ApiOperation({ summary: 'Login using one-time code' })
     @ApiBody({ type: otpLoginDto })
     @ApiResponse({ status: 200, description: 'User successfully logged in' })
@@ -287,6 +328,7 @@ export function CreateAuthController(
     }
 
     @Post('password-reset/request')
+    @Throttle(throttleFor('passwordResetRequest'))
     @ApiOperation({ summary: 'Request password reset token' })
     @ApiBody({ type: passwordResetRequestDto })
     @ApiResponse({
@@ -306,6 +348,7 @@ export function CreateAuthController(
     }
 
     @Post('password-reset/reset')
+    @Throttle(throttleFor('passwordResetReset'))
     @ApiOperation({ summary: 'Reset password using reset token' })
     @ApiBody({ type: passwordResetDto })
     @ApiResponse({

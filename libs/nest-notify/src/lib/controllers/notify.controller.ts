@@ -21,6 +21,7 @@ export interface NotifyControllerOptions {
     push?: string;
     email?: string;
     history?: string;
+    mine?: string;
   };
 }
 
@@ -116,6 +117,19 @@ export function CreateNotifyController(
         limit: query.limit,
       });
     }
+
+    // ─── Mine ────────────────────────────────────────────────
+
+    @Get('mine')
+    @ApiOperation({ summary: "List the current user's notifications" })
+    mine(@CurrentUser() user: AuthUserLike, @Query() query: NotifyHistoryDto) {
+      return this.notifyService.getNotifications({
+        userId: String(user.id),
+        channel: query.channel,
+        page: query.page,
+        limit: query.limit,
+      });
+    }
   }
 
   if (options?.permissions) {
@@ -153,6 +167,13 @@ export function CreateNotifyController(
         AUTH_PERMISSIONS_METADATA_KEY,
         [perm.history],
         NotifyControllerBase.prototype.history
+      );
+    }
+    if (perm.mine) {
+      Reflect.defineMetadata(
+        AUTH_PERMISSIONS_METADATA_KEY,
+        [perm.mine],
+        NotifyControllerBase.prototype.mine
       );
     }
   }

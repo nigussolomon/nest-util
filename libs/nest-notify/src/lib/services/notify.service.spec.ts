@@ -7,6 +7,7 @@ import { NotificationEntity } from '../entities/notification.entity';
 import { NotifyService } from './notify.service';
 import { FcmService } from './fcm.service';
 import { EmailService } from './email.service';
+import { NOTIFY_GATEWAY, NOTIFICATION_CREATED_EVENT } from '../constants';
 
 describe('NotifyService', () => {
   let service: NotifyService;
@@ -30,6 +31,7 @@ describe('NotifyService', () => {
     getDeadTokens: jest.Mock;
   };
   let emailService: { send: jest.Mock };
+  let notificationsGateway: { emitToUser: jest.Mock };
 
   beforeEach(async () => {
     deviceRepo = {
@@ -51,6 +53,7 @@ describe('NotifyService', () => {
       getDeadTokens: jest.fn(() => []),
     };
     emailService = { send: jest.fn() };
+    notificationsGateway = { emitToUser: jest.fn() };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -65,6 +68,7 @@ describe('NotifyService', () => {
           provide: getRepositoryToken(NotificationEntity),
           useValue: notificationRepo,
         },
+        { provide: NOTIFY_GATEWAY, useValue: notificationsGateway },
       ],
     }).compile();
 
@@ -153,13 +157,48 @@ describe('NotifyService', () => {
   // ─── Push ─────────────────────────────────────────────────
 
   describe('push', () => {
-    it('returns empty result without sending when the user has no tokens', async () => {
+    it('returns empty result without sending when the user has no tokens, but still records history', async () => {
       deviceRepo.find.mockResolvedValue([]);
 
       const result = await service.push('user-1', { title: 'Hi' });
 
       expect(fcmService.sendToTokens).not.toHaveBeenCalled();
       expect(result).toEqual({ successCount: 0, failureCount: 0, results: [] });
+      expect(notificationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          channel: 'push',
+          provider: 'fcm',
+          title: 'Hi',
+          status: 'failed',
+          error: 'No device tokens registered for user user-1',
+        })
+      );
+    });
+
+    it('records failed history and returns a failure result when FCM throws', async () => {
+      deviceRepo.find.mockResolvedValue([
+        { id: 'dt1', userId: 'user-1', token: 't1' },
+      ]);
+      fcmService.sendToTokens.mockRejectedValue(new Error('fcm down'));
+
+      const result = await service.push('user-1', { title: 'Hi' });
+
+      expect(result).toEqual({
+        successCount: 0,
+        failureCount: 1,
+        results: [{ token: 't1', success: false, error: 'fcm down' }],
+      });
+      expect(notificationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          channel: 'push',
+          provider: 'fcm',
+          status: 'failed',
+          error: '1 delivery(ies) failed',
+        })
+      );
+      expect(deviceRepo.delete).not.toHaveBeenCalled();
     });
 
     it('sends to all device tokens, records history, and prunes dead tokens', async () => {
@@ -223,6 +262,27 @@ describe('NotifyService', () => {
         })
       );
     });
+
+    it('records failed history and returns a failure result when FCM throws', async () => {
+      fcmService.sendToToken.mockRejectedValue(new Error('fcm down'));
+
+      const result = await service.pushToToken('t1', { title: 'Hi' });
+
+      expect(result).toEqual({
+        successCount: 0,
+        failureCount: 1,
+        results: [{ token: 't1', success: false, error: 'fcm down' }],
+      });
+      expect(notificationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: 'push',
+          provider: 'fcm',
+          to: 't1',
+          status: 'failed',
+          error: '1 delivery(ies) failed',
+        })
+      );
+    });
   });
 
   // ─── Email ────────────────────────────────────────────────
@@ -268,6 +328,53 @@ describe('NotifyService', () => {
           error: 'smtp down',
         })
       );
+    });
+  });
+
+  // ─── Real-time streaming ──────────────────────────────────
+
+  describe('real-time streaming', () => {
+    it('emits the persisted notification to the user room after a push', async () => {
+      deviceRepo.find.mockResolvedValue([
+        { id: 'dt1', userId: 'user-1', token: 't1' },
+      ]);
+      fcmService.sendToTokens.mockResolvedValue({
+        successCount: 1,
+        failureCount: 0,
+        results: [{ token: 't1', success: true }],
+      });
+
+      await service.push('user-1', { title: 'Hi' });
+
+      expect(notificationsGateway.emitToUser).toHaveBeenCalledWith(
+        'user-1',
+        NOTIFICATION_CREATED_EVENT,
+        expect.objectContaining({ id: 'n1', userId: 'user-1', channel: 'push' })
+      );
+    });
+
+    it('emits the persisted notification after an email', async () => {
+      emailService.send.mockResolvedValue(undefined);
+
+      await service.email({ to: 'a@example.com', subject: 'S' }, 'user-1');
+
+      expect(notificationsGateway.emitToUser).toHaveBeenCalledWith(
+        'user-1',
+        NOTIFICATION_CREATED_EVENT,
+        expect.objectContaining({ channel: 'email' })
+      );
+    });
+
+    it('does not emit for token-only sends (no userId)', async () => {
+      fcmService.sendToToken.mockResolvedValue({
+        successCount: 1,
+        failureCount: 0,
+        results: [{ token: 't1', success: true }],
+      });
+
+      await service.pushToToken('t1', { title: 'Hi' });
+
+      expect(notificationsGateway.emitToUser).not.toHaveBeenCalled();
     });
   });
 

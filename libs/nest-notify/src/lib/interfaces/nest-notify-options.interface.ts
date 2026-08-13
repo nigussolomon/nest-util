@@ -42,6 +42,34 @@ export interface NestNotifyOptions {
     from?: { name?: string; address: string };
   };
 
+  /** Real-time Socket.IO gateway configuration */
+  socket?: {
+    /** Enable the notifications gateway. Default: false */
+    enable?: boolean;
+    /** Socket.IO namespace. Default: '/notify' */
+    namespace?: string;
+    /** Socket.IO path. Default: '/socket.io' */
+    path?: string;
+    /** Socket.IO CORS options */
+    cors?: {
+      origin?: string | string[] | RegExp;
+      credentials?: boolean;
+      methods?: string[];
+    };
+    /**
+     * Handshake field carrying the bearer token.
+     * Checked as `handshake.auth[tokenQueryParam]`, then `handshake.query[tokenQueryParam]`.
+     * Default: 'token'
+     */
+    tokenQueryParam?: string;
+    /**
+     * Custom handshake authenticator. When provided, it takes precedence over the
+     * default JWT verification (which requires `@nest-util/nest-auth` + `@nestjs/jwt`).
+     * Return `null` to reject the connection.
+     */
+    authorize?: (token: string) => Promise<{ userId: string } | null>;
+  };
+
   /** Auto-registered controller configuration */
   controller?: {
     /** Enable the auto-registered controller. Default: true */
@@ -54,6 +82,7 @@ export interface NestNotifyOptions {
       push?: string;
       email?: string;
       history?: string;
+      mine?: string;
     };
   };
 }

@@ -50,6 +50,8 @@ describe('AuthService', () => {
     mockOptions.registerHooks = undefined;
     mockOptions.identifierFields = undefined;
     mockOptions.onboarding = undefined;
+    mockOptions.loginAttempts = undefined;
+    mockOptions.passwordReset = undefined;
 
     repository = {
       findOne: jest.fn(),
@@ -62,6 +64,7 @@ describe('AuthService', () => {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         getOne: jest.fn(),
+        getMany: jest.fn(),
         update: jest.fn().mockReturnThis(),
         set: jest.fn().mockReturnThis(),
         execute: jest.fn(),
@@ -428,11 +431,103 @@ describe('AuthService', () => {
       };
       const queryBuilder = repository.createQueryBuilder();
       queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(
         service.login({ email: 'test@example.com', password: 'wrong' })
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should increment failed attempts and lock the account after max attempts', async () => {
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hashedPassword',
+        loginAttempts: 4,
+        loginLockedUntil: null,
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'wrong' })
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(queryBuilder.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginAttempts: 5,
+          loginLockedUntil: expect.any(Date),
+        })
+      );
+    });
+
+    it('should reject login while the account is locked', async () => {
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hashedPassword',
+        loginAttempts: 5,
+        loginLockedUntil: new Date(Date.now() + 60_000),
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'password123' })
+      ).rejects.toThrow(UnauthorizedException);
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
+    });
+
+    it('should reset failed login attempts on successful login', async () => {
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hashedPassword',
+        loginAttempts: 3,
+        loginLockedUntil: new Date(Date.now() - 60_000),
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedRefreshToken');
+      jwtService.sign.mockReturnValue('mock-token');
+
+      const result = await service.login({
+        email: 'test@example.com',
+        password: 'password123',
+      });
+
+      expect(result.access_token).toBeDefined();
+      expect(queryBuilder.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginAttempts: 0,
+          loginLockedUntil: null,
+        })
+      );
+    });
+
+    it('should not track attempts when loginAttempts is disabled', async () => {
+      mockOptions.loginAttempts = { enabled: false };
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hashedPassword',
+      };
+      const queryBuilder = repository.createQueryBuilder();
+      queryBuilder.getOne.mockResolvedValue(user);
+      queryBuilder.execute.mockResolvedValue({ affected: 1 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'wrong' })
+      ).rejects.toThrow(UnauthorizedException);
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
     });
 
     it('should login using the phone identifier when identifierFields is configured', async () => {
@@ -627,6 +722,188 @@ describe('AuthService', () => {
           otpCode: '000000',
         })
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('passwordReset', () => {
+    const resetOptions = () => ({
+      enabled: true,
+      deliverToken: jest.fn().mockResolvedValue(undefined),
+      tokenField: 'passwordResetTokenHash',
+      expiresAtField: 'passwordResetTokenExpiresAt',
+      attemptsField: 'passwordResetAttempts',
+      lockUntilField: 'passwordResetLockedUntil',
+      lastRequestAtField: 'passwordResetLastRequestedAt',
+    });
+
+    describe('requestPasswordReset', () => {
+      it('should generate a token and track the request time', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const user = {
+          id: 1,
+          email: 'test@example.com',
+          passwordResetTokenHash: null,
+          passwordResetTokenExpiresAt: null,
+          passwordResetAttempts: 0,
+          passwordResetLockedUntil: null,
+          passwordResetLastRequestedAt: null,
+        };
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValue(user);
+        queryBuilder.execute.mockResolvedValue({ affected: 1 });
+        (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-token');
+
+        const result = await service.requestPasswordReset({
+          email: 'test@example.com',
+        });
+
+        expect(result).toEqual({ success: true });
+        expect(mockOptions.passwordReset.deliverToken).toHaveBeenCalled();
+        expect(queryBuilder.set).toHaveBeenCalledWith(
+          expect.objectContaining({
+            passwordResetAttempts: 0,
+            passwordResetLastRequestedAt: expect.any(Date),
+          })
+        );
+      });
+
+      it('should return success without delivery for unknown user to avoid enumeration', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValue(null);
+
+        const result = await service.requestPasswordReset({
+          email: 'none@example.com',
+        });
+
+        expect(result.success).toBe(true);
+        expect(mockOptions.passwordReset.deliverToken).not.toHaveBeenCalled();
+      });
+
+      it('should throw UnauthorizedException while the account is locked', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const user = {
+          id: 1,
+          email: 'test@example.com',
+          passwordResetLockedUntil: new Date(Date.now() + 60_000),
+        };
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValue(user);
+
+        await expect(
+          service.requestPasswordReset({ email: 'test@example.com' })
+        ).rejects.toThrow(UnauthorizedException);
+      });
+
+      it('should throw UnauthorizedException during the request cooldown', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const user = {
+          id: 1,
+          email: 'test@example.com',
+          passwordResetLockedUntil: null,
+          passwordResetLastRequestedAt: new Date(),
+        };
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValue(user);
+
+        await expect(
+          service.requestPasswordReset({ email: 'test@example.com' })
+        ).rejects.toThrow(UnauthorizedException);
+      });
+    });
+
+    describe('resetPassword', () => {
+      it('should reset the password and clear the reset state', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const user = {
+          id: 1,
+          email: 'test@example.com',
+          passwordResetTokenHash: 'hashed-token',
+          passwordResetTokenExpiresAt: new Date(Date.now() + 60_000),
+          passwordResetAttempts: 2,
+          passwordResetLockedUntil: null,
+          passwordResetLastRequestedAt: new Date(),
+        };
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getMany.mockResolvedValue([user]);
+        queryBuilder.execute.mockResolvedValue({ affected: 1 });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        (bcrypt.hash as jest.Mock).mockResolvedValue('hashedNewPassword');
+
+        const result = await service.resetPassword(
+          'valid-token',
+          'newPassword123'
+        );
+
+        expect(result.success).toBe(true);
+        expect(queryBuilder.set).toHaveBeenCalledWith(
+          expect.objectContaining({
+            password: 'hashedNewPassword',
+            passwordResetAttempts: 0,
+            passwordResetLockedUntil: null,
+            passwordResetLastRequestedAt: null,
+          })
+        );
+      });
+
+      it('should throw BadRequestException for an invalid token', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getMany.mockResolvedValue([]);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        await expect(
+          service.resetPassword('invalid-token', 'newPassword123')
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('should increment attempts and lock after max failed resets', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const user = {
+          id: 1,
+          email: 'test@example.com',
+          passwordResetTokenHash: 'hashed-token',
+          passwordResetTokenExpiresAt: new Date(Date.now() - 60_000),
+          passwordResetAttempts: 4,
+          passwordResetLockedUntil: null,
+        };
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getMany.mockResolvedValue([user]);
+        queryBuilder.execute.mockResolvedValue({ affected: 1 });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        await expect(
+          service.resetPassword('expired-token', 'newPassword123')
+        ).rejects.toThrow(BadRequestException);
+
+        expect(queryBuilder.set).toHaveBeenCalledWith(
+          expect.objectContaining({
+            passwordResetAttempts: 5,
+            passwordResetLockedUntil: expect.any(Date),
+          })
+        );
+      });
+
+      it('should throw UnauthorizedException while the account is locked', async () => {
+        mockOptions.passwordReset = resetOptions();
+        const user = {
+          id: 1,
+          email: 'test@example.com',
+          passwordResetTokenHash: 'hashed-token',
+          passwordResetTokenExpiresAt: new Date(Date.now() + 60_000),
+          passwordResetAttempts: 5,
+          passwordResetLockedUntil: new Date(Date.now() + 60_000),
+        };
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getMany.mockResolvedValue([user]);
+        queryBuilder.execute.mockResolvedValue({ affected: 1 });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        await expect(
+          service.resetPassword('valid-token', 'newPassword123')
+        ).rejects.toThrow(UnauthorizedException);
+        expect(queryBuilder.execute).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -900,7 +1177,8 @@ describe('AuthService', () => {
 
     describe('completeOnboarding', () => {
       it('should validate the OTP and issue a one-purpose onboarding token', async () => {
-        repository.findOne.mockResolvedValueOnce(pendingAttempt);
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValueOnce(pendingAttempt);
         (bcrypt.compare as jest.Mock).mockResolvedValue(true);
         jwtService.sign.mockReturnValue('signed-onboarding-token');
 
@@ -929,7 +1207,8 @@ describe('AuthService', () => {
       });
 
       it('should throw UnauthorizedException for an invalid code and increment attempts', async () => {
-        repository.findOne.mockResolvedValueOnce(pendingAttempt);
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValueOnce(pendingAttempt);
         (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
         await expect(
@@ -945,7 +1224,8 @@ describe('AuthService', () => {
       });
 
       it('should lock the attempt after max failed attempts', async () => {
-        repository.findOne.mockResolvedValueOnce({
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValueOnce({
           ...pendingAttempt,
           attempts: 4,
         });
@@ -964,7 +1244,8 @@ describe('AuthService', () => {
       });
 
       it('should throw UnauthorizedException when the code has expired', async () => {
-        repository.findOne.mockResolvedValueOnce({
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValueOnce({
           ...pendingAttempt,
           codeExpiresAt: new Date(Date.now() - 60000),
         });
@@ -983,7 +1264,8 @@ describe('AuthService', () => {
       });
 
       it('should throw UnauthorizedException when no pending attempt exists', async () => {
-        repository.findOne.mockResolvedValueOnce(null);
+        const queryBuilder = repository.createQueryBuilder();
+        queryBuilder.getOne.mockResolvedValueOnce(null);
 
         await expect(
           service.completeOnboarding({

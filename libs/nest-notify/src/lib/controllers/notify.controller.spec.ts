@@ -18,6 +18,7 @@ describe('CreateNotifyController', () => {
       push: 'notify.push',
       email: 'notify.email',
       history: 'notify.history',
+      mine: 'notify.mine',
     },
   });
 
@@ -39,6 +40,7 @@ describe('CreateNotifyController', () => {
     expect(controller.push).toBeDefined();
     expect(controller.email).toBeDefined();
     expect(controller.history).toBeDefined();
+    expect(controller.mine).toBeDefined();
   });
 
   it('applies permission metadata to each route', () => {
@@ -63,6 +65,9 @@ describe('CreateNotifyController', () => {
     expect(
       Reflect.getMetadata(AUTH_PERMISSIONS_METADATA_KEY, controller.history)
     ).toEqual(['notify.history']);
+    expect(
+      Reflect.getMetadata(AUTH_PERMISSIONS_METADATA_KEY, controller.mine)
+    ).toEqual(['notify.mine']);
   });
 
   it('does not set permission metadata when no permissions are configured', () => {
@@ -149,6 +154,23 @@ describe('CreateNotifyController', () => {
       channel: 'push',
       page: 2,
       limit: 10,
+    });
+  });
+
+  it('forwards mine queries scoped to the current user', async () => {
+    const controller = buildController() as Record<string, (...a: unknown[]) => unknown>;
+    mockService.getNotifications.mockResolvedValue({ data: [], meta: {} });
+
+    await (controller.mine as (...a: unknown[]) => unknown)(
+      { id: 'user-7' },
+      { channel: 'email', page: 1, limit: 5 }
+    );
+
+    expect(mockService.getNotifications).toHaveBeenCalledWith({
+      userId: 'user-7',
+      channel: 'email',
+      page: 1,
+      limit: 5,
     });
   });
 });

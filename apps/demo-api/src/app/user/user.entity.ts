@@ -61,6 +61,21 @@ export class User {
   })
   passwordResetTokenExpiresAt!: Date;
 
+  @Column({ type: 'int', select: false, default: 0 })
+  loginAttempts!: number;
+
+  @Column({ type: 'timestamptz', select: false, nullable: true })
+  loginLockedUntil!: Date;
+
+  @Column({ type: 'int', select: false, default: 0 })
+  passwordResetAttempts!: number;
+
+  @Column({ type: 'timestamptz', select: false, nullable: true })
+  passwordResetLockedUntil!: Date;
+
+  @Column({ type: 'timestamptz', select: false, nullable: true })
+  passwordResetLastRequestedAt!: Date;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

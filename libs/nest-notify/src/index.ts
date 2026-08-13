@@ -7,6 +7,7 @@ export * from './lib/entities/notification.entity';
 export * from './lib/services/fcm.service';
 export * from './lib/services/email.service';
 export * from './lib/services/notify.service';
+export * from './lib/notifications.gateway';
 export * from './lib/controllers/notify.controller';
 export * from './lib/dtos/register-device.dto';
 export * from './lib/dtos/unregister-device.dto';

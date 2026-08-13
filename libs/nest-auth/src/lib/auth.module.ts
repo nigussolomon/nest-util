@@ -2,10 +2,12 @@ import { DynamicModule, Module, Global } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AUTH_OPTIONS } from './constants';
 import { AuthModuleOptions } from './interfaces/auth-options';
 import { AuthService } from './services/auth.service';
 import { RouteDisabledGuard } from './guards/route-disabled.guard';
+import { AuthThrottlerGuard } from './guards/auth-throttler.guard';
 import { CreateAuthController } from './controllers/auth.controller';
 import { CreatePermissionsController } from './controllers/permissions.controller';
 import { CreateRolesController } from './controllers/roles.controller';
@@ -49,11 +51,23 @@ export class AuthModule {
     const apiKeyExports = apiKeyEnabled
       ? [ApiKeyService, ApiKeyGuard]
       : [];
+    const rateLimitEnabled = options.rateLimit?.enabled !== false;
 
     return {
       module: AuthModule,
       controllers: Controllers,
       imports: [
+        ...(rateLimitEnabled
+          ? [
+              ThrottlerModule.forRoot([
+                {
+                  name: 'default',
+                  ttl: 60000,
+                  limit: 30,
+                },
+              ]),
+            ]
+          : []),
         PassportModule.register({ defaultStrategy: 'jwt' }),
         JwtModule.register({
           secret: options.jwtSecret,
@@ -82,6 +96,7 @@ export class AuthModule {
         PermissionsGuard,
         OnboardingJwtGuard,
         Reflector,
+        ...(rateLimitEnabled ? [AuthThrottlerGuard] : []),
         ...apiKeyProviders,
       ],
       exports: [
@@ -96,6 +111,7 @@ export class AuthModule {
         PermissionsGuard,
         OnboardingJwtGuard,
         Reflector,
+        ...(rateLimitEnabled ? [AuthThrottlerGuard] : []),
         ...apiKeyExports,
       ],
     };

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import type {
@@ -10,6 +10,8 @@ import { DeviceTokenEntity } from '../entities/device-token.entity';
 import { NotificationEntity } from '../entities/notification.entity';
 import { FcmService } from './fcm.service';
 import { EmailService } from './email.service';
+import { NOTIFY_GATEWAY, NOTIFICATION_CREATED_EVENT } from '../constants';
+import type { NotificationsGateway } from '../notifications.gateway';
 
 export type DevicePlatform = 'android' | 'ios' | 'web';
 
@@ -30,7 +32,10 @@ export class NotifyService {
     @InjectRepository(DeviceTokenEntity)
     private readonly deviceTokenRepository: Repository<DeviceTokenEntity>,
     @InjectRepository(NotificationEntity)
-    private readonly notificationRepository: Repository<NotificationEntity>
+    private readonly notificationRepository: Repository<NotificationEntity>,
+    @Optional()
+    @Inject(NOTIFY_GATEWAY)
+    private readonly notificationsGateway?: NotificationsGateway
   ) {}
 
   // ─── Device tokens ─────────────────────────────────────────
@@ -88,13 +93,41 @@ export class NotifyService {
     const tokens = await this.listDeviceTokens(userId);
     if (tokens.length === 0) {
       this.logger.warn(`No device tokens registered for user ${userId}`);
+      await this.recordNotification({
+        userId,
+        channel: 'push',
+        provider: 'fcm',
+        title: payload.title,
+        body: payload.body,
+        metadata: payload.data ?? undefined,
+        status: 'failed',
+        error: `No device tokens registered for user ${userId}`,
+      });
       return { successCount: 0, failureCount: 0, results: [] };
     }
 
-    const result = await this.fcmService.sendToTokens(
-      tokens.map((t) => t.token),
-      payload
-    );
+    let result: SendPushResult;
+    try {
+      result = await this.fcmService.sendToTokens(
+        tokens.map((t) => t.token),
+        payload
+      );
+    } catch (error) {
+      const message =
+        (error as Error)?.message ?? 'Unknown FCM delivery error';
+      this.logger.error(`FCM delivery failed for user ${userId}: ${message}`);
+      result = {
+        successCount: 0,
+        failureCount: 1,
+        results: [
+          {
+            token: tokens[0].token,
+            success: false,
+            error: message,
+          },
+        ],
+      };
+    }
 
     await this.recordNotification({
       userId,
@@ -119,7 +152,19 @@ export class NotifyService {
     token: string,
     payload: PushPayload
   ): Promise<SendPushResult> {
-    const result = await this.fcmService.sendToToken(token, payload);
+    let result: SendPushResult;
+    try {
+      result = await this.fcmService.sendToToken(token, payload);
+    } catch (error) {
+      const message =
+        (error as Error)?.message ?? 'Unknown FCM delivery error';
+      this.logger.error(`FCM delivery failed for token: ${message}`);
+      result = {
+        successCount: 0,
+        failureCount: 1,
+        results: [{ token, success: false, error: message }],
+      };
+    }
     await this.recordNotification({
       channel: 'push',
       provider: 'fcm',
@@ -235,6 +280,16 @@ export class NotifyService {
       metadata: input.metadata,
       sentAt: new Date(),
     });
-    return this.notificationRepository.save(entity);
+    const saved = await this.notificationRepository.save(entity);
+
+    if (input.userId && this.notificationsGateway) {
+      this.notificationsGateway.emitToUser(
+        input.userId,
+        NOTIFICATION_CREATED_EVENT,
+        saved
+      );
+    }
+
+    return saved;
   }
 }

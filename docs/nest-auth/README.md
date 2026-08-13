@@ -20,6 +20,8 @@ pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0
    - access token hash field (default `accessToken`)
    - *(Optional, for OTP)* `otpCodeHash`, `otpCodeExpiresAt`, `otpRequestAttempts`, `otpLastSentAt`, `otpLockedUntil`
    - *(Optional, for Password Reset)* `passwordResetTokenHash`, `passwordResetTokenExpiresAt`
+   - *(Optional, for Login Lockout)* `loginAttempts` (int), `loginLockedUntil` (timestamptz)
+   - *(Optional, for Password Reset Abuse Prevention)* `passwordResetAttempts` (int), `passwordResetLockedUntil` (timestamptz), `passwordResetLastRequestedAt` (timestamptz)
    - *(Optional, for Account Verification)* `isVerified`, `verifiedAt`, `verificationCodeHash`, `verificationCodeExpiresAt`, `verificationAttempts`, `verificationLastSentAt`, `verificationLockedUntil` (all configurable)
 3. Add DTOs for login/register/refresh payloads.
 
@@ -269,6 +271,13 @@ AuthModule.forRoot({
     tokenTtlSeconds: 3600, // Token validity in seconds (1 hour)
     tokenField: 'passwordResetTokenHash', // DB field to store hashed token
     expiresAtField: 'passwordResetTokenExpiresAt', // DB field to store expiration
+    // Anti-abuse (all configurable):
+    cooldownSeconds: 60, // Minimum time between reset requests
+    maxAttempts: 5, // Max failed token attempts before lockout
+    lockSeconds: 300, // Lockout duration in seconds
+    attemptsField: 'passwordResetAttempts', // DB field for failed attempt count
+    lockUntilField: 'passwordResetLockedUntil', // DB field for lockout expiry
+    lastRequestAtField: 'passwordResetLastRequestedAt', // DB field for last request time
     requestDto: PasswordResetRequestDto,
     resetDto: PasswordResetDto,
     buildResetContext: ({ identifier, user }) => ({ appName: 'MyApp' }),
@@ -284,7 +293,65 @@ AuthModule.forRoot({
 - `POST /auth/password-reset/request`: Accepts `{ email: "user@example.com" }`. Returns success even if the user doesn't exist to prevent account enumeration.
 - `POST /auth/password-reset/reset`: Accepts `{ token: "reset_token", newPassword: "new_password" }`. Invalidates all existing sessions upon success.
 
-## 10) OTP Login
+**Abuse prevention:** A per-account lockout kicks in after `maxAttempts` failed reset attempts, and `request` is throttled by the `cooldownSeconds` window between requests. Requests for unknown identifiers are indistinguishable from known ones (anti-enumeration) and are instead bounded by the IP rate limit.
+
+## 10) Rate Limiting & Login Lockout
+
+Two complementary layers protect sensitive auth endpoints:
+
+1. **Per-account login lockout** (`loginAttempts`) — DB-backed, survives restarts.
+2. **IP rate limiting** (`rateLimit`) — in-memory via `@nestjs/throttler` (resets on restart; not shared across instances).
+
+### Login lockout
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  loginAttempts: {
+    enabled: true, // defaults to true when configured
+    maxAttempts: 5, // lock after 5 failed passwords
+    lockSeconds: 300, // lock duration (5 minutes)
+    attemptsField: 'loginAttempts', // DB field for failed attempt count
+    lockUntilField: 'loginLockedUntil', // DB field for lockout expiry
+  },
+})
+```
+
+On a successful login the counters are reset. A locked account keeps returning the generic `401 Invalid credentials` until `lockUntil` passes (the account state is intentionally hidden).
+
+### IP rate limiting
+
+```ts
+AuthModule.forRoot({
+  // ... other options
+  rateLimit: {
+    // enabled: false, // set to disable IP rate limiting entirely
+    // Override a route (ttlSeconds per route):
+    login: { limit: 10, ttlSeconds: 60 },
+    register: { limit: 5, ttlSeconds: 3600 },
+    otpRequest: { limit: 3, ttlSeconds: 60 },
+    otpLogin: { limit: 5, ttlSeconds: 60 },
+    passwordResetRequest: { limit: 3, ttlSeconds: 60 },
+    passwordResetReset: { limit: 10, ttlSeconds: 3600 },
+    // global: { limit: 30, ttlSeconds: 60 },
+    // Optional: custom IP tracker
+    keyGenerator: (req) => req.headers['x-forwarded-for'] ?? req.ip ?? 'unknown',
+  },
+})
+```
+
+Defaults (when unset): `global` 30/60s, `login` 10/60s, `register` 5/1h, `otpRequest` 3/60s, `otpLogin` 5/60s, `passwordResetRequest` 3/60s, `passwordResetReset` 10/1h. When a limit is exceeded the route responds with the same generic `401 Invalid credentials` used by failed logins (anti-enumeration). The default IP tracker reads `req.ips?.[0] ?? req.ip ?? req.socket?.remoteAddress ?? 'unknown'`.
+
+### Required DB fields
+
+The lockout counters live on the `User` entity (all `select: false`):
+
+- `loginAttempts` (int, default 0), `loginLockedUntil` (timestamptz)
+- `passwordResetAttempts` (int, default 0), `passwordResetLockedUntil` (timestamptz), `passwordResetLastRequestedAt` (timestamptz)
+
+A reference migration lives at `apps/demo-api/src/db/migrations/1777000000000-AddLoginAttemptFields.ts`.
+
+## 11) OTP Login
 
 To enable One-Time Password (OTP) login, configure the `otp` option in `AuthModule.forRoot`. You must provide a `deliverCode` callback.
 
@@ -323,7 +390,7 @@ AuthModule.forRoot({
 - `POST /auth/otp/request`: Accepts `{ email: "user@example.com" }`. Triggers the `deliverCode` callback.
 - `POST /auth/otp/login`: Accepts `{ email: "user@example.com", otpCode: "123456" }`. Validates the code and returns auth tokens.
 
-## 11) Assisted Onboarding
+## 12) Assisted Onboarding
 
 To enable agent-assisted onboarding, configure the `onboarding` option in `AuthModule.forRoot`. An agent starts the flow on behalf of an invitee (OTP is sent to the invitee), then enters the invitee's OTP to complete it and receives a **single-purpose onboarding JWT** that only works on `POST /auth/onboarding/user` to create the user. No password is ever set; created users log in with OTP.
 
@@ -360,7 +427,7 @@ AuthModule.forRoot({
 
 Permissions `onboarding.start` and `onboarding.complete` are the fixed convention — register them in your permission registry.
 
-## 12) Account Verification
+## 13) Account Verification
 
 To require email/phone verification after registration, configure the `verification` option. A code is delivered to the new user (defaults to the first identifier field in the registration payload); they must verify before the account is considered active. Optionally combine with `loginDto`/OTP to reject logins from unverified accounts.
 
@@ -399,7 +466,7 @@ AuthModule.forRoot({
 - `POST /auth/verify`: Accepts `{ code: "123456" }` (optionally the identifier). Marks the account verified. Rate-limited and locked like OTP.
 - `POST /auth/verify/resend`: Re-sends the code (cooldown enforced). Returns success whether or not the account exists to prevent enumeration.
 
-## 13) Register Hooks
+## 14) Register Hooks
 
 `registerHooks` lets you mutate the registration payload or run side effects atomically with user creation — everything runs inside a transaction, so a throwing hook rolls back the whole registration.
 
@@ -419,7 +486,7 @@ AuthModule.forRoot({
 
 **Hook context** (`RegisterHookContext`): `payload` (mutable DTO — mutations flow into the saved user), `entity` + `userId` (afterRegister only), `manager` (transaction-scoped `EntityManager`), `assignRole` (afterRegister only; accepts a role id or name).
 
-## 14) Multi-Identifier Login
+## 15) Multi-Identifier Login
 
 `identifierFields` lets users log in with any of several fields (e.g. email OR phone):
 
@@ -431,7 +498,7 @@ AuthModule.forRoot({
 })
 ```
 
-## 15) API Key Configuration
+## 16) API Key Configuration
 
 API key auth auto-registers admin endpoints. Configure via the `apiKey` option:
 
@@ -449,7 +516,7 @@ AuthModule.forRoot({
 
 `JwtAuthGuard` automatically detects the API key header and delegates to `ApiKeyService` — no separate guard needed. Admin API-key endpoints (`POST /auth/api-keys`, etc.) are only registered when `apiKey.enabled: true`.
 
-## 16) Public API Reference
+## 17) Public API Reference
 
 **Guards**: `JwtAuthGuard`, `PermissionsGuard`, `RouteDisabledGuard`, `ApiKeyGuard`, `OnboardingJwtGuard`, `JwtStrategy`.
 
@@ -465,7 +532,7 @@ AuthModule.forRoot({
 
 **`AuthService` methods**: `register`, `login`, `requestOtp`, `loginWithOtp`, `refresh`, `logout`, `changePassword`, `requestPasswordReset`, `resetPassword`, `verifyAccount`, `resendVerificationCode`, `startOnboarding`, `completeOnboarding`, `createUserFromOnboarding`, `createRole`, `assignRoleToUser`, `assignPermissionsToRole`, `removePermissionsFromRole`, `removeRoleFromUser`, `getUserRoles`, `getAllRoles`, `validateUser`.
 
-## 17) Help Notes
+## 18) Help Notes
 
 - `refresh` currently expects `refreshToken` in request body (or in the `refreshTokenHeaderName` header, default `x-refresh-token`).
 - Access and refresh tokens are validated against hashed nonce values stored in DB, enabling single-session token rotation.

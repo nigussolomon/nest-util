@@ -11,6 +11,7 @@ export * from './lib/controllers/api-keys.controller';
 export * from './lib/guards/jwt-auth.guard';
 export * from './lib/guards/jwt.strategy';
 export * from './lib/guards/route-disabled.guard';
+export * from './lib/guards/auth-throttler.guard';
 export * from './lib/guards/api-key.guard';
 export * from './lib/decorators/public';
 export * from './lib/decorators/current-user';

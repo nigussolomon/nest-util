@@ -1,6 +1,6 @@
 {
   "name": "@nest-util/nest-notify",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,15 +24,31 @@
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/platform-socket.io": "^11.0.0",
     "@nestjs/swagger": "^11.2.6",
     "@nestjs/typeorm": "^11.0.1",
+    "@nestjs/websockets": "^11.0.0",
     "@nest-util/nest-auth": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
+    "socket.io": "^4.0.0",
     "typeorm": "^1.1.0"
   },
   "peerDependenciesMeta": {
     "@nest-util/nest-auth": {
+      "optional": true
+    },
+    "@nestjs/jwt": {
+      "optional": true
+    },
+    "@nestjs/platform-socket.io": {
+      "optional": true
+    },
+    "@nestjs/websockets": {
+      "optional": true
+    },
+    "socket.io": {
       "optional": true
     }
   },

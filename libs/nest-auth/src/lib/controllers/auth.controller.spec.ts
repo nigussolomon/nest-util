@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../services/auth.service';
 import { AUTH_OPTIONS } from '../constants';
 import { ForbiddenException } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { PERMISSIONS_KEY } from '../decorators/permissions';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { Reflector } from '@nestjs/core';
@@ -14,8 +15,9 @@ import { CreatePermissionsController } from './permissions.controller';
 import { CreateRolesController } from './roles.controller';
 import { CreateUserRolesController } from './user-roles.controller';
 import { CreateApiKeysController } from './api-keys.controller';
+import type { AuthModuleOptions } from '../interfaces/auth-options';
 
-const mockOptions = {
+const mockOptions: AuthModuleOptions = {
   userEntity: class User {
     id = 1;
   },
@@ -39,6 +41,7 @@ const mockOptions = {
       },
     ],
   },
+  rateLimit: undefined,
 };
 
 const mockAuthService = {
@@ -87,6 +90,7 @@ async function createController<T>(
   ControllerClass: new (...args: unknown[]) => T
 ): Promise<T> {
   const module: TestingModule = await Test.createTestingModule({
+    imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 30 }])],
     controllers: [ControllerClass],
     providers: [
       { provide: AuthService, useValue: mockAuthService },
@@ -121,11 +125,53 @@ describe('CreateAuthController', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockOptions.disabledRoutes = [];
+    mockOptions.rateLimit = undefined;
     controller = await createController(CreateAuthController(mockOptions) as unknown as new (...args: unknown[]) => unknown);
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  describe('rate limiting', () => {
+    it('should attach throttle limits to the login route', () => {
+      expect(Reflect.getMetadata('THROTTLER:LIMIT' + 'default', controller.login)).toBe(10);
+      expect(Reflect.getMetadata('THROTTLER:TTL' + 'default', controller.login)).toBe(60_000);
+    });
+
+    it('should attach throttle limits to the register route', () => {
+      expect(Reflect.getMetadata('THROTTLER:LIMIT' + 'default', controller.register)).toBe(5);
+      expect(Reflect.getMetadata('THROTTLER:TTL' + 'default', controller.register)).toBe(3_600_000);
+    });
+
+    it('should attach throttle limits to the OTP routes', () => {
+      expect(Reflect.getMetadata('THROTTLER:LIMIT' + 'default', controller.requestOtp)).toBe(3);
+      expect(Reflect.getMetadata('THROTTLER:TTL' + 'default', controller.requestOtp)).toBe(60_000);
+      expect(Reflect.getMetadata('THROTTLER:LIMIT' + 'default', controller.loginWithOtp)).toBe(5);
+      expect(Reflect.getMetadata('THROTTLER:TTL' + 'default', controller.loginWithOtp)).toBe(60_000);
+    });
+
+    it('should attach throttle limits to the password reset routes', () => {
+      expect(Reflect.getMetadata('THROTTLER:LIMIT' + 'default', controller.requestPasswordReset)).toBe(3);
+      expect(Reflect.getMetadata('THROTTLER:TTL' + 'default', controller.requestPasswordReset)).toBe(60_000);
+      expect(Reflect.getMetadata('THROTTLER:LIMIT' + 'default', controller.resetPassword)).toBe(10);
+      expect(Reflect.getMetadata('THROTTLER:TTL' + 'default', controller.resetPassword)).toBe(3_600_000);
+    });
+
+    it('should respect custom rate limit configuration', async () => {
+      mockOptions.rateLimit = {
+        login: { limit: 2, ttlSeconds: 5 },
+      };
+      const customController = (await createController(
+        CreateAuthController(mockOptions) as unknown as new (...args: unknown[]) => unknown
+      )) as { login: (...args: unknown[]) => unknown };
+      expect(
+        Reflect.getMetadata('THROTTLER:LIMIT' + 'default', customController.login)
+      ).toBe(2);
+      expect(
+        Reflect.getMetadata('THROTTLER:TTL' + 'default', customController.login)
+      ).toBe(5_000);
+    });
   });
 
   describe('register', () => {
