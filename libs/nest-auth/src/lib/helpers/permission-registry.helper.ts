@@ -7,7 +7,9 @@ import {
   ResolvedPermissionRegistry,
 } from '../interfaces/permission-registry.interface';
 
-const DEFAULT_CRUD_ENDPOINT_ACTIONS: Record<CrudRegistryEndpoint, string> = {
+const DEFAULT_CRUD_ENDPOINT_ACTIONS: Partial<
+  Record<CrudRegistryEndpoint, string>
+> = {
   findAll: 'read',
   findOne: 'readOne',
   create: 'create',

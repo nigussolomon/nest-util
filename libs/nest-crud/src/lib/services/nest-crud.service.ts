@@ -24,6 +24,17 @@ import {
   decodeCursor,
   detectCursorStrategy,
 } from '../helpers/cursor-pagination.helper';
+import { ApprovalStatusEntity } from '../entities/approval-status.entity';
+import { ModificationRequestHistoryEntity } from '../entities/modification-request-history.entity';
+import {
+  APPROVAL_STATUS,
+  ApprovalPipelineConfig,
+  ApprovalStatus,
+  ApprovalStatusView,
+  ApprovalHistoryView,
+  ModificationItem,
+  RequestModificationPayload,
+} from '../interfaces/approval-pipeline.interface';
 
 export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto>
   extends FindMineConfig<Entity> {
@@ -44,6 +55,7 @@ export interface CrudServiceOptions<Entity extends ObjectLiteral, ResponseDto>
   hooks?: CrudHooks<Entity, any, any>;
   transactionConfig?: TransactionConfig;
   statusPipeline?: StatusPipelineConfig<Entity>;
+  approvalPipeline?: ApprovalPipelineConfig;
 }
 
 @Injectable()
@@ -90,6 +102,7 @@ export class NestCrudService<
       action?: StatusTransitionAction<Entity>;
     }
   > = new Map();
+  protected readonly approvalPipeline?: ApprovalPipelineConfig;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -125,6 +138,7 @@ export class NestCrudService<
         options.statusPipeline.transitions
       );
     }
+    this.approvalPipeline = options.approvalPipeline;
   }
 
   private normalizeStatusTransitions(
@@ -532,6 +546,8 @@ export class NestCrudService<
 
     this.applyIncludeJoins(qb);
 
+    this.applyApprovalVisibility(qb);
+
     applyFilters(qb, query.filter, this.allowedFilters, this.include);
 
     const paginationMeta = applyPagination(qb, query);
@@ -567,6 +583,8 @@ export class NestCrudService<
 
     this.applyIncludeJoins(qb);
 
+    this.applyApprovalVisibility(qb);
+
     applyFilters(qb, query.filter, this.allowedFilters, this.include);
 
     const paginationMeta = applyPagination(qb, query);
@@ -600,6 +618,8 @@ export class NestCrudService<
     // Join relations
     this.applyIncludeJoins(qb);
 
+    this.applyApprovalVisibility(qb);
+
     // Apply filters
     applyFilters(qb, query.filter, this.allowedFilters, this.include);
 
@@ -628,6 +648,7 @@ export class NestCrudService<
       // Build a clean count query (reuse same filters but no cursor/order/take)
       const countQb = this.repo.createQueryBuilder('e');
       this.applyIncludeJoins(countQb, false);
+      this.applyApprovalVisibility(countQb);
       applyFilters(countQb, query.filter, this.allowedFilters, this.include);
       total = await countQb.getCount();
     }
@@ -654,6 +675,12 @@ export class NestCrudService<
 
     if (this.enforceOwnershipFor(user)) {
       entity = await this.findOwnedEntity(id, user as OwnershipUser);
+    } else if (this.hasApprovalVisibilityFilter()) {
+      const qb = this.repo.createQueryBuilder('e');
+      this.applyIncludeJoins(qb);
+      this.applyApprovalVisibility(qb);
+      qb.andWhere('e.id = :id', { id });
+      entity = await qb.getOne();
     } else {
       const relationsObj = this.include.length > 0
         ? this.buildRelationsObject(this.include)
@@ -724,7 +751,9 @@ export class NestCrudService<
       payload as unknown as ObjectLiteral
     );
 
-    const entity = await this.repo.save(resolved as unknown as Entity);
+    const entity = this.isApprovalPipelineConfigured()
+      ? await this.createWithApproval(resolved, user)
+      : await this.repo.save(resolved as unknown as Entity);
 
     const result = this.toResponseDto
       ? (this.toResponseDto(entity) as ResponseDto)
@@ -751,6 +780,291 @@ export class NestCrudService<
     const payload = { [String(this.statusField)]: status } as unknown as UpdateDto;
 
     return this.applyUpdateCore(id, payload, user);
+  }
+
+  async getApproval(
+    id: number,
+    user?: OwnershipUser
+  ): Promise<{ approval: ApprovalStatusView; history: ApprovalHistoryView[] }> {
+    if (!this.isApprovalPipelineConfigured()) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    const approval = await this.loadApprovalStatus(id, user);
+
+    if (!approval) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    const history = await this.getHistoryRepository().find({
+      where: { approvalStatusId: approval.id },
+      order: { requestedAt: 'DESC' },
+    });
+
+    return {
+      approval: this.toApprovalStatusView(approval),
+      history: history.map((entry) => this.toApprovalHistoryView(entry)),
+    };
+  }
+
+  async approveApproval(id: number, user?: OwnershipUser): Promise<ApprovalStatusView> {
+    return this.transitionApproval(id, 'approve', user);
+  }
+
+  async rejectApproval(id: number, user?: OwnershipUser): Promise<ApprovalStatusView> {
+    return this.transitionApproval(id, 'reject', user);
+  }
+
+  async requestModification(
+    id: number,
+    payload: RequestModificationPayload,
+    user?: OwnershipUser
+  ): Promise<ApprovalStatusView> {
+    return this.transitionApproval(
+      id,
+      'requestModification',
+      user,
+      payload.modifications,
+      payload.note
+    );
+  }
+
+  async resubmitApproval(id: number, user?: OwnershipUser): Promise<ApprovalStatusView> {
+    return this.transitionApproval(id, 'resubmit', user);
+  }
+
+  private isApprovalPipelineConfigured(): boolean {
+    return Boolean(
+      this.approvalPipeline && this.approvalPipeline.enabled !== false
+    );
+  }
+
+  private hasApprovalVisibilityFilter(): boolean {
+    if (!this.isApprovalPipelineConfigured()) {
+      return false;
+    }
+    const visible = this.approvalPipeline?.visibleStatuses;
+    return Boolean(visible && visible.length > 0);
+  }
+
+  private getApprovalRepository(): Repository<ApprovalStatusEntity> {
+    return this.repo.manager.getRepository(ApprovalStatusEntity);
+  }
+
+  private getHistoryRepository(): Repository<ModificationRequestHistoryEntity> {
+    return this.repo.manager.getRepository(ModificationRequestHistoryEntity);
+  }
+
+  private async createWithApproval(
+    resolved: ObjectLiteral,
+    user?: OwnershipUser
+  ): Promise<Entity> {
+    const entity = await this.repo.manager.transaction(async (manager) => {
+      const entityRepo = manager.getRepository(this.repo.target);
+      const saved = await entityRepo.save(
+        resolved as unknown as DeepPartial<Entity>
+      );
+
+      const approvalRepo = manager.getRepository(ApprovalStatusEntity);
+      const approval = approvalRepo.create({
+        entity: this.repo.metadata.tableName,
+        entityId: String((saved as { id?: string | number }).id),
+        status: APPROVAL_STATUS.pending,
+        requestedBy: user?.id != null ? String(user.id) : null,
+      });
+      await approvalRepo.save(approval);
+
+      return saved as unknown as Entity;
+    });
+
+    return entity;
+  }
+
+  private async resolveEntityForApproval(
+    id: number,
+    user?: OwnershipUser
+  ): Promise<Entity | null> {
+    if (this.enforceOwnershipFor(user)) {
+      return this.findOwnedEntity(id, user as OwnershipUser);
+    }
+    return this.repo.findOneBy({ id } as unknown as Partial<Entity>);
+  }
+
+  private async loadApprovalStatus(
+    id: number,
+    user?: OwnershipUser
+  ): Promise<ApprovalStatusEntity | null> {
+    const entity = await this.resolveEntityForApproval(id, user);
+    if (!entity) {
+      return null;
+    }
+
+    const approval = await this.getApprovalRepository().findOneBy({
+      entity: this.repo.metadata.tableName,
+      entityId: String(id),
+    });
+
+    return approval ?? null;
+  }
+
+  private async transitionApproval(
+    id: number,
+    action: 'approve' | 'reject' | 'requestModification' | 'resubmit',
+    user?: OwnershipUser,
+    modifications?: ModificationItem[],
+    note?: string
+  ): Promise<ApprovalStatusView> {
+    if (!this.isApprovalPipelineConfigured()) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    const permission = this.approvalPipeline?.permissions?.[action];
+    if (permission && !this.userHasPermission(user, permission)) {
+      throw new ForbiddenException(
+        `Missing required permission '${permission}' for ${action}`
+      );
+    }
+
+    const approval = await this.loadApprovalStatus(id, user);
+
+    if (!approval) {
+      throw new NotFoundException('Resource not found');
+    }
+
+    const current = approval.status as ApprovalStatus;
+    const now = new Date();
+    const userId = user?.id != null ? String(user.id) : null;
+    const transitionable = [
+      APPROVAL_STATUS.pending,
+      APPROVAL_STATUS.resubmitted,
+    ];
+
+    switch (action) {
+      case 'approve':
+        this.assertTransitionAllowed(action, current, transitionable);
+        approval.status = APPROVAL_STATUS.approved;
+        approval.decidedBy = userId;
+        approval.decidedAt = now;
+        approval.currentModifications = null;
+        break;
+      case 'reject':
+        this.assertTransitionAllowed(action, current, transitionable);
+        approval.status = APPROVAL_STATUS.rejected;
+        approval.decidedBy = userId;
+        approval.decidedAt = now;
+        approval.currentModifications = null;
+        break;
+      case 'requestModification':
+        this.assertTransitionAllowed(action, current, transitionable);
+        approval.status = APPROVAL_STATUS.modificationRequested;
+        approval.currentModifications = modifications ?? [];
+
+        await this.getHistoryRepository().save(
+          this.getHistoryRepository().create({
+            approvalStatusId: approval.id,
+            modifications: modifications ?? [],
+            requestedBy: userId,
+            note: note ?? null,
+          })
+        );
+        break;
+      case 'resubmit':
+        if (current !== APPROVAL_STATUS.modificationRequested) {
+          throw new BadRequestException(
+            `Cannot resubmit approval from status '${current}'`
+          );
+        }
+        approval.status = APPROVAL_STATUS.resubmitted;
+        approval.currentModifications = null;
+        approval.resubmittedBy = userId;
+        approval.resubmittedAt = now;
+        break;
+    }
+
+    const saved = await this.getApprovalRepository().save(approval);
+
+    return this.toApprovalStatusView(saved);
+  }
+
+  private assertTransitionAllowed(
+    action: string,
+    current: ApprovalStatus,
+    allowedFrom: readonly ApprovalStatus[]
+  ): void {
+    if (!allowedFrom.includes(current)) {
+      throw new BadRequestException(
+        `Cannot ${action} approval from status '${current}'`
+      );
+    }
+  }
+
+  private userHasPermission(user: OwnershipUser | undefined, permission: string): boolean {
+    if (!user) {
+      return false;
+    }
+    const permissions = this.resolveUserPermissions(user);
+    return permissions.includes(permission);
+  }
+
+  private applyApprovalVisibility(qb: SelectQueryBuilder<Entity>): void {
+    if (!this.hasApprovalVisibilityFilter()) {
+      return;
+    }
+
+    const visible = this.approvalPipeline?.visibleStatuses as readonly ApprovalStatus[];
+    const tableName = this.repo.metadata.tableName;
+
+    qb.innerJoin(
+      ApprovalStatusEntity,
+      'approvalStatus',
+      `approvalStatus.entity = :approvalEntityName AND approvalStatus.entityId = ${this.approvalIdCastExpression()} AND approvalStatus.status IN (:...approvalVisibleStatuses)`,
+      {
+        approvalEntityName: tableName,
+        approvalVisibleStatuses: [...visible],
+      }
+    );
+  }
+
+  private approvalIdCastExpression(): string {
+    const type = this.repo.manager.connection.options.type;
+    if (type === 'mysql' || type === 'mariadb' || type === 'aurora-mysql') {
+      return 'CAST(e.id AS CHAR)';
+    }
+    if (type === 'better-sqlite3' || type === 'sqljs' || type === 'capacitor') {
+      return 'CAST(e.id AS TEXT)';
+    }
+    return 'CAST(e.id AS varchar)';
+  }
+
+  private toApprovalStatusView(entity: ApprovalStatusEntity): ApprovalStatusView {
+    return {
+      id: entity.id,
+      entity: entity.entity,
+      entityId: entity.entityId,
+      status: entity.status as ApprovalStatus,
+      requestedBy: entity.requestedBy,
+      requestedAt: entity.requestedAt,
+      currentModifications: entity.currentModifications,
+      decidedBy: entity.decidedBy,
+      decidedAt: entity.decidedAt,
+      resubmittedBy: entity.resubmittedBy,
+      resubmittedAt: entity.resubmittedAt,
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
+    };
+  }
+
+  private toApprovalHistoryView(
+    entity: ModificationRequestHistoryEntity
+  ): ApprovalHistoryView {
+    return {
+      id: entity.id,
+      approvalStatusId: entity.approvalStatusId,
+      modifications: entity.modifications,
+      requestedBy: entity.requestedBy,
+      note: entity.note,
+      requestedAt: entity.requestedAt,
+    };
   }
 
   private async applyUpdateCore(

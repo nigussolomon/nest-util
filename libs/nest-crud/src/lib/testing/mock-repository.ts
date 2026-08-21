@@ -6,6 +6,7 @@ export function createMockQb(): MockQueryBuilder {
   const qb: MockQueryBuilder = {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
@@ -37,6 +38,7 @@ export function createMockRepository<TEntity extends ObjectLiteral>(
     find: jest.fn().mockResolvedValue([mockEntity]),
     metadata: {
       name: entity.name,
+      tableName: entity.name.toLowerCase(),
       primaryColumns: [{ propertyPath: 'id', type: () => Number }],
     },
     manager: {

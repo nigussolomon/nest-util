@@ -34,6 +34,11 @@ describe('NestedCrudController Factory', () => {
       update: jest.fn(),
       remove: jest.fn(),
       findAuditLogs: jest.fn(),
+      getApproval: jest.fn(),
+      approveApproval: jest.fn(),
+      rejectApproval: jest.fn(),
+      requestModification: jest.fn(),
+      resubmitApproval: jest.fn(),
     };
 
     class TestController extends TestControllerBase {
@@ -211,6 +216,73 @@ describe('NestedCrudController Factory', () => {
       service.findAuditLogs = undefined;
 
       expect(() => controller.findAuditLogs?.({})).toThrow(NotFoundException);
+    });
+  });
+
+  describe('approval endpoints', () => {
+    it('should call service.getApproval with id and user', async () => {
+      const expectedResult = { approval: {}, history: [] };
+      (service.getApproval as jest.Mock).mockResolvedValue(expectedResult);
+
+      const result = await controller.getApproval?.(1, { id: 7 } as any);
+
+      expect(service.getApproval).toHaveBeenCalledWith(1, { id: 7 });
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('should call service.approveApproval with id', async () => {
+      const expectedResult = { id: 1, status: 'approved' };
+      (service.approveApproval as jest.Mock).mockResolvedValue(expectedResult);
+
+      const result = await controller.approveApproval?.(1);
+
+      expect(service.approveApproval).toHaveBeenCalledWith(1, undefined);
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('should call service.rejectApproval with id', async () => {
+      await controller.rejectApproval?.(2);
+
+      expect(service.rejectApproval).toHaveBeenCalledWith(2, undefined);
+    });
+
+    it('should call service.requestModification with dto', async () => {
+      const dto = {
+        modifications: [{ field: 'name', wantedValue: 'renamed' }],
+      };
+
+      await controller.requestModification?.(3, dto);
+
+      expect(service.requestModification).toHaveBeenCalledWith(3, dto, undefined);
+    });
+
+    it('should call service.resubmitApproval with id', async () => {
+      await controller.resubmitApproval?.(4);
+
+      expect(service.resubmitApproval).toHaveBeenCalledWith(4, undefined);
+    });
+
+    it('should throw NotFound when approval service methods are unavailable', () => {
+      service.getApproval = undefined;
+      service.approveApproval = undefined;
+      service.rejectApproval = undefined;
+      service.requestModification = undefined;
+      service.resubmitApproval = undefined;
+
+      expect(() => controller.getApproval?.(1)).toThrow(NotFoundException);
+      expect(() => controller.approveApproval?.(1)).toThrow(NotFoundException);
+      expect(() => controller.rejectApproval?.(1)).toThrow(NotFoundException);
+      expect(() => controller.requestModification?.(1, { modifications: [] })).toThrow(
+        NotFoundException
+      );
+      expect(() => controller.resubmitApproval?.(1)).toThrow(NotFoundException);
+    });
+
+    it('should block disabled approval endpoints', () => {
+      service.disabledEndpoints = ['approveApproval'];
+
+      expect(() => controller.approveApproval?.(1)).toThrow(NotFoundException);
+      expect(service.approveApproval).not.toHaveBeenCalled();
     });
   });
 

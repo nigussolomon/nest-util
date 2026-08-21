@@ -16,7 +16,16 @@ export const permissionRegistry: PermissionRegistryConfig = {
     },
     {
       resource: 'posts',
-      permissions: ['read', 'create', 'update', 'delete', 'audit', 'changeStatus'],
+      permissions: [
+        'read',
+        'create',
+        'update',
+        'delete',
+        'audit',
+        'changeStatus',
+        'approve',
+        'reject',
+      ],
     },
     {
       resource: 'payments',

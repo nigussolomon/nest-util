@@ -44,6 +44,14 @@ export class PostService extends NestCrudService<
           );
         },
       },
+      approvalPipeline: {
+        permissions: {
+          approve: 'posts.approve',
+          reject: 'posts.reject',
+          requestModification: 'posts.update',
+          resubmit: 'posts.update',
+        },
+      },
     });
   }
 }

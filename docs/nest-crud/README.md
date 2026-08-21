@@ -138,6 +138,11 @@ Generated controller includes:
 - `DELETE /resource/:id`
 - `GET /resource/auditlogs` (if `service.findAuditLogs` exists)
 - `POST /resource/:id/status` (if a `statusPipeline` is configured)
+- `GET /resource/:id/approval` (if an `approvalPipeline` is configured)
+- `POST /resource/:id/approval/approve`
+- `POST /resource/:id/approval/reject`
+- `POST /resource/:id/approval/request-modification`
+- `POST /resource/:id/approval/resubmit`
 
 ## 5) Status Pipeline
 
@@ -218,7 +223,66 @@ Behavior:
 
 Permission gating: grant `posts.changeStatus` (or map the action via `endpointActions` when building permissions) and use `@ApiBearerAuth` + `PermissionsGuard` as in section 3.
 
-## 6) Lifecycle Hooks
+## 6) Approval Pipeline
+
+An approval workflow for newly created records. When enabled, every `create` also writes an `approval_statuses` row inside the **same transaction**, starting at `pending`. Reviewers can approve, reject, or request modifications; the creator can then resubmit. The two backing tables (`approval_statuses`, `approval_modification_history`) ship with the library — register them with TypeORM (`TypeOrmModule.forFeature`) and let `synchronize` or a migration create them.
+
+Status flow:
+
+```
+pending ──────────> approved
+   │  └───────────> rejected
+   └─> modification_requested ──> resubmitted ──> approved / rejected
+              │                                    │
+              └────────────────────────────────────┘
+            (modifications may be requested again)
+```
+
+Configure on the service:
+
+```ts
+super({
+  repository,
+  approvalPipeline: {
+    // enabled defaults to true when the option is provided
+    permissions: {
+      approve: 'posts.approve',            // optional per-action permission
+      reject: 'posts.reject',
+      requestModification: 'posts.update',
+      resubmit: 'posts.update',
+    },
+    visibleStatuses: ['approved'],         // optional read filter (default: all)
+  },
+});
+```
+
+Behavior:
+
+- **Create**: the record and a `pending` approval row (`entity` = table name, `entityId` = stringified PK, `requestedBy` = current user) are created in one transaction. If either fails, both roll back.
+- **`GET /:id/approval`** — returns `{ approval, history }`, where `approval` is the current status row and `history` is every modification request ever made (newest first).
+- **`POST /:id/approval/approve`** / **`reject`** — allowed from `pending` or `resubmitted`; records `decidedBy` / `decidedAt`. `400` on illegal transitions, `404` when the entity or approval row is missing.
+- **`POST /:id/approval/request-modification`** — allowed from `pending` or `resubmitted`; body `{ modifications: [{ field, currentValue?, wantedValue, note? }], note? }`. Moves the status to `modification_requested`, stores the items on `currentModifications`, and appends an immutable `approval_modification_history` row.
+- **`POST /:id/approval/resubmit`** — moves `modification_requested` → `resubmitted` (the creator edits the record via `PATCH` first, then resubmits).
+- **Permissions**: when `permissions.<action>` is set, the caller must hold that permission (403 otherwise). When unset, the action is open to any caller. Ownership rules from `enforceOwnership` are respected for all approval actions.
+- **Visibility**: when `visibleStatuses` is set, read endpoints (`findAll`, `findMine`, `findAllWithCursor`, `findOne`) only return records whose approval status is in the list. Unset = all records visible regardless of approval state.
+- Endpoints 404 when the pipeline is disabled or the endpoint is disabled, mirroring `changeStatus`.
+
+The endpoints map to `CrudEndpoint` values `getApproval | approveApproval | rejectApproval | requestModification | resubmitApproval`. Map them for the permission guard via `endpointActions`:
+
+```ts
+buildCrudPermissionsFromRegistry(permissionRegistry, {
+  resource: 'posts',
+  endpointActions: {
+    getApproval: 'read',
+    approveApproval: 'approve',
+    rejectApproval: 'reject',
+    requestModification: 'update',
+    resubmitApproval: 'update',
+  },
+});
+```
+
+## 7) Lifecycle Hooks
 
 Configure hooks in your service for before/after actions:
 
@@ -242,7 +306,7 @@ super({
 
 Available hooks: `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeRemove`, `afterRemove`, `beforeFindOne`, `afterFindOne`.
 
-## 7) Cursor Pagination
+## 8) Cursor Pagination
 
 Pass `?cursor=<opaque>` to `GET /` for cursor-based pagination:
 
@@ -298,7 +362,7 @@ type CursorStrategy =
   | { type: 'uuid'; timestampColumn: string };
 ```
 
-## 8) findMine (User-Scoped Records)
+## 9) findMine (User-Scoped Records)
 
 Simple column match:
 
@@ -321,7 +385,7 @@ super({
 });
 ```
 
-## 9) Audit Logging
+## 10) Audit Logging
 
 Two complementary audit mechanisms are built in: **event-based** (real-time streams) and **DB-backed** (persistent audit trail).
 
@@ -438,7 +502,7 @@ export class MyService {
 
 `CreateAuditLogInput` fields: `action`, `tenantId?`, `entity?`, `entityId?`, `userId?`, `metadata?`, `ip?`, `userAgent?`.
 
-## 10) Testing Factory
+## 11) Testing Factory
 
 Generate complete test suites for your CRUD service and controller with zero boilerplate.
 
@@ -544,20 +608,20 @@ const qb = createMockQb();
 const mock = createDefaultMockEntity(Post);
 ```
 
-## 11) Global Response and DB Error Handling
+## 12) Global Response and DB Error Handling
 
 Add these in bootstrap:
 
 - `ResponseInterceptor` as global interceptor for consistent response shape.
 - `TypeOrmExceptionFilter` as global filter for DB errors (including duplicate keys).
 
-## 12) Filtering and Pagination Notes
+## 13) Filtering and Pagination Notes
 
 - Filtering uses `filter[field_operator]=value` format.
 - Supported operators: `eq`, `ne`, `cont`, `notcont`, `starts`, `ends`, `gte`, `lte`, `gt`, `lt`, `in`, `nin`, `isnull`.
 - Express query parser should be `extended` for deep object query parsing.
 
-## 13) Help Notes
+## 14) Help Notes
 
 - Use `disabledEndpoints` in service options to hide generated routes without rewriting controllers.
 - `relations` option lets you resolve `propertyId` payload fields into related entities.

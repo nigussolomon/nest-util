@@ -18,7 +18,14 @@ export type CrudRegistryEndpoint =
   | 'create'
   | 'update'
   | 'remove'
-  | 'findAuditLogs';
+  | 'findAuditLogs'
+  | 'findMine'
+  | 'changeStatus'
+  | 'getApproval'
+  | 'approveApproval'
+  | 'rejectApproval'
+  | 'requestModification'
+  | 'resubmitApproval';
 
 export type CrudEndpointActions = Partial<Record<CrudRegistryEndpoint, string>>;
 

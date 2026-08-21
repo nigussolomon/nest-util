@@ -3,6 +3,11 @@ import { PaginationDto } from '../dtos/pagination.dto';
 import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { OwnershipUser } from './find-mine.interface';
 import { StatusValue } from './status-pipeline.interface';
+import {
+  ApprovalHistoryView,
+  ApprovalStatusView,
+  RequestModificationPayload,
+} from './approval-pipeline.interface';
 
 export type CrudEndpoint =
   | 'findAll'
@@ -12,7 +17,12 @@ export type CrudEndpoint =
   | 'changeStatus'
   | 'remove'
   | 'findAuditLogs'
-  | 'findMine';
+  | 'findMine'
+  | 'getApproval'
+  | 'approveApproval'
+  | 'rejectApproval'
+  | 'requestModification'
+  | 'resubmitApproval';
 
 export interface AuditLogQuery {
   user_id?: string;
@@ -64,4 +74,21 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
     userId: string | number,
     query: PaginationDto & FilterDto
   ): Promise<{ data: ResponseDto[]; meta?: unknown }>;
+
+  getApproval?(
+    id: number,
+    user?: OwnershipUser
+  ): Promise<{ approval: ApprovalStatusView; history: ApprovalHistoryView[] }>;
+
+  approveApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
+
+  rejectApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
+
+  requestModification?(
+    id: number,
+    dto: RequestModificationPayload,
+    user?: OwnershipUser
+  ): Promise<ApprovalStatusView>;
+
+  resubmitApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
 }

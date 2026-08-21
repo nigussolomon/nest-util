@@ -19,8 +19,14 @@ import { FilterDto } from '../dtos/filter.dto';
 import { Audit } from '../decorators/audit-log.decorator';
 import { ListAuditLogsDto } from '../dtos/list-audit-logs.dto';
 import { StatusChangeDto } from '../dtos/status-change.dto';
+import { RequestModificationDto } from '../dtos/request-modification.dto';
 import { CurrentUser } from '@nest-util/nest-auth';
 import type { OwnershipUser } from '../interfaces/find-mine.interface';
+import type {
+  ApprovalHistoryView,
+  ApprovalStatusView,
+  RequestModificationPayload,
+} from '../interfaces/approval-pipeline.interface';
 
 export const AUTH_PERMISSIONS_METADATA_KEY = 'auth:permissions';
 
@@ -50,6 +56,19 @@ export interface IBaseController<CD, UD, RD> {
   ): Promise<RD>;
   remove(id: number, user?: OwnershipUser): Promise<boolean>;
   findAuditLogs?(query: ListAuditLogsDto): Promise<unknown>;
+
+  getApproval?(
+    id: number,
+    user?: OwnershipUser
+  ): Promise<{ approval: ApprovalStatusView; history: ApprovalHistoryView[] }>;
+  approveApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
+  rejectApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
+  requestModification?(
+    id: number,
+    dto: RequestModificationPayload,
+    user?: OwnershipUser
+  ): Promise<ApprovalStatusView>;
+  resubmitApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
 }
 
 const toPermissionList = (
@@ -227,6 +246,92 @@ export function CreateNestedCrudController<CD, UD, RD>(
       }
 
       return this.service.changeStatus(id, dto.status, user);
+    }
+
+    @Get(':id/approval')
+    @Message('fetched approval')
+    @ApiResponse({ description: 'Approval status and modification history' })
+    getApproval(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('getApproval');
+
+      if (!this.service.getApproval) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.getApproval(id, user);
+    }
+
+    @Post(':id/approval/approve')
+    @Message('approved')
+    @Audit({ action: 'APPROVE' })
+    @ApiResponse({ description: 'The updated approval status' })
+    approveApproval(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('approveApproval');
+
+      if (!this.service.approveApproval) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.approveApproval(id, user);
+    }
+
+    @Post(':id/approval/reject')
+    @Message('rejected')
+    @Audit({ action: 'REJECT' })
+    @ApiResponse({ description: 'The updated approval status' })
+    rejectApproval(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('rejectApproval');
+
+      if (!this.service.rejectApproval) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.rejectApproval(id, user);
+    }
+
+    @Post(':id/approval/request-modification')
+    @Message('modification requested')
+    @Audit({ action: 'REQUEST_MODIFICATION' })
+    @ApiBody({ type: RequestModificationDto })
+    @ApiResponse({ description: 'The updated approval status' })
+    requestModification(
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: RequestModificationDto,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('requestModification');
+
+      if (!this.service.requestModification) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.requestModification(id, dto, user);
+    }
+
+    @Post(':id/approval/resubmit')
+    @Message('resubmitted')
+    @Audit({ action: 'RESUBMIT' })
+    @ApiResponse({ description: 'The updated approval status' })
+    resubmitApproval(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('resubmitApproval');
+
+      if (!this.service.resubmitApproval) {
+        throw new NotFoundException('Resource not found');
+      }
+
+      return this.service.resubmitApproval(id, user);
     }
 
     @Delete(':id')

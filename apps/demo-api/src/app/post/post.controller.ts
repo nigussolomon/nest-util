@@ -24,6 +24,13 @@ const PostCrudControllerBase = CreateNestedCrudController(
     permissions: {
       ...buildCrudPermissionsFromRegistry(permissionRegistry, {
         resource: 'posts',
+        endpointActions: {
+          getApproval: 'read',
+          approveApproval: 'approve',
+          rejectApproval: 'reject',
+          requestModification: 'update',
+          resubmitApproval: 'update',
+        },
       }),
       changeStatus: 'posts.changeStatus',
     },

@@ -58,6 +58,7 @@ export interface CrudTestContext {
 export interface MockQueryBuilder {
   where: jest.Mock;
   andWhere: jest.Mock;
+  innerJoin: jest.Mock;
   leftJoinAndSelect: jest.Mock;
   leftJoin: jest.Mock;
   orderBy: jest.Mock;
