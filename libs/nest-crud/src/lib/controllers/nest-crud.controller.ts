@@ -335,6 +335,23 @@ export function CreateNestedCrudController<CD, UD, RD>(
       return this.service.resubmitApproval(id, user);
     }
 
+    @Post(':id/approval/submit')
+    @Message('submitted')
+    @Audit({ action: 'SUBMIT' })
+    @ApiResponse({ description: 'The updated approval status' })
+    submitApproval(
+      @Param('id', ParseIntPipe) id: number,
+      @CurrentUser() user?: OwnershipUser
+    ) {
+      this.ensureEndpointEnabled('submitApproval');
+
+      if (!this.service.submitApproval) {
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
+      }
+
+      return this.service.submitApproval(id, user);
+    }
+
     @Delete(':id')
     @Message('deleted')
     @Audit({ action: 'DELETE' })

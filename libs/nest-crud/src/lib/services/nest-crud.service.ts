@@ -836,6 +836,10 @@ export class NestCrudService<
     return this.transitionApproval(id, 'resubmit', user);
   }
 
+  async submitApproval(id: number, user?: OwnershipUser): Promise<ApprovalStatusView> {
+    return this.transitionApproval(id, 'submit', user);
+  }
+
   private isApprovalPipelineConfigured(): boolean {
     return Boolean(
       this.approvalPipeline && this.approvalPipeline.enabled !== false
@@ -872,8 +876,7 @@ export class NestCrudService<
       const approval = approvalRepo.create({
         entity: this.repo.metadata.tableName,
         entityId: String((saved as { id?: string | number }).id),
-        status: APPROVAL_STATUS.pending,
-        requestedBy: user?.id != null ? String(user.id) : null,
+        status: APPROVAL_STATUS.draft,
       });
       await approvalRepo.save(approval);
 
@@ -912,7 +915,7 @@ export class NestCrudService<
 
   private async transitionApproval(
     id: number,
-    action: 'approve' | 'reject' | 'requestModification' | 'resubmit',
+    action: 'approve' | 'reject' | 'requestModification' | 'resubmit' | 'submit',
     user?: OwnershipUser,
     modifications?: ModificationItem[],
     note?: string
@@ -939,28 +942,33 @@ export class NestCrudService<
     const current = approval.status as ApprovalStatus;
     const now = new Date();
     const userId = user?.id != null ? String(user.id) : null;
-    const transitionable = [
-      APPROVAL_STATUS.pending,
+    const reviewable = [
+      APPROVAL_STATUS.submitted,
       APPROVAL_STATUS.resubmitted,
     ];
 
     switch (action) {
+      case 'submit':
+        this.assertTransitionAllowed(action, current, [APPROVAL_STATUS.draft]);
+        approval.status = APPROVAL_STATUS.submitted;
+        approval.requestedBy = userId;
+        break;
       case 'approve':
-        this.assertTransitionAllowed(action, current, transitionable);
+        this.assertTransitionAllowed(action, current, reviewable);
         approval.status = APPROVAL_STATUS.approved;
         approval.decidedBy = userId;
         approval.decidedAt = now;
         approval.currentModifications = null;
         break;
       case 'reject':
-        this.assertTransitionAllowed(action, current, transitionable);
+        this.assertTransitionAllowed(action, current, reviewable);
         approval.status = APPROVAL_STATUS.rejected;
         approval.decidedBy = userId;
         approval.decidedAt = now;
         approval.currentModifications = null;
         break;
       case 'requestModification':
-        this.assertTransitionAllowed(action, current, transitionable);
+        this.assertTransitionAllowed(action, current, reviewable);
         approval.status = APPROVAL_STATUS.modificationRequested;
         approval.currentModifications = modifications ?? [];
 

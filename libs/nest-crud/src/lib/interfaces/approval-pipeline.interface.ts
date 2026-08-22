@@ -1,15 +1,16 @@
 /**
  * Lifecycle of an approval status row.
  *
- *   pending ──────────> approved
- *      │  └───────────> rejected
- *      └─> modification_requested ──> resubmitted ──> approved / rejected
+ *   draft ──> submitted ────────> approved
+ *      │        │  └────────────> rejected
+ *      │        └─> modification_requested ──> resubmitted ──> approved / rejected
  *                 │                                    │
  *                 └────────────────────────────────────┘
  *               (modifications may be requested again)
  */
 export const APPROVAL_STATUS = {
-  pending: 'pending',
+  draft: 'draft',
+  submitted: 'submitted',
   approved: 'approved',
   rejected: 'rejected',
   modificationRequested: 'modification_requested',
@@ -19,7 +20,7 @@ export const APPROVAL_STATUS = {
 export type ApprovalStatus = (typeof APPROVAL_STATUS)[keyof typeof APPROVAL_STATUS];
 
 /**
- * A single requested modification on a pending record. Each item names the
+ * A single requested modification on a record under review. Each item names the
  * field to change and the value the reviewer wants instead.
  */
 export interface ModificationItem {
@@ -59,19 +60,21 @@ export interface ApprovalHistoryView {
 }
 
 export interface ApprovalPipelinePermissions {
-  /** Required permission to approve (pending/resubmitted -> approved). */
+  /** Required permission to approve (submitted/resubmitted -> approved). */
   approve?: string;
-  /** Required permission to reject (pending/resubmitted -> rejected). */
+  /** Required permission to reject (submitted/resubmitted -> rejected). */
   reject?: string;
   /** Required permission to request modifications. */
   requestModification?: string;
   /** Required permission to resubmit after modifications. */
   resubmit?: string;
+  /** Required permission to submit a draft for approval. */
+  submit?: string;
 }
 
 export interface ApprovalPipelineConfig {
   /**
-   * When true, every created record also gets a pending approval status row
+   * When true, every created record also gets a draft approval status row
    * (created in the same transaction). Defaults to true when the option is
    * provided.
    */

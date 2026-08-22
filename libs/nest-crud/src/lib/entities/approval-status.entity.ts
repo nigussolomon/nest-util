@@ -9,9 +9,9 @@ import {
 import type { ModificationItem } from '../interfaces/approval-pipeline.interface';
 
 /**
- * Tracks the approval lifecycle of a created record. One row per approved-or-
- * pending entity, polymorphically referencing the target row via the table
- * name (`entity`) and its primary key (`entityId`).
+ * Tracks the approval lifecycle of a created record. One row per
+ * draft/submitted/approved entity, polymorphically referencing the target row
+ * via the table name (`entity`) and its primary key (`entityId`).
  */
 @Entity('approval_statuses')
 export class ApprovalStatusEntity {
@@ -28,9 +28,9 @@ export class ApprovalStatusEntity {
   @Column()
   entityId!: string;
 
-  /** pending | approved | rejected | modification_requested | resubmitted */
+  /** draft | submitted | approved | rejected | modification_requested | resubmitted */
   @Index()
-  @Column({ default: 'pending' })
+  @Column({ default: 'draft' })
   status!: string;
 
   /** User who submitted the record for approval. */

@@ -15,12 +15,12 @@ class ApprovalEntity {
   name!: string;
 }
 
-const pendingRow = () =>
+const submittedRow = () =>
   ({
     id: 1,
     entity: 'approval_entity',
     entityId: '1',
-    status: APPROVAL_STATUS.pending,
+    status: APPROVAL_STATUS.submitted,
     requestedBy: '7',
     requestedAt: new Date('2024-01-01T00:00:00.000Z'),
     currentModifications: null,
@@ -28,7 +28,7 @@ const pendingRow = () =>
 
 const modificationRequestedRow = () =>
   ({
-    ...pendingRow(),
+    ...submittedRow(),
     status: APPROVAL_STATUS.modificationRequested,
     currentModifications: [{ field: 'name', wantedValue: 'renamed' }],
   }) as unknown as ApprovalStatusEntity;
@@ -65,7 +65,7 @@ describe('NestCrudService - approval pipeline', () => {
 
   beforeEach(() => {
     approvalRepo = {
-      findOneBy: jest.fn().mockResolvedValue(pendingRow()),
+      findOneBy: jest.fn().mockResolvedValue(submittedRow()),
       create: jest.fn((input) => input),
       save: jest.fn((input) => Promise.resolve(input)),
     } as unknown as jest.Mocked<Repository<ApprovalStatusEntity>>;
@@ -92,7 +92,7 @@ describe('NestCrudService - approval pipeline', () => {
   });
 
   describe('create', () => {
-    it('creates the entity and a pending approval status in one transaction', async () => {
+    it('creates the entity and a draft approval status in one transaction', async () => {
       const service = buildService();
       repo.save.mockImplementation((e: any) =>
         Promise.resolve({ ...e, id: 1 })
@@ -106,8 +106,7 @@ describe('NestCrudService - approval pipeline', () => {
         expect.objectContaining({
           entity: 'approvalentity',
           entityId: '1',
-          status: APPROVAL_STATUS.pending,
-          requestedBy: '7',
+          status: APPROVAL_STATUS.draft,
         })
       );
       expect(approvalRepo.save).toHaveBeenCalled();
@@ -134,13 +133,15 @@ describe('NestCrudService - approval pipeline', () => {
       expect(repo.save).toHaveBeenCalled();
     });
 
-    it('uses a null requestedBy when no user is provided', async () => {
+    it('starts a draft without a requestedBy until submitted', async () => {
       const service = buildService();
 
       await service.create({ name: 'post' });
 
       expect(approvalRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ requestedBy: null })
+        expect.objectContaining({
+          status: APPROVAL_STATUS.draft,
+        })
       );
     });
   });
@@ -168,7 +169,7 @@ describe('NestCrudService - approval pipeline', () => {
       const result = await service.getApproval(1);
 
       expect(result.approval).toEqual(
-        expect.objectContaining({ entityId: '1', status: 'pending' })
+        expect.objectContaining({ entityId: '1', status: 'submitted' })
       );
       expect(result.history).toHaveLength(1);
       expect(result.history[0]).toEqual(
@@ -224,7 +225,7 @@ describe('NestCrudService - approval pipeline', () => {
     it('rejects approving an already approved record', async () => {
       const service = buildService();
       approvalRepo.findOneBy.mockResolvedValue({
-        ...pendingRow(),
+        ...submittedRow(),
         status: APPROVAL_STATUS.approved,
       } as unknown as ApprovalStatusEntity);
 
@@ -279,7 +280,7 @@ describe('NestCrudService - approval pipeline', () => {
     it('rejects requesting modifications on an approved record', async () => {
       const service = buildService();
       approvalRepo.findOneBy.mockResolvedValue({
-        ...pendingRow(),
+        ...submittedRow(),
         status: APPROVAL_STATUS.approved,
       } as unknown as ApprovalStatusEntity);
 
@@ -316,6 +317,40 @@ describe('NestCrudService - approval pipeline', () => {
       await expect(service.resubmitApproval(1)).rejects.toThrow(
         BadRequestException
       );
+    });
+  });
+
+  describe('submit', () => {
+    it('moves a draft to submitted and records the requester', async () => {
+      const service = buildService();
+      const draft = {
+        ...submittedRow(),
+        status: APPROVAL_STATUS.draft,
+        requestedBy: undefined,
+      } as unknown as ApprovalStatusEntity;
+      approvalRepo.findOneBy.mockResolvedValue(draft);
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      const result = await service.submitApproval(1, { id: 11 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.submitted);
+      expect(approvalRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: APPROVAL_STATUS.submitted,
+          requestedBy: '11',
+        })
+      );
+    });
+
+    it('rejects submitting an already submitted record', async () => {
+      const service = buildService();
+
+      await expect(service.submitApproval(1)).rejects.toThrow(
+        BadRequestException
+      );
+      expect(approvalRepo.save).not.toHaveBeenCalled();
     });
   });
 

@@ -22,7 +22,8 @@ export type CrudEndpoint =
   | 'approveApproval'
   | 'rejectApproval'
   | 'requestModification'
-  | 'resubmitApproval';
+  | 'resubmitApproval'
+  | 'submitApproval';
 
 export interface AuditLogQuery {
   user_id?: string;
@@ -91,4 +92,6 @@ export interface CrudInterface<CreateDto, UpdateDto, ResponseDto> {
   ): Promise<ApprovalStatusView>;
 
   resubmitApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
+
+  submitApproval?(id: number, user?: OwnershipUser): Promise<ApprovalStatusView>;
 }
