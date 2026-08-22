@@ -9,7 +9,14 @@ import { FilterDto } from '../dtos/filter.dto';
 import { applyPagination } from '../helpers/pagination.helper';
 import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
 import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
-import { CrudHookConfig, CrudHooks, TransactionConfig } from '../interfaces/hooks.interface';
+import {
+  ApprovalHookContext,
+  ApprovalHooks,
+  AfterApprovalHookContext,
+  CrudHookConfig,
+  CrudHooks,
+  TransactionConfig,
+} from '../interfaces/hooks.interface';
 import { FindMineConfig, OwnershipUser } from '../interfaces/find-mine.interface';
 import {
   StatusPipelineConfig,
@@ -104,6 +111,7 @@ export class NestCrudService<
     }
   > = new Map();
   protected readonly approvalPipeline?: ApprovalPipelineConfig;
+  protected readonly approvalHooks: ApprovalHooks;
 
   constructor(options: CrudServiceOptions<Entity, ResponseDto>) {
     this.repo = options.repository;
@@ -140,6 +148,7 @@ export class NestCrudService<
       );
     }
     this.approvalPipeline = options.approvalPipeline;
+    this.approvalHooks = options.approvalPipeline?.hooks ?? {};
   }
 
   private normalizeStatusTransitions(
@@ -873,10 +882,15 @@ export class NestCrudService<
       );
 
       const approvalRepo = manager.getRepository(ApprovalStatusEntity);
+      const initialStatus =
+        this.approvalPipeline?.initialStatus ?? APPROVAL_STATUS.draft;
       const approval = approvalRepo.create({
         entity: this.repo.metadata.tableName,
         entityId: String((saved as { id?: string | number }).id),
-        status: APPROVAL_STATUS.draft,
+        status: initialStatus,
+        ...(initialStatus === APPROVAL_STATUS.submitted
+          ? { requestedBy: user?.id != null ? String(user.id) : null }
+          : {}),
       });
       await approvalRepo.save(approval);
 
@@ -894,6 +908,69 @@ export class NestCrudService<
       return this.findOwnedEntity(id, user as OwnershipUser);
     }
     return this.repo.findOneBy({ id } as unknown as Partial<Entity>);
+  }
+
+  /**
+   * Loads the target entity with its configured `include` relations so that
+   * relation fields can be read as objects when capturing modification values.
+   */
+  private async getEntityWithRelations(
+    id: number,
+    user?: OwnershipUser
+  ): Promise<Entity | null> {
+    if (this.enforceOwnershipFor(user)) {
+      return this.findOwnedEntity(id, user as OwnershipUser);
+    }
+    const relations = this.include.length
+      ? this.buildRelationsObject(this.include)
+      : undefined;
+    return this.repo.findOne({
+      where: { id } as unknown as Partial<Entity>,
+      relations: relations as any,
+    });
+  }
+
+  /** Reads a (possibly nested, dot-path) field from an entity. */
+  private readCurrentValue(entity: Entity | null, field: string): unknown {
+    if (!entity || !field) {
+      return undefined;
+    }
+    const parts = field.split('.');
+    let current: any = entity;
+    for (const part of parts) {
+      if (current == null) {
+        return undefined;
+      }
+      current = current[part];
+    }
+    return current;
+  }
+
+  /**
+   * Deep-clones a value so it can be safely stored in a jsonb column. Object
+   * graphs with circular references (common for loaded relations) are
+   * sanitized: a circular branch is replaced with the string '[Circular]'.
+   */
+  private sanitizeForJsonb(value: unknown): unknown {
+    const seen = new WeakSet<object>();
+    const walk = (node: unknown): unknown => {
+      if (node === null || typeof node !== 'object') {
+        return node;
+      }
+      if (seen.has(node as object)) {
+        return '[Circular]';
+      }
+      seen.add(node as object);
+      if (Array.isArray(node)) {
+        return node.map((item) => walk(item));
+      }
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(node as Record<string, unknown>)) {
+        out[key] = walk((node as Record<string, unknown>)[key]);
+      }
+      return out;
+    };
+    return walk(value);
   }
 
   private async loadApprovalStatus(
@@ -940,6 +1017,7 @@ export class NestCrudService<
     }
 
     const current = approval.status as ApprovalStatus;
+    const previousStatus = current;
     const now = new Date();
     const userId = user?.id != null ? String(user.id) : null;
     const reviewable = [
@@ -947,9 +1025,29 @@ export class NestCrudService<
       APPROVAL_STATUS.resubmitted,
     ];
 
+    // Already in a reviewable/terminal state (e.g. the pipeline was
+    // configured with initialStatus: 'submitted'): no submit transition is
+    // needed, so this is a harmless no-op returning the current status. Hooks
+    // are skipped because no transition actually occurs.
+    if (action === 'submit' && current !== APPROVAL_STATUS.draft) {
+      return this.toApprovalStatusView(approval);
+    }
+
+    const beforeContext: ApprovalHookContext = {
+      id,
+      user,
+      approval: this.toApprovalStatusView(approval),
+    };
+
+    await this.fireApprovalBeforeHook(
+      action,
+      beforeContext,
+      modifications ?? [],
+      note
+    );
+
     switch (action) {
       case 'submit':
-        this.assertTransitionAllowed(action, current, [APPROVAL_STATUS.draft]);
         approval.status = APPROVAL_STATUS.submitted;
         approval.requestedBy = userId;
         break;
@@ -967,20 +1065,32 @@ export class NestCrudService<
         approval.decidedAt = now;
         approval.currentModifications = null;
         break;
-      case 'requestModification':
+      case 'requestModification': {
         this.assertTransitionAllowed(action, current, reviewable);
         approval.status = APPROVAL_STATUS.modificationRequested;
-        approval.currentModifications = modifications ?? [];
+
+        const entity = await this.getEntityWithRelations(id, user);
+        const capturedModifications = (modifications ?? []).map((m) => ({
+          ...m,
+          currentValue: this.sanitizeForJsonb(
+            m.currentValue !== undefined
+              ? m.currentValue
+              : this.readCurrentValue(entity, m.field)
+          ),
+          wantedValue: this.sanitizeForJsonb(m.wantedValue),
+        }));
+        approval.currentModifications = capturedModifications;
 
         await this.getHistoryRepository().save(
           this.getHistoryRepository().create({
             approvalStatusId: approval.id,
-            modifications: modifications ?? [],
+            modifications: capturedModifications,
             requestedBy: userId,
             note: note ?? null,
           })
         );
         break;
+      }
       case 'resubmit':
         if (current !== APPROVAL_STATUS.modificationRequested) {
           throw keyed(
@@ -998,7 +1108,77 @@ export class NestCrudService<
 
     const saved = await this.getApprovalRepository().save(approval);
 
-    return this.toApprovalStatusView(saved);
+    const afterContext: AfterApprovalHookContext = {
+      id,
+      user,
+      approval: this.toApprovalStatusView(saved),
+      previousStatus,
+    };
+
+    await this.fireApprovalAfterHook(
+      action,
+      afterContext,
+      modifications ?? [],
+      note
+    );
+
+    return afterContext.approval;
+  }
+
+  private async fireApprovalBeforeHook(
+    action: 'approve' | 'reject' | 'requestModification' | 'resubmit' | 'submit',
+    context: ApprovalHookContext,
+    modifications: ModificationItem[],
+    note?: string
+  ): Promise<void> {
+    switch (action) {
+      case 'submit':
+        await this.executeHook(this.approvalHooks.beforeSubmit, context);
+        break;
+      case 'approve':
+        await this.executeHook(this.approvalHooks.beforeApprove, context);
+        break;
+      case 'reject':
+        await this.executeHook(this.approvalHooks.beforeReject, context);
+        break;
+      case 'resubmit':
+        await this.executeHook(this.approvalHooks.beforeResubmit, context);
+        break;
+      case 'requestModification':
+        await this.executeHook(
+          this.approvalHooks.beforeRequestModification,
+          { ...context, modifications, note }
+        );
+        break;
+    }
+  }
+
+  private async fireApprovalAfterHook(
+    action: 'approve' | 'reject' | 'requestModification' | 'resubmit' | 'submit',
+    context: AfterApprovalHookContext,
+    modifications: ModificationItem[],
+    note?: string
+  ): Promise<void> {
+    switch (action) {
+      case 'submit':
+        await this.executeHook(this.approvalHooks.afterSubmit, context);
+        break;
+      case 'approve':
+        await this.executeHook(this.approvalHooks.afterApprove, context);
+        break;
+      case 'reject':
+        await this.executeHook(this.approvalHooks.afterReject, context);
+        break;
+      case 'resubmit':
+        await this.executeHook(this.approvalHooks.afterResubmit, context);
+        break;
+      case 'requestModification':
+        await this.executeHook(
+          this.approvalHooks.afterRequestModification,
+          { ...context, modifications, note }
+        );
+        break;
+    }
   }
 
   private assertTransitionAllowed(

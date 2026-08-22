@@ -30,7 +30,7 @@ register hooks, user management, API keys, notify) live in the main
 | `express` | `^5.2.1` | `^5.2.1` (no change) |
 | CRUD controller factory opts | `{ permissions }` only | `{ permissions, enableFindMine }` |
 | CRUD service options | `repository`, `allowedFilters`, `allowedSortFields`, `include`, `relations`, `toResponseDto`, `createDtoClass`, `updateDtoClass`, `disabledEndpoints` | + `hooks`, `userOwnershipField`, `findMineQuery`, `enforceOwnership`, `ownershipBypass*`, `superAdminPermission`, `cursorStrategy`, `statusPipeline`, `approvalPipeline` |
-| CRUD endpoints | `GET /`, `POST /`, `PATCH /:id`, `DELETE /:id`, `GET /auditlogs`, `GET /:id` | + `GET /mine`, `POST /:id/status`, `GET /:id/approval`, `POST /:id/approval/*` (5), `GET /?cursor=` |
+| CRUD endpoints | `GET /`, `POST /`, `PATCH /:id`, `DELETE /:id`, `GET /auditlogs`, `GET /:id` | + `GET /mine`, `POST /:id/status`, `GET /:id/approval`, `POST /:id/approval/*` (6), `GET /?cursor=` |
 | Auth endpoints | `register`, `login`, `refresh`, `me`, `me/permissions`, `logout`, `permissions`, `roles`, `roles/:roleId/permissions`, `users/:userId/roles(/:roleId)` | + `otp/*`, `password-reset/*`, `verify`, `verify/resend`, `onboarding/*`, `users` (admin CRUD), `api-keys` |
 | Auth module options | `identifierField`, `passkeyField`, `jwtSecret`, `expiresIn`, `refresh*`, `disabledRoutes`, `login/register/refreshDto`, `relations`, `rbac`, `permissionRegistry` | + `identifierFields`, `otp`, `passwordReset`, `rateLimit`, `loginAttempts`, `apiKey`, `userManagement`, `verification`, `onboarding`, `registerHooks` |
 
@@ -275,6 +275,12 @@ what you need. Detailed steps are in the linked phase of
 | `relations` FK resolution | ⚠️ exists in 0.0.1 already | Phase 6 (reference) |
 | Status pipeline (`POST /:id/status`) | ✅ | Phase 7 |
 | Approval pipeline (`/approval/*`) | ✅ | Phase 8 |
+
+> **Note — approval pipeline status change:** the reviewable state was renamed
+> `pending` → `submitted`, and a new `draft` initial state plus a `submit` step
+> (`POST /:id/approval/submit`) were added. If you already had the older
+> `pending`-based pipeline enabled, existing `approval_statuses` rows must be
+> remapped. See [MIGRATION-APPROVAL-PIPELINE.md](./MIGRATION-APPROVAL-PIPELINE.md).
 | Audit event bus | ✅ | Phase 9 |
 | Auth rate limiting / login lockout / reset abuse | ✅ | Phase 10 |
 | Registration verification (OTP) | ✅ | Phase 11 |

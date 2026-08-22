@@ -798,13 +798,18 @@ public async down(queryRunner: QueryRunner): Promise<void> {
 
 ### What's New
 
-`nest-crud@1.1.x+` ships an **approval workflow**. When enabled, every created record also gets a pending `approval_statuses` row (in the same transaction). New endpoints drive the lifecycle:
+`nest-crud@1.1.x+` ships an **approval workflow**. When enabled, every created record also gets an `approval_statuses` row (in the same transaction). New endpoints drive the lifecycle:
 
 ```
-pending ──────────> approved
-   │  └───────────> rejected
-   └─> modification_requested ──> resubmitted ──> approved / rejected
+draft ──> submitted ────────> approved
+   │        │  └────────────> rejected
+   │        └─> modification_requested ──> resubmitted ──> approved / rejected
 ```
+
+> **Upgrading from the older `pending`-based pipeline?** The reviewable state was
+> renamed `pending` → `submitted` and a new `draft` initial state + `submit`
+> step were added. Existing `pending` rows must be remapped — see
+> [MIGRATION-APPROVAL-PIPELINE.md](./MIGRATION-APPROVAL-PIPELINE.md).
 
 ### Step 8.1: Enable in Service Options
 
@@ -813,9 +818,11 @@ super({
   repository,
   approvalPipeline: {
     enabled: true,                              // defaults to true when block present
+    initialStatus: 'draft',                     // 'draft' (default) | 'submitted'
     permissions: {
-      approve: 'posts.approve',                 // pending/resubmitted -> approved
-      reject: 'posts.reject',                   // pending/resubmitted -> rejected
+      submit: 'posts.submit',                   // draft -> submitted (omit for submitted-start)
+      approve: 'posts.approve',                 // submitted/resubmitted -> approved
+      reject: 'posts.reject',                   // submitted/resubmitted -> rejected
       requestModification: 'posts.review',      // -> modification_requested
       resubmit: 'posts.submit',                 // modification_requested -> resubmitted
     },
@@ -824,15 +831,16 @@ super({
 });
 ```
 
-When `permissions` are set, each action requires the matching permission; when unset, any caller may perform it. `visibleStatuses` (e.g. `['approved']`) restricts `findAll`/`findOne`/`findMine`/`findAllWithCursor` to records in those states.
+When `permissions` are set, each action requires the matching permission; when unset, any caller may perform it. `visibleStatuses` (e.g. `['approved']`) restricts `findAll`/`findOne`/`findMine`/`findAllWithCursor` to records in those states. Set `initialStatus: 'submitted'` to keep the old behavior where records are created already reviewable (the `submit` step is then a no-op).
 
 ### Step 8.2: New Endpoints
 
 | Endpoint | Method | Body | Description |
 |---|---|---|---|
 | `GET /:id/approval` | `@Get(':id/approval')` | — | Returns `{ approval, history }` |
-| `POST /:id/approval/approve` | `@Post(':id/approval/approve')` | — | `pending`/`resubmitted` → `approved` |
-| `POST /:id/approval/reject` | `@Post(':id/approval/reject')` | — | `pending`/`resubmitted` → `rejected` |
+| `POST /:id/approval/submit` | `@Post(':id/approval/submit')` | — | `draft` → `submitted`, records `requestedBy` |
+| `POST /:id/approval/approve` | `@Post(':id/approval/approve')` | — | `submitted`/`resubmitted` → `approved` |
+| `POST /:id/approval/reject` | `@Post(':id/approval/reject')` | — | `submitted`/`resubmitted` → `rejected` |
 | `POST /:id/approval/request-modification` | `@Post(':id/approval/request-modification')` | `RequestModificationDto` | → `modification_requested` |
 | `POST /:id/approval/resubmit` | `@Post(':id/approval/resubmit')` | — | `modification_requested` → `resubmitted` |
 
@@ -861,7 +869,7 @@ public async up(queryRunner: QueryRunner): Promise<void> {
       "id" SERIAL PRIMARY KEY,
       "entity" varchar NOT NULL,
       "entityId" varchar NOT NULL,
-      "status" varchar NOT NULL DEFAULT 'pending',
+      "status" varchar NOT NULL DEFAULT 'draft',
       "requestedBy" varchar,
       "requestedAt" timestamptz NOT NULL DEFAULT now(),
       "currentModifications" jsonb,
@@ -893,9 +901,10 @@ public async up(queryRunner: QueryRunner): Promise<void> {
 
 ### Checkpoint 8: Approval Pipeline
 
-- `POST /posts` → new `approval_statuses` row with `status: 'pending'`
+- `POST /posts` → new `approval_statuses` row with `status: 'draft'` (or `'submitted'` if `initialStatus: 'submitted'`)
+- `POST /posts/10/approval/submit` → `draft` → `submitted` (no-op if already `submitted`)
 - `POST /posts/10/approval/approve` → `approved`
-- `POST /posts/10/approval/request-modification` → `modification_requested`, history appended
+- `POST /posts/10/approval/request-modification` → `modification_requested`, history appended (with `currentValue` auto-captured when omitted)
 - `GET /posts/10/approval` → returns approval + history
 
 ---
@@ -1491,6 +1500,7 @@ Start your API and verify these endpoints:
 | PATCH /post/:id | Update post | 200 + audit log |
 | POST /post/:id/status | Change status | 200 (if statusPipeline) |
 | GET /post/:id/approval | Get approval | 200 (if approvalPipeline) |
+| POST /post/:id/approval/submit | Submit draft | 200 (if approvalPipeline) |
 | POST /post/:id/approval/approve | Approve | 200 (if approvalPipeline) |
 | POST /post/:id/approval/request-modification | Request mods | 200 (if approvalPipeline) |
 | POST /post/:id/approval/resubmit | Resubmit | 200 (if approvalPipeline) |

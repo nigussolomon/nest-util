@@ -1,3 +1,5 @@
+import type { ApprovalHooks } from './hooks.interface';
+
 /**
  * Lifecycle of an approval status row.
  *
@@ -24,9 +26,13 @@ export type ApprovalStatus = (typeof APPROVAL_STATUS)[keyof typeof APPROVAL_STAT
  * field to change and the value the reviewer wants instead.
  */
 export interface ModificationItem {
-  /** Entity field to modify, e.g. 'title'. */
+  /** Entity field to modify, e.g. 'title' or 'category' (a relation). */
   field: string;
-  /** Value currently stored on the record (captured at request time). */
+  /**
+   * Value currently stored on the record. Auto-captured from the live entity
+   * when omitted (supports relation objects; circular refs are sanitized to
+   * '[Circular]').
+   */
   currentValue?: unknown;
   /** Value the reviewer wants instead. */
   wantedValue: unknown;
@@ -81,6 +87,17 @@ export interface ApprovalPipelineConfig {
   enabled?: boolean;
 
   /**
+   * Initial status assigned to a record's approval row on create.
+   *  - 'draft'    (default): the record waits in draft until `submitApproval`
+   *    is called; the `submit` permission applies and `requestedBy` is filled
+   *    on submit.
+   *  - 'submitted': the record is created already in the reviewable state
+   *    (the creating user becomes the requester), so no explicit submit step
+   *    is needed.
+   */
+  initialStatus?: 'draft' | 'submitted';
+
+  /**
    * Optional permission strings required to perform each action. When unset,
    * the action is allowed for any authenticated (or anonymous) caller.
    */
@@ -93,6 +110,13 @@ export interface ApprovalPipelineConfig {
    * of approval state.
    */
   visibleStatuses?: readonly ApprovalStatus[];
+
+  /**
+   * Before/after hooks for each approval transition, mirroring the generic
+   * `CrudHooks` API. Each hook receives the approval row view and (for
+   * `after*`) the previous status.
+   */
+  hooks?: ApprovalHooks;
 }
 
 export interface RequestModificationPayload {

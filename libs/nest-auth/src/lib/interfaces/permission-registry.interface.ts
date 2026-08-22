@@ -25,7 +25,8 @@ export type CrudRegistryEndpoint =
   | 'approveApproval'
   | 'rejectApproval'
   | 'requestModification'
-  | 'resubmitApproval';
+  | 'resubmitApproval'
+  | 'submitApproval';
 
 export type CrudEndpointActions = Partial<Record<CrudRegistryEndpoint, string>>;
 

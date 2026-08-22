@@ -1,3 +1,10 @@
+import {
+  ApprovalStatus,
+  ApprovalStatusView,
+  ModificationItem,
+} from './approval-pipeline.interface';
+import { OwnershipUser } from './find-mine.interface';
+
 export type CrudHook<TContext = any> = (context: TContext) => Promise<any> | any;
 
 export interface CrudHookConfig<TContext = any> {
@@ -63,4 +70,38 @@ export interface TransactionConfig {
     | 'REPEATABLE READ'
     | 'SERIALIZABLE';
   timeout?: number;
+}
+
+export interface ApprovalHookContext {
+  id: number;
+  user?: OwnershipUser;
+  approval: ApprovalStatusView;
+}
+
+export interface AfterApprovalHookContext extends ApprovalHookContext {
+  previousStatus: ApprovalStatus;
+}
+
+export interface RequestModificationApprovalHookContext
+  extends ApprovalHookContext {
+  modifications: ModificationItem[];
+  note?: string;
+}
+
+export interface AfterRequestModificationApprovalHookContext
+  extends RequestModificationApprovalHookContext {
+  previousStatus: ApprovalStatus;
+}
+
+export interface ApprovalHooks {
+  beforeSubmit?: CrudHookConfig<ApprovalHookContext>;
+  afterSubmit?: CrudHookConfig<AfterApprovalHookContext>;
+  beforeApprove?: CrudHookConfig<ApprovalHookContext>;
+  afterApprove?: CrudHookConfig<AfterApprovalHookContext>;
+  beforeReject?: CrudHookConfig<ApprovalHookContext>;
+  afterReject?: CrudHookConfig<AfterApprovalHookContext>;
+  beforeRequestModification?: CrudHookConfig<RequestModificationApprovalHookContext>;
+  afterRequestModification?: CrudHookConfig<AfterRequestModificationApprovalHookContext>;
+  beforeResubmit?: CrudHookConfig<ApprovalHookContext>;
+  afterResubmit?: CrudHookConfig<AfterApprovalHookContext>;
 }

@@ -15,7 +15,8 @@ export class ModificationItemDto {
   field!: string;
 
   @ApiProperty({
-    description: 'Value currently stored on the record (captured at request time)',
+    description:
+      'Value currently stored on the record. Auto-filled from the live entity when omitted (supports relation objects).',
     required: false,
   })
   @IsOptional()

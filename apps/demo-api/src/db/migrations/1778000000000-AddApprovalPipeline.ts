@@ -9,7 +9,7 @@ export class AddApprovalPipeline1778000000000 implements MigrationInterface {
         "id" SERIAL NOT NULL,
         "entity" character varying NOT NULL,
         "entityId" character varying NOT NULL,
-        "status" character varying NOT NULL DEFAULT 'pending',
+        "status" character varying NOT NULL DEFAULT 'draft',
         "requestedBy" character varying,
         "requestedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         "currentModifications" jsonb,

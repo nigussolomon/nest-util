@@ -225,14 +225,14 @@ Permission gating: grant `posts.changeStatus` (or map the action via `endpointAc
 
 ## 6) Approval Pipeline
 
-An approval workflow for newly created records. When enabled, every `create` also writes an `approval_statuses` row inside the **same transaction**, starting at `pending`. Reviewers can approve, reject, or request modifications; the creator can then resubmit. The two backing tables (`approval_statuses`, `approval_modification_history`) ship with the library — register them with TypeORM (`TypeOrmModule.forFeature`) and let `synchronize` or a migration create them.
+An approval workflow for newly created records. When enabled, every `create` also writes an `approval_statuses` row inside the **same transaction**, starting at `draft` (default) or `submitted` (see `initialStatus`). Reviewers can approve, reject, or request modifications; the creator can then resubmit. The two backing tables (`approval_statuses`, `approval_modification_history`) ship with the library — register them with TypeORM (`TypeOrmModule.forFeature`) and let `synchronize` or a migration create them.
 
 Status flow:
 
 ```
-pending ──────────> approved
-   │  └───────────> rejected
-   └─> modification_requested ──> resubmitted ──> approved / rejected
+draft ──> submitted ────────> approved
+   │        │  └────────────> rejected
+   │        └─> modification_requested ──> resubmitted ──> approved / rejected
               │                                    │
               └────────────────────────────────────┘
             (modifications may be requested again)
@@ -245,35 +245,50 @@ super({
   repository,
   approvalPipeline: {
     // enabled defaults to true when the option is provided
+    // initialStatus: 'draft' (default) | 'submitted'
+    initialStatus: 'draft',
     permissions: {
-      approve: 'posts.approve',            // optional per-action permission
+      submit: 'posts.submit',               // required to move draft -> submitted
+      approve: 'posts.approve',             // optional per-action permission
       reject: 'posts.reject',
       requestModification: 'posts.update',
       resubmit: 'posts.update',
     },
     visibleStatuses: ['approved'],         // optional read filter (default: all)
+    hooks: {
+      beforeSubmit: {
+        handler: async (ctx) => { /* validate before the submit transition */ },
+      },
+      afterApprove: {
+        handler: async (ctx) => { /* notify after approval is saved */ },
+        transaction: true,                 // optional; runs inside a transaction
+      },
+    },
   },
 });
 ```
 
 Behavior:
 
-- **Create**: the record and a `pending` approval row (`entity` = table name, `entityId` = stringified PK, `requestedBy` = current user) are created in one transaction. If either fails, both roll back.
+- **Create**: the record and an approval row (`entity` = table name, `entityId` = stringified PK) are created in one transaction. With the default `initialStatus: 'draft'` the row starts at `draft` (no `requestedBy` yet). With `initialStatus: 'submitted'` it starts at `submitted` and `requestedBy` is set to the creating user, so no explicit submit step is needed. If either write fails, both roll back.
+- **`POST /:id/approval/submit`** — moves `draft` → `submitted` and records `requestedBy`. When the record is already in a reviewable/terminal state (e.g. it started as `submitted`), this is a harmless no-op returning the current status. Gated by `permissions.submit` when the transition actually runs.
 - **`GET /:id/approval`** — returns `{ approval, history }`, where `approval` is the current status row and `history` is every modification request ever made (newest first).
-- **`POST /:id/approval/approve`** / **`reject`** — allowed from `pending` or `resubmitted`; records `decidedBy` / `decidedAt`. `400` on illegal transitions, `404` when the entity or approval row is missing.
-- **`POST /:id/approval/request-modification`** — allowed from `pending` or `resubmitted`; body `{ modifications: [{ field, currentValue?, wantedValue, note? }], note? }`. Moves the status to `modification_requested`, stores the items on `currentModifications`, and appends an immutable `approval_modification_history` row.
+- **`POST /:id/approval/approve`** / **`reject`** — allowed from `submitted` or `resubmitted`; records `decidedBy` / `decidedAt`. `400` on illegal transitions, `404` when the entity or approval row is missing.
+- **`POST /:id/approval/request-modification`** — allowed from `submitted` or `resubmitted`; body `{ modifications: [{ field, currentValue?, wantedValue, note? }], note? }`. Moves the status to `modification_requested`, stores the items on `currentModifications`, and appends an immutable `approval_modification_history` row. `currentValue` is **auto-captured from the live record** when omitted — including relation objects (the entity is loaded with its configured `include` relations). Circular references in captured objects are sanitized to `'[Circular]'` so the `jsonb` column saves cleanly.
 - **`POST /:id/approval/resubmit`** — moves `modification_requested` → `resubmitted` (the creator edits the record via `PATCH` first, then resubmits).
 - **Permissions**: when `permissions.<action>` is set, the caller must hold that permission (403 otherwise). When unset, the action is open to any caller. Ownership rules from `enforceOwnership` are respected for all approval actions.
+- **Lifecycle hooks**: `hooks.before<Action>` fires before the transition (with the current approval view); `hooks.after<Action>` fires after the transition is saved (with the new view and `previousStatus`). `requestModification` hooks also receive `modifications` and `note`. Hooks use the same `{ handler, transaction? }` shape as `CrudHooks`, and `transaction: true` wraps the handler in its own transaction. A `submit` that is a no-op (already reviewable) skips hooks. See section 7 for the full hook list and context shapes.
 - **Visibility**: when `visibleStatuses` is set, read endpoints (`findAll`, `findMine`, `findAllWithCursor`, `findOne`) only return records whose approval status is in the list. Unset = all records visible regardless of approval state.
 - Endpoints 404 when the pipeline is disabled or the endpoint is disabled, mirroring `changeStatus`.
 
-The endpoints map to `CrudEndpoint` values `getApproval | approveApproval | rejectApproval | requestModification | resubmitApproval`. Map them for the permission guard via `endpointActions`:
+The endpoints map to `CrudEndpoint` values `getApproval | submitApproval | approveApproval | rejectApproval | requestModification | resubmitApproval`. Map them for the permission guard via `endpointActions`:
 
 ```ts
 buildCrudPermissionsFromRegistry(permissionRegistry, {
   resource: 'posts',
   endpointActions: {
     getApproval: 'read',
+    submitApproval: 'submit',
     approveApproval: 'approve',
     rejectApproval: 'reject',
     requestModification: 'update',
@@ -305,6 +320,29 @@ super({
 ```
 
 Available hooks: `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeRemove`, `afterRemove`, `beforeFindOne`, `afterFindOne`.
+
+### Approval Lifecycle Hooks
+
+The approval pipeline (section 6) exposes the same hook shape for its transitions, nested under `approvalPipeline.hooks`:
+
+```ts
+approvalPipeline: {
+  hooks: {
+    beforeSubmit: { handler: async (ctx) => {} },
+    afterSubmit: { handler: async (ctx) => {}, transaction: true },
+    beforeApprove: { handler: async (ctx) => {} },
+    afterApprove: { handler: async (ctx) => {} },
+    beforeReject: { handler: async (ctx) => {} },
+    afterReject: { handler: async (ctx) => {} },
+    beforeRequestModification: { handler: async (ctx) => {} },
+    afterRequestModification: { handler: async (ctx) => {} },
+    beforeResubmit: { handler: async (ctx) => {} },
+    afterResubmit: { handler: async (ctx) => {} },
+  },
+}
+```
+
+Each `before<Action>` context carries `{ id, user?, approval }`, where `approval` is the current `ApprovalStatusView`. Each `after<Action>` context adds `previousStatus` and carries the freshly saved `approval` view. `requestModification` hooks additionally receive `modifications` and `note`.
 
 ## 8) Cursor Pagination
 
