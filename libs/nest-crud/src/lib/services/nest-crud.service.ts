@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Type } from '@nestjs/common';
+import { Injectable, HttpStatus, Type } from '@nestjs/common';
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import { DeepPartial, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 import { AuditLogEntity } from '../entities/audit-log.entity';
 import { applyFilters, resolveQueryTarget } from '../helpers/filter.helper';
@@ -214,7 +215,11 @@ export class NestCrudService<
       } as unknown as Partial<ObjectLiteral>);
 
       if (!entity) {
-        throw new NotFoundException(`${String(relation.property)} not found`);
+        throw keyed(
+        HttpStatus.NOT_FOUND,
+        ErrorKey.CRUD_RELATION_NOT_FOUND,
+        { property: String(relation.property) }
+      );
       }
 
       (payload as unknown as Record<string, unknown>)[
@@ -411,9 +416,7 @@ export class NestCrudService<
     const userId = user?.id;
 
     if (userId === undefined || userId === null) {
-      throw new ForbiddenException(
-        'Authentication required to access this resource'
-      );
+      throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_UNAUTHORIZED);
     }
 
     const qb = this.repo.createQueryBuilder('e');
@@ -448,10 +451,10 @@ export class NestCrudService<
       this.statusCreateAllow.length > 0 &&
       !this.statusCreateAllow.includes(requested as StatusValue)
     ) {
-      throw new BadRequestException(
-        `Invalid initial status '${String(requested)}'. Allowed: ${this.statusCreateAllow
-          .map(String)
-          .join(', ') || 'none'}`
+      throw keyed(
+        HttpStatus.BAD_REQUEST,
+        ErrorKey.CRUD_INVALID_STATUS,
+        { requested: String(requested) }
       );
     }
   }
@@ -482,24 +485,26 @@ export class NestCrudService<
     const entry = this.statusTransitions.get(current as StatusValue);
 
     if (!entry) {
-      throw new BadRequestException(
-        `Invalid status transition: '${String(current)}' -> '${String(
-          requestedValue
-        )}'. Status '${String(current)}' has no allowed transitions`
+      throw keyed(
+        HttpStatus.BAD_REQUEST,
+        ErrorKey.CRUD_STATUS_TRANSITION_INVALID,
+        { from: String(current), to: String(requestedValue) }
       );
     }
 
     if (!entry.to.has(requestedValue)) {
-      throw new BadRequestException(
-        `Invalid status transition: '${String(current)}' -> '${String(
-          requestedValue
-        )}'. Allowed: ${[...entry.to].map(String).join(', ')}`
+      throw keyed(
+        HttpStatus.BAD_REQUEST,
+        ErrorKey.CRUD_STATUS_TRANSITION_INVALID,
+        { from: String(current), to: String(requestedValue) }
       );
     }
 
     if (entry.permission && !this.canBypassOwnershipForTransition(user, entry.permission)) {
-      throw new ForbiddenException(
-        `Missing required permission '${entry.permission}' for status transition`
+      throw keyed(
+        HttpStatus.FORBIDDEN,
+        ErrorKey.CRUD_STATUS_TRANSITION_FORBIDDEN,
+        { permission: entry.permission }
       );
     }
 
@@ -574,7 +579,7 @@ export class NestCrudService<
     query: PaginationDto & FilterDto
   ): Promise<{ data: ResponseDto[]; meta?: unknown }> {
     if (!this.userOwnershipField && !this.findMineQuery) {
-      throw new BadRequestException('findMine not configured');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.CRUD_FIND_MINE_NOT_CONFIGURED);
     }
 
     const qb = this.repo.createQueryBuilder('e');
@@ -693,7 +698,7 @@ export class NestCrudService<
     }
 
     if (!entity) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
     }
 
     const result = this.toResponseDto
@@ -712,9 +717,7 @@ export class NestCrudService<
       !this.canBypassOwnership(user)
     ) {
       if (!user || user.id === undefined || user.id === null) {
-        throw new ForbiddenException(
-          'Authentication required to access this resource'
-        );
+        throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_UNAUTHORIZED);
       }
       const field = String(this.userOwnershipField);
       const matchingRelation = this.relations.find(
@@ -731,7 +734,7 @@ export class NestCrudService<
       if (payloadValue !== undefined && payloadValue !== null) {
         // Value present — must match the authenticated user
         if (String(payloadValue) !== String(user.id)) {
-          throw new NotFoundException('Resource not found');
+          throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
         }
       } else {
         // Value absent — auto-set to the authenticated user
@@ -774,7 +777,7 @@ export class NestCrudService<
     user?: OwnershipUser
   ): Promise<ResponseDto> {
     if (!this.isStatusPipelineConfigured()) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_STATUS_NOT_CONFIGURED);
     }
 
     const payload = { [String(this.statusField)]: status } as unknown as UpdateDto;
@@ -787,13 +790,13 @@ export class NestCrudService<
     user?: OwnershipUser
   ): Promise<{ approval: ApprovalStatusView; history: ApprovalHistoryView[] }> {
     if (!this.isApprovalPipelineConfigured()) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_APPROVAL_NOT_CONFIGURED);
     }
 
     const approval = await this.loadApprovalStatus(id, user);
 
     if (!approval) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
     }
 
     const history = await this.getHistoryRepository().find({
@@ -915,20 +918,22 @@ export class NestCrudService<
     note?: string
   ): Promise<ApprovalStatusView> {
     if (!this.isApprovalPipelineConfigured()) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_APPROVAL_NOT_CONFIGURED);
     }
 
     const permission = this.approvalPipeline?.permissions?.[action];
     if (permission && !this.userHasPermission(user, permission)) {
-      throw new ForbiddenException(
-        `Missing required permission '${permission}' for ${action}`
+      throw keyed(
+        HttpStatus.FORBIDDEN,
+        ErrorKey.CRUD_APPROVAL_FORBIDDEN,
+        { permission, action }
       );
     }
 
     const approval = await this.loadApprovalStatus(id, user);
 
     if (!approval) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
     }
 
     const current = approval.status as ApprovalStatus;
@@ -970,8 +975,10 @@ export class NestCrudService<
         break;
       case 'resubmit':
         if (current !== APPROVAL_STATUS.modificationRequested) {
-          throw new BadRequestException(
-            `Cannot resubmit approval from status '${current}'`
+          throw keyed(
+            HttpStatus.BAD_REQUEST,
+            ErrorKey.CRUD_APPROVAL_INVALID_TRANSITION,
+            { action: 'resubmit', current: String(current) }
           );
         }
         approval.status = APPROVAL_STATUS.resubmitted;
@@ -992,8 +999,10 @@ export class NestCrudService<
     allowedFrom: readonly ApprovalStatus[]
   ): void {
     if (!allowedFrom.includes(current)) {
-      throw new BadRequestException(
-        `Cannot ${action} approval from status '${current}'`
+      throw keyed(
+        HttpStatus.BAD_REQUEST,
+        ErrorKey.CRUD_APPROVAL_INVALID_TRANSITION,
+        { action, current: String(current) }
       );
     }
   }
@@ -1083,7 +1092,7 @@ export class NestCrudService<
     }
 
     if (!existing) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
     }
 
     await this.executeHook(this.hooks.beforeUpdate, { payload, entity: existing, id });
@@ -1125,7 +1134,7 @@ export class NestCrudService<
     }
 
     if (!existing) {
-      throw new NotFoundException('Resource not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
     }
 
     await this.executeHook(this.hooks.beforeRemove, { entity: existing, id });

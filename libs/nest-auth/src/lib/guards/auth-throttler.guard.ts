@@ -1,4 +1,5 @@
-import { Inject, UnauthorizedException } from '@nestjs/common';
+import { keyed, ErrorKey } from '@nest-util/nest-error';
+import { HttpStatus, Inject } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerGuard, InjectThrottlerOptions, InjectThrottlerStorage } from '@nestjs/throttler';
@@ -41,6 +42,6 @@ export class AuthThrottlerGuard extends ThrottlerGuard {
   protected override async throwThrottlingException(
     _context: ExecutionContext
   ): Promise<void> {
-    throw new UnauthorizedException('Invalid credentials');
+    throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
   }
 }

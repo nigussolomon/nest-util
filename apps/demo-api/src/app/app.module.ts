@@ -5,6 +5,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ResponseInterceptor } from '@nest-util/nest-crud';
+import { LocalizationModule } from '@nest-util/nest-error';
+import errorMessages from '../config/error-messages.json';
 import { PostController } from './post/post.controller';
 import { CommentController } from './comment/comment.controller';
 import { PostService } from './post/post.service';
@@ -158,6 +160,12 @@ import { NotifyModule } from './notify/notify.module';
     }),
     PaymentModule,
     NotifyModule,
+    LocalizationModule.forRoot({
+      messages: errorMessages,
+      defaultLang: 'en',
+      supportedLangs: ['en', 'am'],
+      // debug: process.env.NODE_ENV !== 'production',
+    }),
     NestFileModule.forRoot({
       s3: {
         endpoint: process.env.S3_ENDPOINT,

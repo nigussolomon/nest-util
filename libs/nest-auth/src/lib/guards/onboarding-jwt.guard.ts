@@ -1,10 +1,11 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   CanActivate,
   ExecutionContext,
   Inject,
   Injectable,
   Optional,
-  UnauthorizedException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
@@ -38,7 +39,7 @@ export class OnboardingJwtGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (!this.options.onboarding?.enabled) {
-      throw new UnauthorizedException('Onboarding is not enabled');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_NOT_ENABLED);
     }
 
     const request = context.switchToHttp().getRequest();
@@ -46,7 +47,7 @@ export class OnboardingJwtGuard implements CanActivate {
 
     if (!token) {
       this.emitDenied(request, 'Missing onboarding token');
-      throw new UnauthorizedException('Onboarding token is required');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_TOKEN_REQUIRED);
     }
 
     const secret = this.options.onboarding.onboardingTokenSecret ||
@@ -59,12 +60,12 @@ export class OnboardingJwtGuard implements CanActivate {
       });
     } catch {
       this.emitDenied(request, 'Invalid or expired onboarding token');
-      throw new UnauthorizedException('Invalid or expired onboarding token');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_TOKEN_INVALID);
     }
 
     if (payload.type !== 'onboarding' || !payload.sub) {
       this.emitDenied(request, 'Token is not an onboarding token');
-      throw new UnauthorizedException('Invalid onboarding token');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_TOKEN_INVALID);
     }
 
     const attempt = await this.onboardingAttemptRepository.findOne({
@@ -73,12 +74,12 @@ export class OnboardingJwtGuard implements CanActivate {
 
     if (!attempt) {
       this.emitDenied(request, 'Onboarding attempt not found');
-      throw new UnauthorizedException('Invalid onboarding token');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_TOKEN_INVALID);
     }
 
     if (attempt.consumedAt) {
       this.emitDenied(request, 'Onboarding token already used');
-      throw new UnauthorizedException('Onboarding token has already been used');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_TOKEN_USED);
     }
 
     request.onboardingAttempt = attempt;

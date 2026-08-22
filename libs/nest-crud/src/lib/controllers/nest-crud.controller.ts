@@ -2,14 +2,15 @@ import {
   Body,
   Delete,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
   ParseIntPipe,
   Type,
+  HttpStatus,
 } from '@nestjs/common';
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import { ApiBody, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { Message } from '../decorators/response-message.decorator';
 import { CrudEndpoint, CrudInterface } from '../interfaces/crud.interface';
@@ -137,7 +138,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
 
     private ensureEndpointEnabled(endpoint: CrudEndpoint): void {
       if (this.service.disabledEndpoints?.includes(endpoint)) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
     }
 
@@ -173,7 +174,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       // Cursor-based pagination: dispatch to cursor endpoint
       if (query.cursor !== undefined) {
         if (!this.service.findAllWithCursor) {
-          throw new NotFoundException('Resource not found');
+          throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
         }
         return this.service.findAllWithCursor(query);
       }
@@ -199,7 +200,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('findMine');
 
       if (!this.service.findMine) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.findMine(user.id, query);
@@ -242,7 +243,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('changeStatus');
 
       if (!this.service.changeStatus) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.changeStatus(id, dto.status, user);
@@ -258,7 +259,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('getApproval');
 
       if (!this.service.getApproval) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.getApproval(id, user);
@@ -275,7 +276,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('approveApproval');
 
       if (!this.service.approveApproval) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.approveApproval(id, user);
@@ -292,7 +293,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('rejectApproval');
 
       if (!this.service.rejectApproval) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.rejectApproval(id, user);
@@ -311,7 +312,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('requestModification');
 
       if (!this.service.requestModification) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.requestModification(id, dto, user);
@@ -328,7 +329,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('resubmitApproval');
 
       if (!this.service.resubmitApproval) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.resubmitApproval(id, user);
@@ -351,7 +352,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
       this.ensureEndpointEnabled('findAuditLogs');
 
       if (!this.service.findAuditLogs) {
-        throw new NotFoundException('Resource not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.CRUD_RESOURCE_NOT_FOUND);
       }
 
       return this.service.findAuditLogs(query);

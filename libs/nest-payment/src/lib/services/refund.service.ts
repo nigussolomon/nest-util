@@ -1,9 +1,9 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException,
-  BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -50,12 +50,10 @@ export class RefundService {
       id: dto.paymentId,
     });
     if (!payment) {
-      throw new NotFoundException('Parent payment not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.PAYMENT_PAYMENT_NOT_FOUND);
     }
     if (payment.status !== 'succeeded') {
-      throw new BadRequestException(
-        `Cannot refund payment with status '${payment.status}'. Only 'succeeded' payments can be refunded.`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     // Calculate already-refunded total
@@ -70,9 +68,7 @@ export class RefundService {
     const refundAmount = dto.amount ?? Number(payment.amount);
 
     if (totalRefunded + refundAmount > Number(payment.amount)) {
-      throw new BadRequestException(
-        `Refund amount (${refundAmount}) plus already refunded (${totalRefunded}) exceeds payment amount (${payment.amount})`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     // Create DB record
@@ -93,9 +89,7 @@ export class RefundService {
     // Resolve provider
     const provider = this.getProvider(saved.provider);
     if (!provider.createRefund) {
-      throw new BadRequestException(
-        `Provider '${provider.id}' does not support refunds`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     try {
@@ -189,7 +183,7 @@ export class RefundService {
 
   async findOne(id: string): Promise<RefundEntity> {
     const entity = await this.refundRepository.findOneBy({ id });
-    if (!entity) throw new NotFoundException('Refund not found');
+    if (!entity) throw keyed(HttpStatus.NOT_FOUND, ErrorKey.PAYMENT_REFUND_NOT_FOUND);
     return entity;
   }
 
@@ -232,7 +226,7 @@ export class RefundService {
   private getProvider(providerId: string) {
     const provider = this.options.providers.find((p) => p.id === providerId);
     if (!provider) {
-      throw new BadRequestException(`Unknown payment provider: ${providerId}`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_PROVIDER_NOT_CONFIGURED);
     }
     return provider;
   }

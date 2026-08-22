@@ -97,6 +97,7 @@
   "dependencies": {
     "@nest-util/nest-auth": "workspace:*",
     "@nest-util/nest-crud": "workspace:*",
+    "@nest-util/nest-error": "workspace:*",
     "@nest-util/nest-file": "workspace:*",
     "@nest-util/nest-notify": "workspace:*",
     "@nest-util/nest-payment": "workspace:*",

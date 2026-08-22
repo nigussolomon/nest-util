@@ -1,0 +1,26 @@
+{
+  "en": {
+    "CRUD_RESOURCE_NOT_FOUND": "The requested resource was not found",
+    "CRUD_FORBIDDEN": "You are not allowed to perform this action",
+    "AUTH_UNAUTHORIZED": "Authentication is required",
+    "CRUD_RELATION_NOT_FOUND": "The referenced related record does not exist",
+    "CRUD_INVALID_STATUS": "The provided status is not allowed",
+    "CRUD_STATUS_TRANSITION_INVALID": "The requested status change is not allowed",
+    "CRUD_STATUS_TRANSITION_FORBIDDEN": "You do not have permission to change this status",
+    "DB_DUPLICATE_ENTRY": "A record with this value already exists",
+    "VALIDATION_FAILED": "Some of the provided data is invalid",
+    "INTERNAL_ERROR": "An unexpected error occurred. Please try again later"
+  },
+  "am": {
+    "CRUD_RESOURCE_NOT_FOUND": "የቀየረው ሀብት አልተገኘም",
+    "CRUD_FORBIDDEN": "ይህን እርምጃ ለመውሰድ ፍቃድ የለህም",
+    "AUTH_UNAUTHORIZED": "ማረጋገጻ ያስፈልግዎታል",
+    "CRUD_RELATION_NOT_FOUND": "የተገለጸው የተዛመደ ሀብት አልተገኘም",
+    "CRUD_INVALID_STATUS": "የቀረበው ሁኔታ አይፈቀድም",
+    "CRUD_STATUS_TRANSITION_INVALID": "የተጠየቀው የሁኔታ ለውጥ አይፈቀድም",
+    "CRUD_STATUS_TRANSITION_FORBIDDEN": "ይህን ሁኔታ ለመቀየር ፍቃድ የለህም",
+    "DB_DUPLICATE_ENTRY": "በዚህ እሴት ሌላ መዝገብ አስቀድሞ አለ",
+    "VALIDATION_FAILED": "የቀረቡት መረጃ አንዳንዶቹ ልክ ያልሆኑ ናቸው",
+    "INTERNAL_ERROR": "ያልተጠበቀ ስህተት ተከስቷል። እባክዎ ቆይተው እንደገና ይሞክሩ"
+  }
+}

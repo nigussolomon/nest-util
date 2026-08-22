@@ -1,9 +1,8 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
-  ConflictException,
   Inject,
   Injectable,
-  NotFoundException,
-  UnauthorizedException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -82,7 +81,7 @@ export class ApiKeyService {
     if (data.roleIds?.length) {
       const roles = await this.roleRepo.findBy({ id: In(data.roleIds) });
       if (roles.length !== data.roleIds.length) {
-        throw new NotFoundException('One or more roles not found');
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_API_KEY_ROLE_NOT_FOUND);
       }
       const apiKeyRoles = data.roleIds.map((roleId) =>
         this.apiKeyRoleRepo.create({ apiKeyId: saved.id, roleId })
@@ -146,7 +145,7 @@ export class ApiKeyService {
   async revoke(userId: number, keyId: string): Promise<boolean> {
     const key = await this.apiKeyRepo.findOneBy({ id: keyId, userId });
     if (!key) {
-      throw new NotFoundException('API key not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_API_KEY_NOT_FOUND);
     }
     key.isActive = false;
     await this.apiKeyRepo.save(key);
@@ -158,7 +157,7 @@ export class ApiKeyService {
     apiKey: ApiKeyEntity;
   }> {
     if (!rawKey) {
-      throw new UnauthorizedException('Missing API key');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_API_KEY_MISSING);
     }
 
     const allKeys = await this.apiKeyRepo
@@ -175,15 +174,15 @@ export class ApiKeyService {
     }
 
     if (!matchedKey) {
-      throw new UnauthorizedException('Invalid API key');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_API_KEY_INVALID);
     }
 
     if (!matchedKey.isActive) {
-      throw new UnauthorizedException('API key has been revoked');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_API_KEY_REVOKED);
     }
 
     if (matchedKey.expiresAt && matchedKey.expiresAt < new Date()) {
-      throw new UnauthorizedException('API key has expired');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_API_KEY_EXPIRED);
     }
 
     const apiKeyRoles = await this.apiKeyRoleRepo.find({
@@ -225,12 +224,12 @@ export class ApiKeyService {
   ): Promise<ApiKeyRoleEntity> {
     const key = await this.apiKeyRepo.findOneBy({ id: keyId, userId });
     if (!key) {
-      throw new NotFoundException('API key not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_API_KEY_NOT_FOUND);
     }
 
     const role = await this.roleRepo.findOneBy({ id: roleId });
     if (!role) {
-      throw new NotFoundException('Role not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_ROLE_NOT_FOUND);
     }
 
     const existing = await this.apiKeyRoleRepo.findOneBy({
@@ -238,7 +237,7 @@ export class ApiKeyService {
       roleId,
     });
     if (existing) {
-      throw new ConflictException('Role already assigned to this key');
+      throw keyed(HttpStatus.CONFLICT, ErrorKey.AUTH_API_KEY_ROLE_ASSIGN_FAILED);
     }
 
     const apiKeyRole = this.apiKeyRoleRepo.create({
@@ -255,7 +254,7 @@ export class ApiKeyService {
   ): Promise<boolean> {
     const key = await this.apiKeyRepo.findOneBy({ id: keyId, userId });
     if (!key) {
-      throw new NotFoundException('API key not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_API_KEY_NOT_FOUND);
     }
 
     const result = await this.apiKeyRoleRepo.delete({

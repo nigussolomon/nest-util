@@ -33,6 +33,7 @@ The guide is structured in phases. Phases 1–6 are the original `0.1.x → 1.0.
 - [Phase 14: User Management & Profile Endpoints (Optional)](#phase-14-user-management--profile-endpoints-optional)
 - [Phase 15: API Key Authentication (Optional)](#phase-15-api-key-authentication-optional)
 - [Phase 16: Notify — FCM Push, SMTP Email & WebSocket (Optional)](#phase-16-notify--fcm-push-smtp-email--websocket-optional)
+- [Phase 17: Standardized Error System (`@nest-util/nest-error`)](#phase-17-standardized-error-system-nest-utilnest-error)
 - [Post-Migration Verification](#post-migration-verification)
 - [Troubleshooting](#troubleshooting)
 - [Agent Guardrails](#agent-guardrails)
@@ -51,6 +52,9 @@ pnpm add express@^5.2.1
 
 # Optional: add the notify package
 pnpm add @nest-util/nest-notify@^1.1.1
+
+# Required: standardized error system (peer dep of all nest-util libs)
+pnpm add @nest-util/nest-error@^1.0.0
 
 # Optional: auth hardening requires throttler
 pnpm add @nestjs/throttler
@@ -83,6 +87,9 @@ npm run build  # or your build command
 | NestJS 10 → 11 | Peer dependency conflict | Upgrade `@nestjs/common`, `@nestjs/core`, etc. |
 | Express 4 → 5 | Peer dependency conflict | Upgrade `express` to `^5.2.1` |
 | `getCurrentUser` → `CurrentUser` | If you referenced the old decorator name | Use `@CurrentUser()` (already the case since `1.0.x`) |
+| **New required peer `@nest-util/nest-error`** | App fails to boot without it (`Cannot find module`) | `pnpm add @nest-util/nest-error@^1.0.0` |
+| **Error response body shape changed** | `message` becomes an object unless `LocalizationModule` is registered; with it, the `error` field is removed and `code`/`errorKey`/`timestamp`/`path` are added | Register `LocalizationModule.forRoot(...)` (see Phase 17); update clients to read `body.code` |
+| **English error wording changed** | Messages now come from generic `errorKey` defaults (e.g. `Resource not found` → `The requested resource was not found`) | Assert on `body.code` instead of message text; override via `error-messages.json` |
 
 ### New Features (Backward Compatible / Opt-In)
 
@@ -107,6 +114,7 @@ npm run build  # or your build command
 | **Profile Self-Edit** | **1.4.x** | `PATCH /auth/me` for end users | Configure `userManagement.profilePermission` |
 | **API Key Auth** | **1.4.x** | `x-api-key` header auth with roles | Add `apiKey: { enabled: true }` |
 | **Notify (FCM + SMTP + WS)** | **1.1.x** | Push/email notifications + websocket gateway | Add `NestNotifyModule.forRoot(...)` |
+| **Standardized Error System** | **next** | `@nest-util/nest-error`: stable `errorKey`, localized/generic error bodies, `LocalizedExceptionFilter` (handles `23505` → `DB_DUPLICATE_ENTRY`) | `pnpm add @nest-util/nest-error` + register `LocalizationModule.forRoot(...)` — see [Phase 17](#phase-17-standardized-error-system-nest-utilnest-error) and the [Nest Error Migration Guide](./NEST-ERROR-MIGRATION-GUIDE.md) |
 
 ### Package Versions
 
@@ -115,6 +123,7 @@ npm run build  # or your build command
 | `@nest-util/nest-crud` | 0.1.1 | **1.2.2** |
 | `@nest-util/nest-auth` | 0.0.3 | **1.4.5** |
 | `@nest-util/nest-notify` | — (new) | **1.1.1** |
+| `@nest-util/nest-error` | — (new) | **1.0.0** |
 | `@nest-util/nest-audit` | 0.1.1 | **Deleted** |
 | `typeorm` | ^0.3.28 | ^1.1.0 |
 | `@nestjs/common` | ^10.x | ^11.0.0 |
@@ -1333,6 +1342,116 @@ When `socket.enable: true`, a Socket.IO gateway connects at `namespace` (default
 
 ---
 
+## Phase 17: Standardized Error System (`@nest-util/nest-error`)
+
+**Risk Level:** Medium (new required peer; error-body shape change)
+**Estimated Time:** 10-20 minutes
+**Rollback:** Install the peer and keep your own global filter (see [Rollback](#rollback-1))
+
+### What's New
+
+A new package, `@nest-util/nest-error`, provides a standardized, localized, **generic**
+error system used by every library (`nest-crud`, `nest-auth`, `nest-notify`,
+`nest-payment`, `nest-file`):
+
+- `keyed(status, code, params?, safeDetails?)` — throws the real NestJS exception
+  class carrying a stable `errorKey` (so `toThrow(...)` / `instanceof` keep working).
+- `ErrorKey` — single source of truth for all error codes.
+- `LocalizedExceptionFilter` — catch-all filter that renders a consistent JSON body
+  driven by `errorKey`, localizes messages, and maps TypeORM unique-violation errors
+  (`23505` / errno `1062`) to `DB_DUPLICATE_ENTRY` (HTTP 422) with **no SQL leaked**.
+- `LocalizationModule.forRoot(options)` — global module that wires the i18n service,
+  language resolver, and the filter (`APP_FILTER`).
+
+This replaces the old per-app `useGlobalFilters(new TypeOrmExceptionFilter())`
+duplicate-key handling (see [Troubleshooting](#duplicate-key-errors-23505)).
+
+### Step 17.1: Install the Peer Dependency (Required)
+
+```bash
+pnpm add @nest-util/nest-error@^1.0.0
+```
+
+Without it, the libraries fail to load (`Cannot find module '@nest-util/nest-error'`).
+
+### Step 17.2: Register `LocalizationModule` (Recommended)
+
+Register it **once** in your root module. It registers the global
+`LocalizedExceptionFilter`, so every error — including those from `nest-crud`,
+`nest-auth`, etc. — becomes standardized and localized.
+
+```typescript
+import { LocalizationModule } from '@nest-util/nest-error';
+import errorMessages from './config/error-messages.json';
+
+@Module({
+  imports: [
+    LocalizationModule.forRoot({
+      messages: errorMessages,        // { [lang]: { [errorKey]: 'template' } }
+      defaultLang: 'en',
+      supportedLangs: ['en'],
+      debug: process.env.NODE_ENV !== 'production',
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`error-messages.json` is deep-merged over the library defaults, so you only override
+what you need:
+
+```json
+{
+  "en": {
+    "AUTH_USER_NOT_FOUND": "The requested user was not found",
+    "CRUD_RESOURCE_NOT_FOUND": "The requested resource was not found"
+  }
+}
+```
+
+### Step 17.3: Update Client Error Handling
+
+With the filter registered, the error body changes shape:
+
+```json
+{
+  "status": "error",
+  "code": "CRUD_RESOURCE_NOT_FOUND",
+  "message": "The requested resource was not found",
+  "statusCode": 404,
+  "details": null,
+  "timestamp": "2026-08-22T12:00:00.000Z",
+  "path": "/posts/42"
+}
+```
+
+- The old `error` field (`"Not Found"`) is **removed** — read `body.code` / `body.errorKey` instead.
+- `body.message` is again a localized **string** (English wording may differ from before).
+- If you skip Step 17.2, `body.message` is an **object** (`{ errorKey, params, details, message }`) — a hard break for clients that parse `message` as a string.
+
+### Step 17.4: Remove the Old `TypeOrmExceptionFilter`
+
+The new filter already handles `23505` duplicate-key errors, so the manual global
+filter is no longer needed:
+
+```diff
+   const app = await NestFactory.create(AppModule);
+-  app.useGlobalFilters(new TypeOrmExceptionFilter());
+   // ...
+```
+
+### Checkpoint 17: Error System
+
+- A duplicate-key insert returns `422` with `code: "DB_DUPLICATE_ENTRY"` (no SQL leaked)
+- A `404` returns `code: "..."` and a localized `message`
+- `body.error` is no longer present; clients use `body.code`
+- `pnpm run build && pnpm test` pass
+
+> Full details, override examples, and troubleshooting: see the
+> [Nest Error Migration Guide](./NEST-ERROR-MIGRATION-GUIDE.md).
+
+---
+
 ## Post-Migration Verification
 
 ### Full Test Suite
@@ -1498,7 +1617,14 @@ export class PostController extends PostCrudControllerBase {
 
 ### Duplicate Key Errors (23505)
 
-Register `TypeOrmExceptionFilter` as a global filter in your `main.ts`:
+The standardized error system (`@nest-util/nest-error`) maps TypeORM unique-violation
+errors (`23505` / errno `1062`) to `DB_DUPLICATE_ENTRY` (HTTP 422) with no SQL
+leaked. This is handled automatically by the `LocalizedExceptionFilter` registered by
+`LocalizationModule.forRoot()` ([Phase 17](#phase-17-standardized-error-system-nest-utilnest-error)).
+
+If you have **not** adopted `LocalizationModule`, you can still register the older
+`TypeOrmExceptionFilter` from `@nest-util/nest-crud` as a global filter in your
+`main.ts`:
 
 ```typescript
 import { TypeOrmExceptionFilter } from '@nest-util/nest-crud';
@@ -1509,6 +1635,9 @@ async function bootstrap() {
   // ...
 }
 ```
+
+Prefer `LocalizationModule.forRoot()` — it covers all error codes, not just duplicate
+keys, and produces the standardized body.
 
 ---
 
@@ -1582,6 +1711,14 @@ async function bootstrap() {
 1. **ALWAYS** provide FCM credentials or a pre-built app when `fcm.enabled: true`
 2. **ALWAYS** provide SMTP transport/host or disable `smtp.enabled`
 3. **ALWAYS** scope `notify/push` and `notify/email` to the authenticated user
+
+### Standardized Error System
+
+1. **ALWAYS** `pnpm add @nest-util/nest-error` (required peer) when upgrading any nest-util library
+2. **ALWAYS** register `LocalizationModule.forRoot(...)` so errors render as the standardized body (otherwise `message` is an object)
+3. **ALWAYS** update clients to read `body.code` / `body.errorKey` instead of the removed `body.error`
+4. **NEVER** rely on exact English error strings — assert on `errorKey` and override wording via `error-messages.json`
+5. **NEVER** leak SQL/stack by enabling `debug` in production
 
 ### Testing
 

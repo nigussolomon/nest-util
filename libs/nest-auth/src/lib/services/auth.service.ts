@@ -1,12 +1,10 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Injectable,
   Inject,
   Optional,
   UnauthorizedException,
-  ConflictException,
-  BadRequestException,
-  NotFoundException,
-  InternalServerErrorException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource, IsNull, Like } from 'typeorm';
@@ -183,9 +181,7 @@ export class AuthService {
     if (override) {
       const matched = presentIdentifiers.find(({ field }) => field === override);
       if (!matched) {
-        throw new BadRequestException(
-          `verification.identifierField '${override}' was not provided in the registration payload`
-        );
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
       }
       return matched.value.trim();
     }
@@ -198,9 +194,7 @@ export class AuthService {
     const presentIdentifiers = this.getPresentIdentifiers(data);
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     const existingUser = await this.userRepository.findOne({
@@ -213,7 +207,7 @@ export class AuthService {
       this.emitAuthEvent('auth.user.register.conflict', {
         metadata: { identifier: presentIdentifiers[0].value },
       });
-      throw new ConflictException('User already exists');
+      throw keyed(HttpStatus.CONFLICT, ErrorKey.AUTH_USER_ALREADY_EXISTS);
     }
 
     const hashedPassword = password
@@ -248,9 +242,7 @@ export class AuthService {
         );
       } catch {
         await this.userRepository.delete((savedUser as any).id);
-        throw new InternalServerErrorException(
-          'Failed to send verification code'
-        );
+        throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.INTERNAL_ERROR);
       }
     }
 
@@ -266,7 +258,7 @@ export class AuthService {
       this.emitAuthEvent('auth.user.login.failed.user_not_found', {
         metadata: { identifier: undefined },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
     const identifier = presentIdentifiers[0].value;
 
@@ -280,7 +272,7 @@ export class AuthService {
 
     if (!user) {
       this.emitAuthEvent('auth.user.login.failed.user_not_found', { metadata: { identifier } });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
 
     const now = new Date();
@@ -291,7 +283,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier, lockUntil },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
 
     if (this.options.verification?.enabled) {
@@ -302,7 +294,7 @@ export class AuthService {
           userId: user.id,
           metadata: { identifier },
         });
-        throw new UnauthorizedException('Account not verified');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ACCOUNT_NOT_VERIFIED);
       }
     }
 
@@ -336,7 +328,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
 
     if (loginConfig.enabled) {
@@ -362,9 +354,7 @@ export class AuthService {
     const presentIdentifiers = this.getPresentIdentifiers(data);
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     const normalizedIdentifier = presentIdentifiers[0].value.trim();
@@ -445,7 +435,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier, channel: otpOptions.channel || otpConfig.channel },
       });
-      throw new InternalServerErrorException('Failed to deliver OTP');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_OTP_DELIVERY_FAILED);
     }
 
     this.emitAuthEvent('auth.otp.request.success', {
@@ -465,14 +455,14 @@ export class AuthService {
     const otpCode = credentials[otpConfig.inputCodeField];
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException({
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED, {
         code: 'IDENTIFIER_REQUIRED',
         message: `${this.getIdentifierLabel()} is required`,
       });
     }
 
     if (typeof otpCode !== 'string' || !otpCode.trim()) {
-      throw new BadRequestException({
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED, {
         code: 'OTP_REQUIRED',
         message: `${otpConfig.inputCodeField} is required`,
       });
@@ -494,7 +484,7 @@ export class AuthService {
 
     if (!user) {
       this.emitAuthEvent('auth.otp.login.failed.user_not_found', { metadata: { identifier: normalizedIdentifier } });
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'USER_NOT_FOUND',
         message: 'User not found',
       });
@@ -510,7 +500,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier, lockUntil },
       });
-      throw new BadRequestException({
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED, {
         code: 'OTP_LOCKED',
         message: 'Too many OTP attempts',
         lockUntil,
@@ -526,14 +516,14 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier },
       });
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'OTP_NOT_REQUESTED',
         message: 'No OTP has been generated',
       });
     }
 
     if (!expiresAt) {
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'OTP_INVALID_STATE',
         message: 'OTP expiration is missing',
       });
@@ -547,7 +537,7 @@ export class AuthService {
         metadata: { identifier: normalizedIdentifier },
       });
 
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'OTP_EXPIRED',
         message: 'OTP has expired',
       });
@@ -577,7 +567,7 @@ export class AuthService {
           metadata: { identifier: normalizedIdentifier, lockUntil: nextLockUntil },
         });
 
-        throw new BadRequestException({
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED, {
           code: 'OTP_MAX_ATTEMPTS_REACHED',
           message: 'Maximum OTP attempts reached',
           lockUntil: nextLockUntil,
@@ -591,7 +581,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier, attemptsRemaining: otpConfig.maxAttempts - nextAttempts },
       });
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'OTP_INVALID',
         message: 'Invalid OTP code',
         attemptsRemaining: otpConfig.maxAttempts - nextAttempts,
@@ -622,27 +612,27 @@ export class AuthService {
 
       if (!user) {
         this.emitAuthEvent('auth.token.refresh.failed', { metadata: { reason: 'Invalid refresh token' } });
-        throw new UnauthorizedException('Invalid refresh token');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_INVALID);
       }
 
       if (this.options.verification?.enabled) {
         const verifiedField = this.options.verification.verifiedField ?? 'isVerified';
         if (!user[verifiedField]) {
           this.emitAuthEvent('auth.token.refresh.failed', { userId: payload.sub, metadata: { reason: 'Account not verified' } });
-          throw new UnauthorizedException('Account not verified');
+          throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ACCOUNT_NOT_VERIFIED);
         }
       }
 
       const storedHash = user[refreshTokenField] as string;
       if (!storedHash) {
         this.emitAuthEvent('auth.token.refresh.failed', { userId: payload.sub, metadata: { reason: 'Invalid refresh token' } });
-        throw new UnauthorizedException('Invalid refresh token');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_INVALID);
       }
 
       const isTokenValid = await bcrypt.compare(payload.nonce, storedHash);
       if (!isTokenValid) {
         this.emitAuthEvent('auth.token.refresh.failed', { userId: payload.sub, metadata: { reason: 'Refresh token reused or invalid' } });
-        throw new UnauthorizedException('Refresh token reused or invalid');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_REUSED);
       }
 
       this.emitAuthEvent('auth.token.refresh.success', {
@@ -654,7 +644,7 @@ export class AuthService {
     } catch (e: unknown) {
       if (e instanceof UnauthorizedException) throw e;
       this.emitAuthEvent('auth.token.refresh.failed', { metadata: { reason: 'Invalid refresh token' } });
-      throw new UnauthorizedException('Invalid refresh token');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_INVALID);
     }
   }
 
@@ -671,7 +661,7 @@ export class AuthService {
 
     if (updateResult.affected === 0) {
       this.emitAuthEvent('auth.user.logout.failed', { userId, metadata: { reason: 'No user affected' } });
-      throw new UnauthorizedException('Failed to logout');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_LOGOUT_FAILED);
     }
 
     this.emitAuthEvent('auth.user.logout.success', { entityId: userId, userId });
@@ -692,7 +682,7 @@ export class AuthService {
 
     if (!user) {
       this.emitAuthEvent('auth.password.change.failed.user_not_found', { userId, metadata: { reason: 'User not found' } });
-      throw new NotFoundException('User not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_USER_NOT_FOUND);
     }
 
     const storedPassword = user[passkeyField] as string | undefined;
@@ -709,7 +699,7 @@ export class AuthService {
           userId,
           metadata: { reason: 'Current password is incorrect' },
         });
-        throw new UnauthorizedException('Current password is incorrect');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_CURRENT_PASSWORD_INCORRECT);
       }
     } else {
       this.emitAuthEvent('auth.password.change.failed.no_password_set', {
@@ -717,7 +707,7 @@ export class AuthService {
         userId,
         metadata: { reason: 'User does not have a password set' },
       });
-      throw new BadRequestException('User does not have a password set');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_PASSWORD_NOT_SET);
     }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
@@ -730,7 +720,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new InternalServerErrorException('Failed to change password');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_PASSWORD_CHANGE_FAILED);
     }
 
     this.emitAuthEvent('auth.password.change.success', { entityId: userId, userId });
@@ -746,9 +736,7 @@ export class AuthService {
     const presentIdentifiers = this.getPresentIdentifiers(data);
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     const normalizedIdentifier = presentIdentifiers[0].value.trim();
@@ -783,7 +771,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier, lockUntil },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
 
     const lastRequestAt = this.toDate(user[resetConfig.lastRequestAtField]);
@@ -797,7 +785,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
 
     const token = crypto
@@ -825,7 +813,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new InternalServerErrorException('Failed to create reset token');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_RESET_STATE_FAILED);
     }
 
     try {
@@ -850,7 +838,7 @@ export class AuthService {
         metadata: { identifier: normalizedIdentifier },
       });
 
-      throw new InternalServerErrorException('Failed to deliver reset token');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_PASSWORD_RESET_DELIVERY_FAILED);
     }
 
     this.emitAuthEvent('auth.password.reset.request.success', {
@@ -870,11 +858,11 @@ export class AuthService {
     );
 
     if (!token?.trim()) {
-      throw new BadRequestException('Reset token is required');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_PASSWORD_RESET_TOKEN_REQUIRED);
     }
 
     if (!newPassword?.trim()) {
-      throw new BadRequestException('New password is required');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_PASSWORD_RESET_NEW_REQUIRED);
     }
 
     const users = await this.userRepository
@@ -907,7 +895,7 @@ export class AuthService {
 
     if (!matchedUser) {
       this.emitAuthEvent('auth.password.reset.failed.invalid_token', { metadata: { reason: 'Invalid reset token' } });
-      throw new BadRequestException('Invalid reset token');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_PASSWORD_RESET_TOKEN_INVALID);
     }
 
     const lockUntil = this.toDate(matchedUser[resetConfig.lockUntilField]);
@@ -917,7 +905,7 @@ export class AuthService {
         userId: matchedUser.id,
         metadata: { reason: 'Account temporarily locked' },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
 
     const expiresAt = this.toDate(matchedUser[resetConfig.expiresAtField]);
@@ -939,7 +927,7 @@ export class AuthService {
         metadata: { reason: 'Reset token has expired' },
       });
 
-      throw new BadRequestException('Reset token has expired');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_PASSWORD_RESET_TOKEN_EXPIRED);
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -963,7 +951,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new InternalServerErrorException('Failed to reset password');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_RESET_STATE_FAILED);
     }
 
     this.emitAuthEvent('auth.password.reset.success', {
@@ -980,7 +968,7 @@ export class AuthService {
     const roleName = typeof data.name === 'string' ? data.name.trim() : '';
 
     if (!roleName) {
-      throw new BadRequestException('Role name is required');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ROLE_NAME_REQUIRED);
     }
 
     const existingRole = await this.roleRepository.findOne({
@@ -989,7 +977,7 @@ export class AuthService {
 
     if (existingRole) {
       this.emitAuthEvent('auth.role.created.conflict', { metadata: { roleName } });
-      throw new ConflictException('Role already exists');
+      throw keyed(HttpStatus.CONFLICT, ErrorKey.AUTH_ROLE_ALREADY_EXISTS);
     }
 
     const role = this.roleRepository.create({
@@ -1016,7 +1004,7 @@ export class AuthService {
 
     const role = await this.roleRepository.findOne({ where: { id: roleId } });
     if (!role) {
-      throw new NotFoundException('Role not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_ROLE_NOT_FOUND);
     }
 
     const existingAssignment = await this.userRoleRepository.findOne({
@@ -1042,12 +1030,12 @@ export class AuthService {
   ): Promise<RoleEntity> {
     const role = await this.roleRepository.findOne({ where: { id: roleId } });
     if (!role) {
-      throw new NotFoundException('Role not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_ROLE_NOT_FOUND);
     }
 
     const parsedPermissions = this.toPermissionArray(permissions);
     if (parsedPermissions.length === 0) {
-      throw new BadRequestException('Permissions are required');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ROLE_PERMISSIONS_REQUIRED);
     }
 
     const currentPermissions = Array.isArray(role.permissions)
@@ -1072,12 +1060,12 @@ export class AuthService {
   ): Promise<RoleEntity> {
     const role = await this.roleRepository.findOne({ where: { id: roleId } });
     if (!role) {
-      throw new NotFoundException('Role not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_ROLE_NOT_FOUND);
     }
 
     const parsedPermissions = this.toPermissionArray(permissions);
     if (parsedPermissions.length === 0) {
-      throw new BadRequestException('Permissions are required');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ROLE_PERMISSIONS_REQUIRED);
     }
 
     const currentPermissions = Array.isArray(role.permissions)
@@ -1102,7 +1090,7 @@ export class AuthService {
 
     const role = await this.roleRepository.findOne({ where: { id: roleId } });
     if (!role) {
-      throw new NotFoundException('Role not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_ROLE_NOT_FOUND);
     }
 
     const result = await this.userRoleRepository.delete({ userId, roleId });
@@ -1193,9 +1181,7 @@ export class AuthService {
 
     const presentIdentifiers = this.getPresentIdentifiers(data);
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     const existingUser = await this.userRepository.findOne({
@@ -1204,7 +1190,7 @@ export class AuthService {
       })) as never,
     });
     if (existingUser) {
-      throw new ConflictException('User already exists');
+      throw keyed(HttpStatus.CONFLICT, ErrorKey.AUTH_USER_ALREADY_EXISTS);
     }
 
     const allowed = new Set<string>(config.createFields ?? []);
@@ -1220,9 +1206,7 @@ export class AuthService {
           payload[key] = value;
           continue;
         }
-        throw new BadRequestException(
-          `Field '${key}' is not allowed in the user payload`
-        );
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
       }
 
       if (isPassword) {
@@ -1230,7 +1214,7 @@ export class AuthService {
         continue;
       }
       if (this.isSensitiveField(key)) {
-        throw new BadRequestException(`Field '${key}' is not allowed`);
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_REGISTER_FIELD_NOT_ALLOWED);
       }
       payload[key] = value;
     }
@@ -1268,7 +1252,7 @@ export class AuthService {
     });
 
     if (Object.keys(patch).length === 0) {
-      throw new BadRequestException('No updatable fields provided');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_NO_UPDATABLE_FIELDS);
     }
 
     await this.userRepository.update(id, patch as never);
@@ -1296,7 +1280,7 @@ export class AuthService {
     );
 
     if (Object.keys(patch).length === 0) {
-      throw new BadRequestException('No updatable fields provided');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_NO_UPDATABLE_FIELDS);
     }
 
     await this.userRepository.update(userId, patch as never);
@@ -1437,7 +1421,7 @@ export class AuthService {
     } as never);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_USER_NOT_FOUND);
     }
 
     return user;
@@ -1475,19 +1459,16 @@ export class AuthService {
       target?: string;
     } = {}
   ): Record<string, unknown> {
-    const target = options.target ?? 'update';
     const allowed = new Set<string>(whitelist ?? []);
     const allowIdentifiers = options.allowIdentifiers ?? true;
     const patch: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(data)) {
       if (options.rejectPassword && key === this.options.passkeyField) {
-        throw new BadRequestException(
-          `Field '${key}' is not allowed via user ${target}`
-        );
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
       }
       if (options.forbid?.includes(key)) {
-        throw new BadRequestException(`Field '${key}' is not allowed`);
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_REGISTER_FIELD_NOT_ALLOWED);
       }
 
       const isIdentifier = this.getIdentifierFields().includes(key);
@@ -1497,13 +1478,11 @@ export class AuthService {
           patch[key] = value;
           continue;
         }
-        throw new BadRequestException(
-          `Field '${key}' is not allowed in the user ${target}`
-        );
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
       }
 
       if (this.isSensitiveField(key)) {
-        throw new BadRequestException(`Field '${key}' is not allowed`);
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_REGISTER_FIELD_NOT_ALLOWED);
       }
       patch[key] = value;
     }
@@ -1563,7 +1542,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new UnauthorizedException('Failed to update session');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_SESSION_UPDATE_FAILED);
     }
 
     return {
@@ -1575,11 +1554,11 @@ export class AuthService {
 
   private getOtpOptions(): AuthOtpOptions {
     if (!this.options.otp?.enabled) {
-      throw new BadRequestException('OTP login is not enabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_OTP_NOT_ENABLED);
     }
 
     if (!this.options.otp.deliverCode) {
-      throw new BadRequestException('OTP delivery callback is not configured');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_OTP_DELIVERY_FAILED);
     }
 
     return this.options.otp;
@@ -1588,7 +1567,7 @@ export class AuthService {
   private resolveOtpOptions(otp: AuthOtpOptions): ResolvedOtpOptions {
     const codeLength = otp.codeLength ?? 6;
     if (codeLength < 4 || codeLength > 10) {
-      throw new BadRequestException('OTP code length must be between 4 and 10');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_OTP_CODE_LENGTH_INVALID);
     }
 
     return {
@@ -1609,13 +1588,11 @@ export class AuthService {
 
   private getPasswordResetOptions(): AuthPasswordResetOptions {
     if (!this.options.passwordReset?.enabled) {
-      throw new BadRequestException('Password reset is not enabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_PASSWORD_RESET_NOT_ENABLED);
     }
 
     if (!this.options.passwordReset.deliverToken) {
-      throw new BadRequestException(
-        'Password reset delivery callback is not configured'
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     return this.options.passwordReset;
@@ -1664,7 +1641,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_INVALID_CREDENTIALS);
     }
   }
 
@@ -1680,7 +1657,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new InternalServerErrorException('Failed to update reset state');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_RESET_STATE_FAILED);
     }
   }
 
@@ -1710,13 +1687,11 @@ export class AuthService {
 
   private getOnboardingOptions(): AuthOnboardingOptions {
     if (!this.options.onboarding?.enabled) {
-      throw new BadRequestException('Assisted onboarding is not enabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ONBOARDING_NOT_ENABLED);
     }
 
     if (!this.options.onboarding.deliverCode) {
-      throw new BadRequestException(
-        'Onboarding delivery callback is not configured'
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     return this.options.onboarding;
@@ -1727,9 +1702,7 @@ export class AuthService {
   ): ResolvedOnboardingOptions {
     const codeLength = onboarding.codeLength ?? 6;
     if (codeLength < 4 || codeLength > 10) {
-      throw new BadRequestException(
-        'Onboarding OTP code length must be between 4 and 10'
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     return {
@@ -1774,9 +1747,7 @@ export class AuthService {
     );
 
     if (result.affected === 0) {
-      throw new InternalServerErrorException(
-        'Failed to update onboarding state'
-      );
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.INTERNAL_ERROR);
     }
   }
 
@@ -1794,13 +1765,11 @@ export class AuthService {
 
   private getVerificationOptions(): AuthVerificationOptions {
     if (!this.options.verification?.enabled) {
-      throw new BadRequestException('Account verification is not enabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_VERIFICATION_NOT_ENABLED);
     }
 
     if (!this.options.verification.deliverCode) {
-      throw new BadRequestException(
-        'Verification delivery callback is not configured'
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     return this.options.verification;
@@ -1811,9 +1780,7 @@ export class AuthService {
   ): ResolvedVerificationOptions {
     const codeLength = verif.codeLength ?? 6;
     if (codeLength < 4 || codeLength > 10) {
-      throw new BadRequestException(
-        'Verification code length must be between 4 and 10'
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     return {
@@ -1874,7 +1841,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new InternalServerErrorException('Failed to update verification state');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_VERIFICATION_STATE_FAILED);
     }
   }
 
@@ -1886,13 +1853,11 @@ export class AuthService {
     const code = data[verif.inputCodeField];
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     if (typeof code !== 'string' || !code.trim()) {
-      throw new BadRequestException(`${verif.inputCodeField} is required`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_VERIFICATION_CODE_REQUIRED);
     }
 
     const normalizedIdentifier = presentIdentifiers[0].value.trim();
@@ -1913,7 +1878,7 @@ export class AuthService {
       this.emitAuthEvent('auth.verification.verify.failed.user_not_found', {
         metadata: { identifier: normalizedIdentifier },
       });
-      throw new UnauthorizedException('Invalid verification code');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_VERIFICATION_CODE_INVALID);
     }
 
     const now = new Date();
@@ -1926,7 +1891,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier },
       });
-      throw new BadRequestException('Too many verification attempts');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_VERIFICATION_RATE_LIMITED);
     }
 
     const storedHash = user[verif.codeHashField] as string | null;
@@ -1938,7 +1903,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier },
       });
-      throw new UnauthorizedException('No verification code has been sent');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_VERIFICATION_CODE_REQUIRED);
     }
 
     // Check expiry → delete user
@@ -1947,9 +1912,7 @@ export class AuthService {
       this.emitAuthEvent('auth.verification.verify.failed.expired', {
         metadata: { identifier: normalizedIdentifier },
       });
-      throw new UnauthorizedException(
-        'Verification code has expired. Please register again.'
-      );
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED);
     }
 
     const isCodeValid = await bcrypt.compare(code.trim(), storedHash);
@@ -1968,9 +1931,7 @@ export class AuthService {
         this.emitAuthEvent('auth.verification.verify.failed.max_attempts', {
           metadata: { identifier: normalizedIdentifier },
         });
-        throw new UnauthorizedException(
-          'Maximum verification attempts reached. Please register again.'
-        );
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED);
       }
 
       await this.updateVerificationState(user.id as string | number, verif, updatePayload);
@@ -1980,7 +1941,7 @@ export class AuthService {
         userId: user.id,
         metadata: { identifier: normalizedIdentifier, attemptsRemaining: verif.maxAttempts - nextAttempts },
       });
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'VERIFICATION_INVALID',
         message: 'Invalid verification code',
         attemptsRemaining: verif.maxAttempts - nextAttempts,
@@ -2016,9 +1977,7 @@ export class AuthService {
     const presentIdentifiers = this.getPresentIdentifiers(data);
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     const normalizedIdentifier = presentIdentifiers[0].value.trim();
@@ -2068,7 +2027,7 @@ export class AuthService {
         entityId: user.id,
         userId: user.id,
       });
-      throw new InternalServerErrorException('Failed to deliver verification code');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_VERIFICATION_DELIVERY_FAILED);
     }
 
     this.emitAuthEvent('auth.verification.resend.success', {
@@ -2094,9 +2053,7 @@ export class AuthService {
 
     const presentIdentifiers = this.getPresentIdentifiers(data);
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException(
-        `${this.getIdentifierLabel()} is required`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     const { field, value } = presentIdentifiers[0];
@@ -2110,7 +2067,7 @@ export class AuthService {
       this.emitAuthEvent('auth.onboarding.start.failed.user_exists', {
         metadata: { identifier },
       });
-      throw new ConflictException('User already exists');
+      throw keyed(HttpStatus.CONFLICT, ErrorKey.AUTH_USER_ALREADY_EXISTS);
     }
 
     const now = new Date();
@@ -2188,7 +2145,7 @@ export class AuthService {
       this.emitAuthEvent('auth.onboarding.start.failed.delivery', {
         metadata: { identifier, channel: onboardingOptions.channel ?? config.channel },
       });
-      throw new InternalServerErrorException('Failed to deliver onboarding code');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_ONBOARDING_DELIVERY_FAILED);
     }
 
     this.emitAuthEvent('auth.onboarding.start.success', {
@@ -2213,14 +2170,14 @@ export class AuthService {
     const code = data[inputCodeField];
 
     if (presentIdentifiers.length === 0) {
-      throw new BadRequestException({
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED, {
         code: 'IDENTIFIER_REQUIRED',
         message: `${this.getIdentifierLabel()} is required`,
       });
     }
 
     if (typeof code !== 'string' || !code.trim()) {
-      throw new BadRequestException({
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED, {
         code: 'OTP_REQUIRED',
         message: `${inputCodeField} is required`,
       });
@@ -2254,7 +2211,7 @@ export class AuthService {
           identifiers: presentIdentifiers.map(({ value: v }) => v),
         },
       });
-      throw new UnauthorizedException('Invalid onboarding code');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_CODE_INVALID);
     }
 
     const now = new Date();
@@ -2264,7 +2221,7 @@ export class AuthService {
       this.emitAuthEvent('auth.onboarding.complete.failed.locked', {
         metadata: { attemptId: attempt.id },
       });
-      throw new BadRequestException('Too many onboarding OTP attempts');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ONBOARDING_RATE_LIMITED);
     }
 
     const storedHash = attempt.codeHash as string | null;
@@ -2274,7 +2231,7 @@ export class AuthService {
       this.emitAuthEvent('auth.onboarding.complete.failed.not_requested', {
         metadata: { attemptId: attempt.id },
       });
-      throw new UnauthorizedException('No onboarding code has been generated');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ONBOARDING_CODE_REQUIRED);
     }
 
     if (expiresAt <= now) {
@@ -2282,9 +2239,7 @@ export class AuthService {
       this.emitAuthEvent('auth.onboarding.complete.failed.expired', {
         metadata: { attemptId: attempt.id },
       });
-      throw new UnauthorizedException(
-        'Onboarding code has expired. Please start again.'
-      );
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED);
     }
 
     const isCodeValid = await bcrypt.compare(normalizedCode, storedHash);
@@ -2305,14 +2260,14 @@ export class AuthService {
         this.emitAuthEvent('auth.onboarding.complete.failed.max_attempts', {
           metadata: { attemptId: attempt.id, lockUntil: updatePayload.lockedUntil },
         });
-        throw new BadRequestException('Maximum onboarding attempts reached');
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ONBOARDING_ATTEMPTS_EXCEEDED);
       }
 
       await this.updateOnboardingState(attempt.id, updatePayload);
       this.emitAuthEvent('auth.onboarding.complete.failed.invalid', {
         metadata: { attemptId: attempt.id, attemptsRemaining: config.maxAttempts - nextAttempts },
       });
-      throw new UnauthorizedException({
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED, {
         code: 'ONBOARDING_INVALID',
         message: 'Invalid onboarding code',
         attemptsRemaining: config.maxAttempts - nextAttempts,
@@ -2341,7 +2296,7 @@ export class AuthService {
     data: Record<string, unknown>
   ): Promise<AuthUser> {
     if (!this.options.onboarding?.enabled) {
-      throw new BadRequestException('Onboarding is not enabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_ONBOARDING_NOT_ENABLED);
     }
 
     const field = attempt.identifierField;
@@ -2353,7 +2308,7 @@ export class AuthService {
       provided !== null &&
       String(provided).trim() !== identifier
     ) {
-      throw new BadRequestException(`Identifier mismatch for ${field}`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.AUTH_IDENTIFIER_MISMATCH);
     }
 
     const userData: Record<string, unknown> = {
@@ -2400,7 +2355,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new InternalServerErrorException('Failed to clear reset state');
+      throw keyed(HttpStatus.INTERNAL_SERVER_ERROR, ErrorKey.AUTH_RESET_STATE_FAILED);
     }
   }
 
@@ -2449,7 +2404,7 @@ export class AuthService {
       .execute();
 
     if (updateResult.affected === 0) {
-      throw new UnauthorizedException('Failed to update OTP session');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_OTP_SESSION_UPDATE_FAILED);
     }
   }
 
@@ -2555,7 +2510,7 @@ export class AuthService {
     const storedAccessToken = user ? user[accessTokenField] : null;
 
     if (!user || !storedAccessToken) {
-      throw new UnauthorizedException('Access token reused or invalid');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_REUSED);
     }
 
     const isAccessTokenValid = await bcrypt.compare(
@@ -2563,13 +2518,13 @@ export class AuthService {
       storedAccessToken as string
     );
     if (!isAccessTokenValid) {
-      throw new UnauthorizedException('Access token reused or invalid');
+      throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_REUSED);
     }
 
     if (this.options.verification?.enabled) {
       const verifiedField = this.options.verification.verifiedField ?? 'isVerified';
       if (!user[verifiedField]) {
-        throw new UnauthorizedException('Account not verified');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_ACCOUNT_NOT_VERIFIED);
       }
     }
 
@@ -2632,7 +2587,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.AUTH_USER_NOT_FOUND);
     }
   }
 
@@ -2650,7 +2605,7 @@ export class AuthService {
           : await roleRepository.findOne({ where: { name: roleIdOrName } });
 
       if (!role) {
-        throw new NotFoundException(`Role '${roleIdOrName}' not found`);
+        throw keyed(HttpStatus.NOT_FOUND, ErrorKey.NOT_FOUND);
       }
 
       const assignment = userRoleRepository.create({

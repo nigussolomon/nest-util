@@ -29,15 +29,9 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
 
     if (isUniqueViolation) {
       status = HttpStatus.UNPROCESSABLE_ENTITY;
-
-      message = 'Duplicate entry: A record with this value already exists.';
-
-      if (driverError.detail) {
-        message = driverError.detail
-          .replace('Key ', '')
-          .replace(/[()]/g, '')
-          .trim();
-      }
+      // Generic message only — the raw driverError.detail (column / constraint /
+      // values) is intentionally NOT leaked to the client.
+      message = 'A record with this value already exists';
     }
 
     response.status(status).json({

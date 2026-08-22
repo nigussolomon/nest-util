@@ -1,13 +1,14 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Controller,
   Post,
   Body,
   Inject,
-  ForbiddenException,
   UseGuards,
   Get,
   Type,
   Req,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -282,7 +283,7 @@ export function CreateAuthController(
       const refreshToken = body.refreshToken;
 
       if (!refreshToken || typeof refreshToken !== 'string') {
-        throw new ForbiddenException('Refresh token is required');
+        throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_REFRESH_TOKEN_REQUIRED);
       }
 
       return await this.authService.refresh(refreshToken);
@@ -387,7 +388,7 @@ export function CreateAuthController(
 
     protected checkIfRouteDisabled(routeName: string) {
       if (this.options.disabledRoutes?.includes(routeName)) {
-        throw new ForbiddenException(`Route /auth/${routeName} is disabled`);
+        throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_ROUTE_DISABLED);
       }
     }
   }

@@ -1,10 +1,11 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   CanActivate,
   ExecutionContext,
-  ForbiddenException,
   Inject,
   Injectable,
   Optional,
+  HttpStatus,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -55,7 +56,7 @@ export class PermissionsGuard implements CanActivate {
           reason: 'Authenticated user not found',
         },
       });
-      throw new ForbiddenException('Authenticated user not found');
+      throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_UNAUTHORIZED);
     }
 
     const resolvedPermissions = resolvePermissions(user, this.options.rbac);
@@ -83,7 +84,7 @@ export class PermissionsGuard implements CanActivate {
             reason: 'Custom evaluator rejected',
           },
         });
-        throw new ForbiddenException('Missing required permissions');
+        throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_PERMISSION_DENIED);
       }
 
       return true;
@@ -109,7 +110,7 @@ export class PermissionsGuard implements CanActivate {
           reason: 'Missing required permissions',
         },
       });
-      throw new ForbiddenException('Missing required permissions');
+      throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_PERMISSION_DENIED);
     }
 
     return true;

@@ -6,9 +6,11 @@
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "target": "es2021"
+    "target": "es2021",
+    "resolveJsonModule": true,
+    "esModuleInterop": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.json"],
   "exclude": [
     "out-tsc",
     "dist",
@@ -35,6 +37,9 @@
     },
     {
       "path": "../../libs/nest-auth/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/nest-error/tsconfig.lib.json"
     }
   ]
 }

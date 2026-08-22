@@ -1,12 +1,14 @@
 import {
   ExecutionContext,
   HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from '../decorators/public';
@@ -101,6 +103,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw err;
     }
 
-    throw new UnauthorizedException();
+    throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED);
   }
 }

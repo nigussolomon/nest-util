@@ -20,6 +20,9 @@
     },
     {
       "path": "./libs/nest-notify"
+    },
+    {
+      "path": "./libs/nest-error"
     }
   ]
 }

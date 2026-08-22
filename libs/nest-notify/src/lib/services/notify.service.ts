@@ -1,4 +1,5 @@
-import { Injectable, Inject, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { keyed, ErrorKey } from '@nest-util/nest-error';
+import { HttpStatus, Injectable, Inject, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import type {
@@ -77,7 +78,7 @@ export class NotifyService {
       return false;
     }
     if (existing.userId !== userId) {
-      throw new NotFoundException('Device token not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.NOTIFY_DEVICE_TOKEN_INVALID);
     }
     await this.deviceTokenRepository.remove(existing);
     return true;

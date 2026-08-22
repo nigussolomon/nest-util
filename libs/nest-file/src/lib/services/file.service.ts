@@ -1,9 +1,9 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException,
-  BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -68,12 +68,12 @@ export class FileService {
   async confirmUpload(dto: ConfirmUploadDto): Promise<FileEntity> {
     const entity = await this.fileRepository.findOneBy({ id: dto.fileId });
     if (!entity) {
-      throw new NotFoundException('File not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.FILE_NOT_FOUND);
     }
 
     const exists = await this.s3Service.objectExists(dto.key);
     if (!exists) {
-      throw new BadRequestException('File not found in storage');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.FILE_NOT_FOUND);
     }
 
     const publicUrl = this.options.s3.publicUrl
@@ -92,7 +92,7 @@ export class FileService {
   async getDownloadUrl(fileId: string): Promise<string> {
     const entity = await this.fileRepository.findOneBy({ id: fileId });
     if (!entity) {
-      throw new NotFoundException('File not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.FILE_NOT_FOUND);
     }
 
     return this.s3Service.generatePresignedDownloadUrl(entity.key);
@@ -101,7 +101,7 @@ export class FileService {
   async getFile(fileId: string): Promise<FileEntity> {
     const entity = await this.fileRepository.findOneBy({ id: fileId });
     if (!entity) {
-      throw new NotFoundException('File not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.FILE_NOT_FOUND);
     }
     return entity;
   }
@@ -109,7 +109,7 @@ export class FileService {
   async deleteFile(fileId: string): Promise<boolean> {
     const entity = await this.fileRepository.findOneBy({ id: fileId });
     if (!entity) {
-      throw new NotFoundException('File not found');
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.FILE_NOT_FOUND);
     }
 
     await this.s3Service.deleteObject(entity.key);
@@ -186,9 +186,7 @@ export class FileService {
     });
 
     if (!isAllowed) {
-      throw new BadRequestException(
-        `MIME type "${mimeType}" is not allowed. Allowed types: ${allowed.join(', ')}`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
   }
 }

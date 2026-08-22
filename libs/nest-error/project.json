@@ -1,0 +1,29 @@
+{
+  "name": "@nest-util/nest-error",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/nest-error/src",
+  "projectType": "library",
+  "tags": ["npm:public"],
+  "targets": {
+    "build": {
+      "dependsOn": ["^build"],
+      "options": {
+        "cwd": "libs/nest-error",
+        "command": "tsc --build tsconfig.lib.json"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/tsconfig.base.json",
+        "{projectRoot}/tsconfig.lib.json",
+        "{projectRoot}/src/**/*.ts",
+        "!{projectRoot}/jest.config.js",
+        "!{projectRoot}/jest.config.cts",
+        "!{projectRoot}/src/**/*.spec.ts",
+        "!{projectRoot}/src/**/*.test.ts",
+        { "dependentTasksOutputFiles": "**/*.d.ts" }
+      ],
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}

@@ -7,7 +7,9 @@
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "target": "es2021",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
@@ -16,7 +18,9 @@
     "strictBindCallApply": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "exclude": [
     "jest.config.ts",
     "jest.config.cts",
@@ -27,6 +31,9 @@
   "references": [
     {
       "path": "../nest-auth/tsconfig.lib.json"
+    },
+    {
+      "path": "../nest-error/tsconfig.lib.json"
     }
   ]
 }

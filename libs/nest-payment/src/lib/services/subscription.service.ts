@@ -1,9 +1,9 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException,
-  BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -79,9 +79,7 @@ export class SubscriptionService {
     // Resolve provider
     const provider = this.getProvider(saved.provider);
     if (!provider.createSubscription) {
-      throw new BadRequestException(
-        `Provider '${provider.id}' does not support subscriptions`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     try {
@@ -177,7 +175,7 @@ export class SubscriptionService {
     const entity = await this.subscriptionRepository.findOneBy({
       id: subscriptionId,
     });
-    if (!entity) throw new NotFoundException('Subscription not found');
+    if (!entity) throw keyed(HttpStatus.NOT_FOUND, ErrorKey.PAYMENT_SUBSCRIPTION_NOT_FOUND);
 
     // Idempotent: already canceled
     if (entity.status === 'canceled') {
@@ -186,13 +184,11 @@ export class SubscriptionService {
 
     const provider = this.getProvider(entity.provider);
     if (!provider.cancelSubscription) {
-      throw new BadRequestException(
-        `Provider '${provider.id}' does not support subscription cancellation`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     if (!entity.providerSubscriptionId) {
-      throw new BadRequestException('Subscription has no provider reference');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_SUBSCRIPTION_NO_PROVIDER);
     }
     await provider.cancelSubscription(entity.providerSubscriptionId);
 
@@ -209,7 +205,7 @@ export class SubscriptionService {
 
   async findOne(id: string): Promise<SubscriptionEntity> {
     const entity = await this.subscriptionRepository.findOneBy({ id });
-    if (!entity) throw new NotFoundException('Subscription not found');
+    if (!entity) throw keyed(HttpStatus.NOT_FOUND, ErrorKey.PAYMENT_SUBSCRIPTION_NOT_FOUND);
     return entity;
   }
 
@@ -279,7 +275,7 @@ export class SubscriptionService {
   private getProvider(providerId: string) {
     const provider = this.options.providers.find((p) => p.id === providerId);
     if (!provider) {
-      throw new BadRequestException(`Unknown payment provider: ${providerId}`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_PROVIDER_NOT_CONFIGURED);
     }
     return provider;
   }

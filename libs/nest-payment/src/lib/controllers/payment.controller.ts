@@ -1,3 +1,4 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Body,
   Delete,
@@ -6,8 +7,8 @@ import {
   Post,
   Query,
   Req,
-  BadRequestException,
   ParseUUIDPipe,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -78,7 +79,7 @@ export function CreatePaymentController(
       if (providerInstance.verifyWebhookSignature) {
         const valid = providerInstance.verifyWebhookSignature(rawBody, headers);
         if (!valid) {
-          throw new BadRequestException('Invalid webhook signature');
+          throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_WEBHOOK_INVALID);
         }
       }
 

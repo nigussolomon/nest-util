@@ -1,9 +1,9 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException,
-  BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, LessThanOrEqual } from 'typeorm';
@@ -174,7 +174,7 @@ export class PaymentService {
 
   async findOne(id: string): Promise<PaymentEntity> {
     const entity = await this.paymentRepository.findOneBy({ id });
-    if (!entity) throw new NotFoundException('Payment not found');
+    if (!entity) throw keyed(HttpStatus.NOT_FOUND, ErrorKey.PAYMENT_PAYMENT_NOT_FOUND);
     return entity;
   }
 
@@ -250,18 +250,16 @@ export class PaymentService {
 
   async reconcilePayment(id: string): Promise<PaymentEntity> {
     if (this.options.reconciliation?.enable === false) {
-      throw new BadRequestException('Reconciliation is disabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_RECONCILIATION_DISABLED);
     }
 
     const payment = await this.paymentRepository.findOneBy({ id });
     if (!payment) {
-      throw new NotFoundException(`Payment not found: ${id}`);
+      throw keyed(HttpStatus.NOT_FOUND, ErrorKey.PAYMENT_PAYMENT_NOT_FOUND);
     }
 
     if (!RECONCILABLE_STATUSES.includes(payment.status)) {
-      throw new BadRequestException(
-        `Cannot reconcile payment in '${payment.status}' status`
-      );
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.VALIDATION_FAILED);
     }
 
     if (!payment.providerPaymentId) {
@@ -274,17 +272,17 @@ export class PaymentService {
 
     const provider = this.getProvider(payment.provider);
     if (!provider.getPaymentStatus) {
-      throw new BadRequestException(`Provider '${provider.id}' does not support status checks`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_PROVIDER_NOT_CONFIGURED);
     }
 
     const providerStatus = await provider.getPaymentStatus(payment.providerPaymentId);
     if (!providerStatus) {
-      throw new BadRequestException(`Could not retrieve status from provider for payment ${id}`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_PROVIDER_NOT_CONFIGURED);
     }
 
     if (providerStatus !== payment.status) {
       if (!this.isValidForwardTransition(payment.status, providerStatus)) {
-        throw new BadRequestException(`Cannot transition from ${payment.status} to ${providerStatus}`);
+        throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_CHECKOUT_FAILED);
       }
       payment.status = providerStatus;
       payment.metadata = { ...payment.metadata, reconciledAt: new Date().toISOString() };
@@ -304,7 +302,7 @@ export class PaymentService {
     staleAfterMs?: number;
   }): Promise<{ checked: number; updated: number; failed: number }> {
     if (this.options.reconciliation?.enable === false) {
-      throw new BadRequestException('Reconciliation is disabled');
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_RECONCILIATION_DISABLED);
     }
 
     const staleAfterMs =
@@ -374,7 +372,7 @@ export class PaymentService {
   getProvider(providerId: string): PaymentProvider {
     const provider = this.options.providers.find((p) => p.id === providerId);
     if (!provider) {
-      throw new BadRequestException(`Unknown payment provider: ${providerId}`);
+      throw keyed(HttpStatus.BAD_REQUEST, ErrorKey.PAYMENT_PROVIDER_NOT_CONFIGURED);
     }
     return provider;
   }

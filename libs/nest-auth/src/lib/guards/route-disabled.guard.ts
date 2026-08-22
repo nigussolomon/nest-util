@@ -3,10 +3,11 @@ import {
   CanActivate,
   ExecutionContext,
   Inject,
-  ForbiddenException,
+  HttpStatus,
 } from '@nestjs/common';
 import { AUTH_OPTIONS } from '../constants';
 import type { AuthModuleOptions } from '../interfaces/auth-options';
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 
 @Injectable()
 export class RouteDisabledGuard implements CanActivate {
@@ -19,7 +20,7 @@ export class RouteDisabledGuard implements CanActivate {
     const route = request.route.path.split('/').pop(); // Simple check for 'login' or 'register'
 
     if (this.options.disabledRoutes?.includes(route)) {
-      throw new ForbiddenException(`Route ${request.route.path} is disabled`);
+      throw keyed(HttpStatus.FORBIDDEN, ErrorKey.AUTH_ROUTE_DISABLED);
     }
 
     return true;

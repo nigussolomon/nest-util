@@ -210,6 +210,9 @@ importers:
       '@nest-util/nest-crud':
         specifier: workspace:*
         version: link:../../libs/nest-crud
+      '@nest-util/nest-error':
+        specifier: workspace:*
+        version: link:../../libs/nest-error
       '@nest-util/nest-file':
         specifier: workspace:*
         version: link:../../libs/nest-file
@@ -296,6 +299,9 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0(babel-plugin-macros@3.1.0)(pg@8.20.0)(ts-node@10.9.1(@swc/core@1.5.29(@swc/helpers@0.5.21))(@types/node@20.19.9)(typescript@5.9.3))
     devDependencies:
+      '@nest-util/nest-error':
+        specifier: workspace:*
+        version: link:../nest-error
       '@types/bcrypt':
         specifier: ^6.0.0
         version: 6.0.0
@@ -345,6 +351,24 @@ importers:
       '@nest-util/nest-auth':
         specifier: workspace:*
         version: link:../nest-auth
+      '@nest-util/nest-error':
+        specifier: workspace:*
+        version: link:../nest-error
+
+  libs/nest-error:
+    dependencies:
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: ^11.0.0
+        version: 11.1.18(@nestjs/common@11.1.18(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/platform-express@11.1.18)(@nestjs/websockets@11.1.28)(reflect-metadata@0.1.14)(rxjs@7.8.2)
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
 
   libs/nest-file:
     dependencies:
@@ -379,6 +403,9 @@ importers:
       '@nest-util/nest-auth':
         specifier: workspace:*
         version: link:../nest-auth
+      '@nest-util/nest-error':
+        specifier: workspace:*
+        version: link:../nest-error
 
   libs/nest-notify:
     dependencies:
@@ -425,6 +452,9 @@ importers:
       '@nest-util/nest-auth':
         specifier: workspace:*
         version: link:../nest-auth
+      '@nest-util/nest-error':
+        specifier: workspace:*
+        version: link:../nest-error
       '@types/nodemailer':
         specifier: ^6.4.17
         version: 6.4.24
@@ -456,6 +486,9 @@ importers:
       '@nest-util/nest-auth':
         specifier: workspace:*
         version: link:../nest-auth
+      '@nest-util/nest-error':
+        specifier: workspace:*
+        version: link:../nest-error
 
 packages:
 
@@ -3969,6 +4002,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'

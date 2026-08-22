@@ -33,7 +33,8 @@
     "@nestjs/typeorm": "^11.0.1",
     "@nest-util/nest-auth": "workspace:*",
     "class-validator": "^0.14.3",
-    "typeorm": "^1.1.0"
+    "typeorm": "^1.1.0",
+    "@nest-util/nest-error": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@nest-util/nest-auth": {
@@ -41,6 +42,7 @@
     }
   },
   "devDependencies": {
-    "@nest-util/nest-auth": "workspace:*"
+    "@nest-util/nest-auth": "workspace:*",
+    "@nest-util/nest-error": "workspace:*"
   }
 }

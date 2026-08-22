@@ -27,6 +27,9 @@
   "references": [
     {
       "path": "../nest-auth/tsconfig.lib.json"
+    },
+    {
+      "path": "../nest-error/tsconfig.lib.json"
     }
   ]
 }

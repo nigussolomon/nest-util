@@ -28,10 +28,12 @@
     "tslib": "^2.8.1"
   },
   "devDependencies": {
-    "@nest-util/nest-auth": "workspace:*"
+    "@nest-util/nest-auth": "workspace:*",
+    "@nest-util/nest-error": "workspace:*"
   },
   "peerDependencies": {
     "@nest-util/nest-auth": "workspace:*",
+    "@nest-util/nest-error": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/event-emitter": "^3.0.0",

@@ -1,10 +1,11 @@
+import { keyed, ErrorKey } from '@nest-util/nest-error';
 import {
   Inject,
   Injectable,
   Logger,
   Optional,
-  UnauthorizedException,
   type Type,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   WebSocketGateway,
@@ -85,11 +86,11 @@ export function createNotifyGateway(
       try {
         const socket = this.notifyOptions.socket;
         if (socket?.enable !== true) {
-          throw new UnauthorizedException('Notifications socket is disabled');
+          throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.NOTIFY_SOCKET_DISABLED);
         }
         const token = this.extractToken(client, socket.tokenQueryParam);
         if (!token) {
-          throw new UnauthorizedException('Missing authentication token');
+          throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED);
         }
         const userId = await this.resolveUserId(token, socket.authorize);
         client.data.userId = userId;
@@ -145,14 +146,12 @@ export function createNotifyGateway(
       if (authorize) {
         const result = await authorize(token);
         if (!result) {
-          throw new UnauthorizedException('Invalid token');
+          throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_INVALID);
         }
         return result.userId;
       }
       if (!this.jwtService || !this.authService) {
-        throw new UnauthorizedException(
-          'Socket authentication requires @nest-util/nest-auth or a custom socket.authorize handler'
-        );
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_UNAUTHORIZED);
       }
       const payload = await this.jwtService.verifyAsync(token);
       const user = await this.authService.validateUser({
@@ -160,7 +159,7 @@ export function createNotifyGateway(
         nonce: payload.nonce,
       });
       if (!user) {
-        throw new UnauthorizedException('Invalid token');
+        throw keyed(HttpStatus.UNAUTHORIZED, ErrorKey.AUTH_TOKEN_INVALID);
       }
       return String(payload.sub);
     }
