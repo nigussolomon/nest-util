@@ -312,6 +312,81 @@ describe('NestCrudService - approval pipeline', () => {
       expect(historyRepo.save).toHaveBeenCalled();
     });
 
+    it('auto-loads relations referenced by modification fields without include', async () => {
+      const service = buildService({
+        approvalPipeline: { enabled: true, initialStatus: 'submitted' },
+      });
+      (repo as any).metadata = {
+        ...repo.metadata,
+        columns: [
+          { propertyPath: 'id', type: () => Number },
+          { propertyPath: 'name', type: () => String },
+        ],
+        relations: [
+          {
+            propertyName: 'category',
+            propertyAliasName: 'category',
+            inverseEntityMetadata: { relations: [] },
+          },
+          {
+            propertyName: 'company',
+            propertyAliasName: 'company',
+            inverseEntityMetadata: {
+              relations: [
+                {
+                  propertyName: 'addresses',
+                  propertyAliasName: 'addresses',
+                  inverseEntityMetadata: { relations: [] },
+                },
+              ],
+            },
+          },
+        ],
+      } as any;
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        name: 'post',
+        category: { id: 5 },
+      } as any);
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      await service.requestModification(
+        1,
+        {
+          modifications: [
+            { field: 'category', wantedValue: 'x' },
+            { field: 'company.addresses.city', wantedValue: 'Addis' },
+          ],
+        },
+        { id: 5 } as any
+      );
+
+      expect(repo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relations: { category: true, company: { addresses: true } },
+        })
+      );
+    });
+
+    it('normalizes missing relation values to explicit null', async () => {
+      const service = buildService();
+      repo.findOne.mockResolvedValue({ id: 1, name: 'post' } as any);
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      await service.requestModification(
+        1,
+        { modifications: [{ field: 'name', wantedValue: 'x' }] },
+        { id: 5 } as any
+      );
+
+      const savedRow = approvalRepo.save.mock.calls[0][0] as any;
+      expect(savedRow.currentModifications[0].currentValue).toBe('post');
+    });
+
     it('captures relation objects as the current value', async () => {
       const service = buildService({
         approvalPipeline: { enabled: true, initialStatus: 'submitted' },

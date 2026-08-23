@@ -7,6 +7,11 @@ import { PaginationDto } from '../dtos/pagination.dto';
 import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
 import { applyPagination } from '../helpers/pagination.helper';
+import {
+  isKnownProperty,
+  normalizeCapturedValue,
+  resolveRelationPaths,
+} from '../helpers/relation-path.helper';
 import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
 import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
 import {
@@ -916,13 +921,17 @@ export class NestCrudService<
    */
   private async getEntityWithRelations(
     id: number,
-    user?: OwnershipUser
+    user?: OwnershipUser,
+    extraRelations?: readonly string[]
   ): Promise<Entity | null> {
     if (this.enforceOwnershipFor(user)) {
       return this.findOwnedEntity(id, user as OwnershipUser);
     }
-    const relations = this.include.length
-      ? this.buildRelationsObject(this.include)
+    const relationPaths = [
+      ...new Set([...this.include, ...(extraRelations ?? [])]),
+    ];
+    const relations = relationPaths.length
+      ? this.buildRelationsObject(relationPaths)
       : undefined;
     return this.repo.findOne({
       where: { id } as unknown as Partial<Entity>,
@@ -1069,16 +1078,36 @@ export class NestCrudService<
         this.assertTransitionAllowed(action, current, reviewable);
         approval.status = APPROVAL_STATUS.modificationRequested;
 
-        const entity = await this.getEntityWithRelations(id, user);
-        const capturedModifications = (modifications ?? []).map((m) => ({
-          ...m,
-          currentValue: this.sanitizeForJsonb(
-            m.currentValue !== undefined
-              ? m.currentValue
-              : this.readCurrentValue(entity, m.field)
-          ),
-          wantedValue: this.sanitizeForJsonb(m.wantedValue),
-        }));
+        const fields = (modifications ?? []).map((m) => m.field);
+        const extraRelations = resolveRelationPaths(
+          this.repo.metadata,
+          fields
+        );
+        const entity = await this.getEntityWithRelations(
+          id,
+          user,
+          extraRelations
+        );
+        const capturedModifications = (modifications ?? []).map((m) => {
+          if (
+            !isKnownProperty(this.repo.metadata, m.field.split('.')[0])
+          ) {
+            console.warn(
+              `[NestCrudService] Approval modification field "${m.field}" does not exist on ${this.repo.metadata.tableName}; capturing null`
+            );
+          }
+          return {
+            ...m,
+            currentValue: this.sanitizeForJsonb(
+              normalizeCapturedValue(
+                m.currentValue !== undefined
+                  ? m.currentValue
+                  : this.readCurrentValue(entity, m.field)
+              )
+            ),
+            wantedValue: this.sanitizeForJsonb(m.wantedValue),
+          };
+        });
         approval.currentModifications = capturedModifications;
 
         await this.getHistoryRepository().save(
