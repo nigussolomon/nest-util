@@ -123,9 +123,10 @@
 
       <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
       <div class="install-box">
-        <code>pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
+        <code>pnpm add @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
+      <p><code>@nest-util/nest-error</code> is a required peer dependency. Register <code>LocalizationModule.forRoot(...)</code> once for consistent localized error responses.</p>
 
       <h3>Prerequisites</h3>
       <ol>
@@ -1034,7 +1035,7 @@
         <div class="step">
           <div class="step-number">1</div>
           <h3>Install the package</h3>
-          <p>Run <code>pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code> and ensure TypeORM is configured with a User entity.</p>
+          <p>Run <code>pnpm add @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt</code> and ensure TypeORM is configured with a User entity.</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>

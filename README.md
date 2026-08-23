@@ -4,635 +4,280 @@
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![TypeORM](https://img.shields.io/badge/TypeORM-FE0803?style=for-the-badge&logo=typeorm&logoColor=white)
 
-[![CI](https://github.com/nigussolomon/nest-util/actions/workflows/ci.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/ci.yml)
-[![Security](https://github.com/nigussolomon/nest-util/actions/workflows/security.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/security.yml)
-[![Deploy Documentation](https://github.com/nigussolomon/nest-util/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/deploy-docs.yml)
-[![Publish Libs](https://github.com/nigussolomon/nest-util/actions/workflows/publish.yml/badge.svg)](https://github.com/nigussolomon/nest-util/actions/workflows/publish.yml)
+A collection of reusable, production-ready **NestJS** utilities that remove the
+boilerplate you usually write for every app: CRUD, authentication, error handling,
+file uploads, payments, and notifications.
 
-**A modern, production-ready collection of NestJS utilities designed to accelerate development by providing reusable, battle-tested patterns for CRUD operations and authentication.**
-
-[Docs Index](./docs/README.md) | [Quick Start](#-quick-start) | [demo-api config](./docs/demo-api/README.md) | [Migration Guide](./MIGRATION-GUIDE.md)
-
----
-
-## What is Nest-Util?
-
-Nest-Util is a comprehensive toolkit that eliminates boilerplate and accelerates NestJS development. Instead of writing repetitive CRUD logic, authentication flows, and entity scaffolding for every project, Nest-Util provides:
-
-- **Production-Ready Components**: Battle-tested services, controllers, and modules that handle common patterns
-- **Flexible Authentication**: Dynamic auth system that adapts to your schema without forcing a specific user model
-- **Built-in Best Practices**: Automatic pagination, filtering, hooks, Swagger documentation, and error handling
-
-### Why Nest-Util?
-
-| Problem | Nest-Util Solution |
-|---|---|
-| Writing the same CRUD logic for every entity | `@nest-util/nest-crud` — Generic CRUD service + controller factory |
-| Implementing secure JWT authentication | `@nest-util/nest-auth` — Flexible auth module with token rotation |
-| Tracking entity-level mutations | Built-in audit logging via `@Audit()` decorator |
-| Inconsistent API responses | Built-in response interceptors and transformers |
-| Manual Swagger documentation | Automatic OpenAPI documentation with proper decorators |
-| Integrating payment providers | `@nest-util/nest-payment` — Provider-agnostic checkout, subscriptions, refunds |
+- **Start here:** [Documentation index](./docs/README.md)
+- **Run the example:** [demo-api setup](./docs/demo-api/README.md)
+- **Upgrading an existing app:** [Migration Guide](./MIGRATION-GUIDE.md)
 
 ---
 
-## Architecture Overview
+## The packages
 
-Nest-Util is composed of focused modules that integrate into the same NestJS app.
+| Package | What it does | Guide |
+|---|---|---|
+| `@nest-util/nest-crud` | Generic CRUD service + controller factory, filtering, pagination, hooks, ownership, status/approval pipelines, audit logging | [nest-crud](./docs/nest-crud/README.md) |
+| `@nest-util/nest-auth` | Registration/login, JWT + refresh tokens, permissions/RBAC, API keys, OTP, password reset, onboarding | [nest-auth](./docs/nest-auth/README.md) |
+| `@nest-util/nest-error` | Standardized, localized error responses for every package (required peer) | [nest-error](./libs/nest-error/README.md) |
+| `@nest-util/nest-file` | S3/MinIO-compatible file uploads with presigned URLs and metadata tracking | [nest-file](./docs/nest-file/README.md) |
+| `@nest-util/nest-notify` | FCM push + SMTP email notifications with history and optional WebSocket streaming | [nest-notify](./docs/nest-notify/README.md) |
+| `@nest-util/nest-payment` | Provider-agnostic checkout, subscriptions, refunds, webhooks, and reconciliation | [nest-payment](./docs/nest-payment/README.md) |
 
-**Architecture Components:**
-
-- `@nest-util/nest-crud`: provides reusable CRUD service/controller building blocks, audit logging, lifecycle hooks, cursor pagination, and findMine
-- `@nest-util/nest-auth`: handles JWT auth, refresh tokens, permissions, and API key authentication
-- `@nest-util/nest-payment`: provider-agnostic checkout sessions, subscriptions, refunds, webhook handling, reconciliation
-- `TypeORM + Database`: persistence layer used by all runtime modules
-
-### Integration Flow
-
-1. Configure TypeORM and entity loading.
-2. Add `AuthModule.forRoot(...)`.
-3. Build services with `NestCrudService`.
-4. Build controllers with `CreateNestedCrudController(...)`.
-5. Configure `main.ts` globals (validation pipe, query parser, Swagger, DB exception filter).
+The packages are designed to be used together in one NestJS app, but each is
+independently installable. Only `@nest-util/nest-error` is a required peer
+dependency of the others.
 
 ---
 
-## Key Features
+## Prerequisites
 
-### 1. @nest-util/nest-crud
-
-A powerful and flexible CRUD library featuring:
-
-- **`NestCrudService`**: Generic base service for common TypeORM operations with built-in filtering and pagination
-- **`CreateNestedCrudController`**: Controller factory that generates fully-functional REST endpoints
-- **`IBaseController`**: TypeScript interface for proper type inference
-- **Advanced Filtering**: Query-based filtering with operators like `eq`, `cont`, `gte`, `lte`
-- **Pagination**: Both offset-based (`page`/`limit`) and cursor-based (`?cursor=...`)
-- **Lifecycle Hooks**: `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeRemove`, `afterRemove`, `beforeFindOne`, `afterFindOne` — with optional transaction wrapping
-- **findMine**: User-scoped record retrieval via `GET /resource/mine` with `@CurrentUser()` injection
-- **Audit Logging**: Built-in `@Audit()` decorator and `AuditInterceptor` for entity-level mutation tracking
-- **Swagger Integration**: Automatic OpenAPI documentation with proper schemas
-- **Response Interceptors**: Consistent API response format with metadata
-
-**Key Capabilities:**
-
-- Type-safe CRUD operations
-- Dynamic query filtering (`?filter[name_cont]=john&filter[age_gte]=18`)
-- Cursor pagination for efficient large-dataset traversal
-- Before/after hooks with configurable transaction isolation levels
-- User-scoped record retrieval (`GET /resource/mine`)
-- Automatic Swagger documentation
-- Global exception handling for database errors
-- Extensible architecture for custom business logic
-
-### 2. @nest-util/nest-auth
-
-A dynamic and flexible authentication library:
-
-- **`AuthModule`**: Dynamic configuration for entities, fields, and JWT settings
-- **`AuthService`**: Built-in registration and login with bcrypt hashing
-- **Token Security**: Refresh token rotation with nonce-based validation
-- **API Key Authentication**: Server-to-server auth with per-key RBAC and composable guard
-- **Custom Decorators**: `@Public()`, `@CurrentUser()`, `@Permissions()`
-- **Flexible DTOs**: Bring your own DTOs for full control over validation and documentation
-- **Route Control**: Enable/disable auth endpoints via configuration
-
-**Security Features:**
-
-- JWT access and refresh token rotation
-- Bcrypt password hashing
-- Single-use refresh tokens with nonce validation
-- Automatic token invalidation on refresh
-- No sensitive data in auth responses
-- Configurable token expiration
-
----
-
-## Installation
-
-### Prerequisites
-
-- **Node.js**: v18 or higher
+- **Node.js** 18 or newer
+- **NestJS** 11
+- **TypeORM** 1.1
+- **Express** 5 (already the default with NestJS 11)
 - **pnpm** (recommended) or npm
-- **PostgreSQL** (or your preferred database)
-- **NestJS**: v10+
-- **TypeORM**: v1.1.0+
+- A database (PostgreSQL is used in the examples)
 
-### Installing Libraries
+---
 
-We recommend using **pnpm** as your package manager.
+## Quick start
+
+This is the shortest path to a working CRUD + auth app. For a full walkthrough,
+follow the numbered steps in [docs/README.md](./docs/README.md) or look at the
+run-ready [demo-api](./docs/demo-api/README.md).
+
+### 1. Install the core libraries
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^2.0.1 @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0
+pnpm add @nestjs/typeorm typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
 pnpm add -D @types/passport-jwt @types/bcrypt
 ```
 
----
+`@nest-util/nest-error` is required: the other packages import it at runtime.
 
-## Quick Start
+### 2. Wire up TypeORM and the global pieces
 
-### Step 1: Register the Module
-
-Create a module for your resource:
+Set `autoLoadEntities: true` — the libraries register their own entities this way.
 
 ```typescript
-// apps/my-api/src/app/post/post.module.ts
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { PostController } from './post.controller';
-import { PostService } from './post.service';
-import { Post } from './post.entity';
-
-@Module({
-  imports: [TypeOrmModule.forFeature([Post])],
-  controllers: [PostController],
-  providers: [PostService],
-  exports: [PostService],
-})
-export class PostModule {}
+TypeOrmModule.forRoot({
+  type: 'postgres',
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  username: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  autoLoadEntities: true, // required
+  synchronize: process.env.NODE_ENV !== 'production',
+});
 ```
 
-Import it in your `AppModule`:
+In `main.ts`, turn on validation, the extended query parser (needed for filters),
+and Swagger:
 
 ```typescript
-import { PostModule } from './post/post.module';
+app.useGlobalPipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    transformOptions: { enableImplicitConversion: true },
+  })
+);
 
-@Module({
-  imports: [
-    // ... other imports
-    PostModule,
-  ],
-})
-export class AppModule {}
+// deep filter[field_operator]=value objects parse correctly
+app.getHttpAdapter().getInstance().set('query parser', 'extended');
+
+const config = new DocumentBuilder()
+  .setTitle('My API')
+  .setVersion('1.0')
+  .addBearerAuth()
+  .build();
+const document = SwaggerModule.createDocument(app, config);
+SwaggerModule.setup('api/docs', app, document);
 ```
 
-### Step 2: Configure Global Settings
+### 3. Register the error system (once)
 
-For optimal functionality, add these global configurations in your `main.ts`:
+This gives every library a consistent, localized error body. Add it to your root
+module:
 
 ```typescript
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { TypeOrmExceptionFilter } from '@nest-util/nest-crud';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app/app.module';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      enableImplicitConversion: true,
-    })
-  );
-
-  app.useGlobalFilters(new TypeOrmExceptionFilter());
-
-  const adapter = app.getHttpAdapter();
-  adapter.getInstance().set('query parser', 'extended');
-
-  const config = new DocumentBuilder()
-    .setTitle('My API')
-    .setDescription('API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
-  await app.listen(3000);
-}
-bootstrap();
-```
-
-### Step 3: Test Your API
-
-Your CRUD endpoints are now available:
-
-```bash
-# Create a post
-curl -X POST http://localhost:3000/post \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Hello","content":"World","published":true}'
-
-# Get all posts with pagination
-curl "http://localhost:3000/post?page=1&limit=10"
-
-# Filter posts
-curl "http://localhost:3000/post?filter[published_eq]=true&filter[title_cont]=Hello"
-
-# Cursor pagination
-curl "http://localhost:3000/post?cursor=eyJpZCI6MTB9&limit=10"
-
-# Get one post
-curl http://localhost:3000/post/1
-
-# Update a post
-curl -X PATCH http://localhost:3000/post/1 \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Updated Title"}'
-
-# Delete a post
-curl -X DELETE http://localhost:3000/post/1
-```
-
-Visit `http://localhost:3000/api/docs` for interactive Swagger documentation!
-
----
-
-## Adding Authentication
-
-### Step 1: Configure AuthModule
-
-```typescript
-import { AuthModule } from '@nest-util/nest-auth';
-import { User } from './user/user.entity';
-import { LoginDto, RegisterDto, RefreshDto } from './auth/auth.dto';
+import { LocalizationModule } from '@nest-util/nest-error';
+import errorMessages from './config/error-messages.json';
 
 @Module({
   imports: [
-    AuthModule.forRoot({
-      userEntity: User,
-      identifierField: 'email',
-      passkeyField: 'password',
-      jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
-      loginDto: LoginDto,
-      registerDto: RegisterDto,
-      refreshDto: RefreshDto,
-      accessTokenField: 'accessToken',
-      refreshTokenField: 'refreshToken',
+    LocalizationModule.forRoot({
+      messages: errorMessages, // { en: { ERROR_KEY: 'template' } }
+      defaultLang: 'en',
+      supportedLangs: ['en'],
+      debug: process.env.NODE_ENV !== 'production',
     }),
   ],
 })
 export class AppModule {}
 ```
 
-### Step 2: Protect Routes
+See [libs/nest-error/README.md](./libs/nest-error/README.md) for the full details.
+
+### 4. Build a resource
 
 ```typescript
-import { JwtAuthGuard, CurrentUser, AuthUser } from '@nest-util/nest-auth';
+// post.service.ts
+@Injectable()
+export class PostService extends NestCrudService<Post, CreatePostDto, UpdatePostDto> {
+  constructor(@InjectRepository(Post) repository: Repository<Post>) {
+    super({
+      repository,
+      allowedFilters: ['title'],
+      include: ['author'],
+    });
+  }
+}
+```
 
+```typescript
+// post.controller.ts
+const PostCrudControllerBase = CreateNestedCrudController(
+  CreatePostDto,
+  UpdatePostDto,
+  Post,
+) as abstract new (service: PostService) => IBaseController<
+  CreatePostDto,
+  UpdatePostDto,
+  Post
+>;
+
+@ApiTags('post')
 @Controller('post')
-@UseGuards(JwtAuthGuard)
-export class PostController
-  extends CreateNestedCrudController(CreatePostDto, UpdatePostDto, Post)
-  implements IBaseController<CreatePostDto, UpdatePostDto, Post>
-{
+export class PostController extends PostCrudControllerBase {
   constructor(override readonly service: PostService) {
     super(service);
   }
-
-  @Get('my-posts')
-  getMyPosts(@CurrentUser() user: AuthUser) {
-    return this.service.findAll({ filter: { authorId_eq: user.id } });
-  }
 }
 ```
 
-### Step 3: Enable API Key Authentication (Optional)
+That single controller factory generates `findAll`, `findOne`, `create`,
+`update`, and `remove`, plus filtering and pagination. Add `enableFindMine: true`
+and configure `userOwnershipField` to get a user-scoped `GET /post/mine`.
 
-For server-to-server requests, enable API key authentication:
-
-```typescript
-AuthModule.forRoot({
-  // ... other options
-  apiKey: {
-    enabled: true,
-    headerName: 'x-api-key',    // default
-    keyPrefix: 'nuk_live_',      // default
-    hashRounds: 10,              // default
-  },
-})
-```
-
-Use the composable `ApiKeyGuard` with JWT:
+### 5. Protect it with auth
 
 ```typescript
-import { ApiKeyGuard, JwtAuthGuard, PermissionsGuard } from '@nest-util/nest-auth';
-
-@Controller('data')
-@UseGuards(ApiKeyGuard, JwtAuthGuard, PermissionsGuard)
-export class DataController {
-  // API keys and JWT tokens work on the same endpoint
-}
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+export class PostController extends PostCrudControllerBase { /* ... */ }
 ```
 
----
+Configure `AuthModule.forRoot(...)` once and use `@CurrentUser()`,
+`@Permissions()`, `JwtAuthGuard`, and `PermissionsGuard` anywhere. The
+[`nest-auth` guide](./docs/nest-auth/README.md) covers every endpoint and option.
 
-## Adding Payment Integration
-
-### Step 1: Implement a Payment Provider
-
-```typescript
-import { PaymentProvider, PaymentCheckoutResult } from '@nest-util/nest-payment';
-
-export class ChapaProvider implements PaymentProvider {
-  readonly name = 'chapa';
-  readonly supportsSubscriptions = false;
-  readonly supportsRefunds = false;
-
-  async createCheckout(input) {
-    // Call Chapa API — use callback_url, not webhooks
-    const response = await chapa.initialize({
-      amount: input.amount,
-      currency: input.currency,
-      callback_url: input.callbackUrl,
-      tx_ref: input.idempotencyKey,
-    });
-    return {
-      providerPaymentId: response.tx_ref,
-      checkoutUrl: response.checkout_url,
-      status: 'pending',
-    };
-  }
-
-  async getPaymentStatus(providerPaymentId) {
-    const result = await chapa.verify(providerPaymentId);
-    return { status: result.status === 'success' ? 'succeeded' : 'pending' };
-  }
-
-  async refund(providerPaymentId, amount) {
-    throw new Error('Chapa does not support refunds');
-  }
-}
-```
-
-### Step 2: Register NestPaymentModule
-
-```typescript
-import { NestPaymentModule } from '@nest-util/nest-payment';
-import { ChapaProvider } from './chapa.provider';
-
-@Module({
-  imports: [
-    NestPaymentModule.forRoot({
-      provider: new ChapaProvider(),
-      entities: [Payment, Subscription, Refund],
-      webhookSecret: process.env.WEBHOOK_SECRET,
-      webhookTtlMs: 300_000, // 5 min dedup window
-      controller: {
-        path: 'payments',
-        permissions: { checkout: 'payments.create', refund: 'payments.refund' },
-      },
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-### Step 3: Create Checkout & Handle Callbacks
-
-```typescript
-// Server: create checkout session
-const result = await paymentService.createCheckout({
-  amount: 100,
-  currency: 'ETB',
-  userId: user.id,
-});
-return { checkoutUrl: result.checkoutUrl };
-
-// Callback endpoint (provider redirects user back)
-app.use('/payments/callback', async (req, res) => {
-  await paymentService.handleCallback({ providerPaymentId: req.query.tx_ref });
-  res.redirect('/success');
-});
-```
-
----
-
-## Development
-
-This workspace uses [Nx](https://nx.dev) for efficient monorepo management.
-
-### Repository Setup
+### 6. Try it
 
 ```bash
-# Clone the repository
-git clone https://github.com/nigussolomon/nest-util.git
-cd nest-util
+# Create
+curl -X POST http://localhost:3000/post \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Hello","content":"World"}'
 
-# Install dependencies
+# List with pagination
+curl "http://localhost:3000/post?page=1&limit=10"
+
+# Filter
+curl "http://localhost:3000/post?filter[title_cont]=Hello"
+
+# Get one
+curl http://localhost:3000/post/1
+```
+
+Swagger is available at `http://localhost:3000/api/docs`.
+
+---
+
+## What you get out of the box
+
+### `nest-crud`
+
+- Generic `NestCrudService` with TypeORM persistence
+- `CreateNestedCrudController` endpoint factory
+- Offset and cursor pagination
+- Query filtering (`eq`, `cont`, `gte`, `lte`, `in`, and more)
+- Lifecycle hooks with optional transaction wrapping
+- Ownership enforcement and user-scoped `findMine`
+- Status pipelines (declared transition graph)
+- Approval pipelines (draft → submitted → approved/rejected)
+- Audit logging (event bus + persistent `audit_logs` table)
+- Generated test suites via `@nest-util/nest-crud/testing`
+
+### `nest-auth`
+
+- Registration, login, refresh, and logout
+- JWT access tokens with refresh-token rotation
+- Permissions and RBAC (`@Permissions()`, `PermissionsGuard`, roles)
+- API-key authentication for server-to-server calls
+- OTP login, password reset, account verification, and assisted onboarding
+- Admin user management and self-service profile editing
+- Rate limiting and per-account login lockout
+
+### `nest-error`
+
+- One stable `ErrorKey` per error
+- Localized, generic messages (never leaking SQL or stack traces)
+- A catch-all `LocalizedExceptionFilter` registered via `LocalizationModule`
+
+---
+
+## Running this repository
+
+This is an [Nx](https://nx.dev) monorepo.
+
+```bash
 pnpm install
 
-# Start the database (PostgreSQL via Docker)
+# PostgreSQL (also provides MinIO if you need file uploads)
 ./db.sh
 
 # Run the demo API
 npx nx serve demo-api
 ```
 
-Explore the demo API at `http://localhost:3000/api/docs`
-
-### Useful Commands
+Useful commands:
 
 ```bash
-# View dependency graph
-npx nx graph
-
-# Lint a specific library
-npx nx lint nest-crud
-
-# Build all libraries
-npx nx run-many -t build
-
-# Run tests for a library
-npx nx test nest-crud
-
-# Run affected tests (only projects affected by changes)
-npx nx affected -t test
-
-# Type check all projects
-npx nx run-many -t typecheck
-```
-
----
-
-## Advanced Features
-
-### Custom Filtering
-
-The CRUD system supports advanced filtering with various operators:
-
-```typescript
-// Filter by exact match
-GET /post?filter[published_eq]=true
-
-// Filter by contains (case-insensitive)
-GET /post?filter[title_cont]=hello
-
-// Filter by greater than or equal
-GET /post?filter[views_gte]=100
-
-// Filter by less than or equal
-GET /post?filter[createdAt_lte]=2024-01-01
-
-// Combine multiple filters
-GET /post?filter[published_eq]=true&filter[views_gte]=100&filter[title_cont]=nest
-
-// OR groups (requires `query parser = extended`)
-GET /post?filter[or][0][title_cont]=nestjs&filter[or][1][title_cont]=typeorm
-```
-
-**Supported Operators:** `eq`, `ne`, `cont`, `notcont`, `starts`, `ends`, `gte`, `lte`, `gt`, `lt`, `in`, `nin`, `isnull`
-
-**Grouping Keys:** `and`, `or`
-
-### Lifecycle Hooks
-
-Add before/after hooks with optional transaction wrapping:
-
-```typescript
-@Injectable()
-export class PostService extends NestCrudService<Post, CreatePostDto, UpdatePostDto> {
-  constructor(@InjectRepository(Post) repository: Repository<Post>) {
-    super({
-      repository,
-      hooks: {
-        beforeCreate: {
-          handler: async (ctx) => {
-            ctx.payload.title = ctx.payload.title.trim();
-          },
-          transaction: true,
-        },
-        afterCreate: {
-          handler: async (ctx) => {
-            await this.notificationService.notify('post.created', ctx.entity);
-          },
-        },
-      },
-      transactionConfig: {
-        isolationLevel: 'READ COMMITTED',
-      },
-    });
-  }
-}
-```
-
-### Cursor Pagination
-
-```bash
-# First page
-GET /posts?limit=10
-
-# Next page (use nextCursor from previous response)
-GET /posts?cursor=eyJpZCI6MTB9&limit=10
-
-# With total count
-GET /posts?limit=10&includeTotal=true
-```
-
-### findMine (User-Scoped Records)
-
-```typescript
-// Service
-super({
-  repository,
-  userOwnershipField: 'authorId',
-});
-
-// Controller
-CreateNestedCrudController(CreatePostDto, UpdatePostDto, Post, {
-  enableFindMine: true,
-});
-```
-
----
-
-## Troubleshooting
-
-### TypeScript Error: TS2742 (Inferred type is not portable)
-
-**Solution:** Add explicit `implements IBaseController` to your controller:
-
-```typescript
-import { CreateNestedCrudController, IBaseController } from '@nest-util/nest-crud';
-
-export class MyController
-  extends CreateNestedCrudController(CreateDto, UpdateDto, ResponseDto)
-  implements IBaseController<CreateDto, UpdateDto, ResponseDto> {
-  // ...
-}
-```
-
-### Database Connection Issues
-
-Ensure your `TypeOrmModule` is properly configured:
-
-```typescript
-TypeOrmModule.forRoot({
-  type: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'mydb',
-  autoLoadEntities: true,  // Required for AuditLogEntity
-  synchronize: process.env.NODE_ENV !== 'production',
-});
-```
-
-### Filtering Not Working
-
-Make sure you've configured the query parser correctly:
-
-```typescript
-const adapter = app.getHttpAdapter();
-adapter.getInstance().set('query parser', 'extended');
-```
-
-And whitelist fields in your service:
-
-```typescript
-super({
-  repository,
-  allowedFilters: ['name', 'email', 'status'],
-});
-```
-
-### Authentication Token Issues
-
-Check that:
-
-1. Your user entity has `accessToken` and `refreshToken` fields
-2. JWT secret is consistent across requests
-3. Token fields are excluded from default queries (add `select: false` in entity)
-
-```typescript
-@Column({ select: false })
-refreshToken?: string;
+npx nx graph                       # dependency graph
+npx nx lint nest-crud              # lint one library
+npx nx run-many -t build           # build everything
+npx nx test nest-crud              # test one library
+npx nx run-many -t test build lint typecheck --exclude=starter  # full check
 ```
 
 ---
 
 ## Documentation
 
-- **Docs Index**: [docs/README.md](./docs/README.md)
-- **demo-api setup**: [docs/demo-api/README.md](./docs/demo-api/README.md)
-- **nest-auth guide**: [docs/nest-auth/README.md](./docs/nest-auth/README.md)
-- **nest-crud guide**: [docs/nest-crud/README.md](./docs/nest-crud/README.md)
-- **nest-file guide**: [docs/nest-file/README.md](./docs/nest-file/README.md)
-- **nest-payment guide**: [docs/nest-payment/README.md](./docs/nest-payment/README.md)
-- **Migration Guide**: [MIGRATION-GUIDE.md](./MIGRATION-GUIDE.md)
+- **[docs/README.md](./docs/README.md)** — documentation index and integration order
+- **[demo-api](./docs/demo-api/README.md)** — how the example app is wired
+- **[nest-crud](./docs/nest-crud/README.md)** — CRUD, pipelines, hooks, audit, testing
+- **[nest-auth](./docs/nest-auth/README.md)** — auth, RBAC, OTP, reset, onboarding
+- **[nest-error](./libs/nest-error/README.md)** — standardized error responses
+- **[nest-file](./docs/nest-file/README.md)** — S3-compatible file management
+- **[nest-notify](./docs/nest-notify/README.md)** — push + email notifications
+- **[nest-payment](./docs/nest-payment/README.md)** — payments and subscriptions
+- **[MIGRATION-GUIDE.md](./MIGRATION-GUIDE.md)** — upgrade an existing consumer app
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome. Fork the repository, create a feature branch, make your
+changes with tests, and open a pull request.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License.
-
----
-
-> **Tip:** Start from [docs/README.md](./docs/README.md). The module guides are split by package and include demo-api-specific configuration notes.
+MIT

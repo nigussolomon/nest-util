@@ -46,18 +46,19 @@
 <section class="hero">
   <div class="container">
     <div class="hero-badges">
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-crud v1.1.3</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-auth v1.4.0</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-file v1.0.1</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-payment v1.0.1</span>
-      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-notify v1.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-crud v2.0.1</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-auth v2.0.1</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-error v1.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-file v2.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-payment v2.0.0</span>
+      <span class="hero-badge"><span class="dot"></span>@nest-util/nest-notify v2.0.0</span>
     </div>
     <h1>
       NestJS CRUD, Auth, Files, Payments &amp; Notifications<br>
       <span class="accent">That Just Works</span>
     </h1>
     <p>
-      Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, provider-agnostic payments, notifications, audit events, lifecycle hooks, and cursor pagination. Five packages, zero boilerplate.
+      Type-safe CRUD scaffolding, JWT auth with RBAC, S3 file management, provider-agnostic payments, notifications, standardized errors, audit events, lifecycle hooks, and cursor pagination. Six packages, zero boilerplate.
     </p>
     <div class="hero-actions">
       <a href="#quickstart" class="btn btn-primary">
@@ -77,7 +78,7 @@
      ═══════════════════════════════════════════════════════ -->
 <div class="stats container">
     <div class="stat">
-    <div class="stat-value">5</div>
+    <div class="stat-value">6</div>
     <div class="stat-label">Packages</div>
   </div>
   <div class="stat">
@@ -109,7 +110,7 @@
   <div class="container">
     <div class="section-header">
       <h2>What You Get</h2>
-      <p>Five packages that replace hours of boilerplate.</p>
+      <p>Six packages that replace hours of boilerplate.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card">
@@ -206,7 +207,7 @@
 <section id="packages">
   <div class="container">
     <div class="section-header">
-      <h2>Five Packages</h2>
+      <h2>Six Packages</h2>
       <p>Focused modules. No bloat.</p>
     </div>
     <div class="packages">
@@ -225,7 +226,7 @@
             <li>findMine with custom query support</li>
             <li>Testing factory with auto-generated suites</li>
             <li>Automatic Swagger documentation</li>
-            <li>TypeORM exception filter</li>
+            <li>Localized error handling via <code>nest-error</code></li>
           </ul>
         </div>
         <div class="package-footer">
@@ -252,6 +253,24 @@
         </div>
         <div class="package-footer">
           <a href="nest-auth/index.html">Docs &rarr;</a>
+        </div>
+      </div>
+      <div class="package-card">
+        <div class="package-header">
+          <div class="package-name">@nest-util/nest-error</div>
+          <div class="package-desc">Standardized, localized error responses</div>
+        </div>
+        <div class="package-body">
+          <ul>
+            <li>Stable <code>ErrorKey</code> per error</li>
+            <li>Localized, generic messages</li>
+            <li>Global <code>LocalizedExceptionFilter</code></li>
+            <li>Never leaks SQL or stack traces</li>
+            <li>Required peer of every package</li>
+          </ul>
+        </div>
+        <div class="package-footer">
+          <a href="nest-error/index.html">Docs &rarr;</a>
         </div>
       </div>
       <div class="package-card">
@@ -708,8 +727,8 @@
         <div class="label">install</div>
       </div>
       <div class="terminal-body">
-        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 @nest-util/nest-file@^1.0.1 @nest-util/nest-payment@^1.0.1 @nest-util/nest-notify@^1.0.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
+        <code><span class="prompt">$</span> pnpm add @nest-util/nest-crud@^2.0.1 @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0 @nest-util/nest-file@^2.0.0 @nest-util/nest-payment@^2.0.0 @nest-util/nest-notify@^2.0.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-crud@^2.0.1 @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0 @nest-util/nest-file@^2.0.0 @nest-util/nest-payment@^2.0.0 @nest-util/nest-notify@^2.0.0 typeorm @nestjs/typeorm @nestjs/swagger @nestjs/event-emitter class-validator class-transformer').then(()=>this.textContent='Copied!')">Copy</button>
       </div>
     </div>
 
@@ -745,6 +764,10 @@
       <span class="cm">// ...</span>
     }),
     <span class="typ">NestCrudModule</span>,
+    <span class="typ">LocalizationModule</span>.<span class="fn">forRoot</span>({
+      defaultLang: <span class="str">'en'</span>,
+      supportedLangs: [<span class="str">'en'</span>],
+    }),
     <span class="typ">AuthModule</span>.<span class="fn">forRoot</span>({
       userEntity: <span class="typ">User</span>,
       identifierField: <span class="str">'email'</span>,
@@ -760,9 +783,9 @@
       },
     }),
     <span class="typ">NestPaymentModule</span>.<span class="fn">forRoot</span>({
-      provider: <span class="kw">new</span> <span class="typ">ChapaProvider</span>(),
+      providers: [<span class="kw">new</span> <span class="typ">ChapaProvider</span>()],
       entities: [<span class="typ">Payment</span>, <span class="typ">Subscription</span>, <span class="typ">Refund</span>],
-      webhookSecret: process.env.<span class="typ">WEBHOOK_SECRET</span>,
+      webhook: { enable: <span class="num">true</span>, path: <span class="str">'webhook'</span> },
     }),
     <span class="typ">NestNotifyModule</span>.<span class="fn">forRoot</span>({
       fcm: {

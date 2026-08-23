@@ -5,7 +5,7 @@ Provider-agnostic payment library for NestJS. Handles checkout sessions, subscri
 ## Installation
 
 ```bash
-pnpm add @nest-util/nest-payment
+pnpm add @nest-util/nest-payment @nest-util/nest-error
 ```
 
 Peer dependencies:
@@ -15,6 +15,10 @@ pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator class-tr
 # Optional — for @CurrentUser() integration
 pnpm add @nest-util/nest-auth
 ```
+
+`@nest-util/nest-error` is required. Register `LocalizationModule.forRoot(...)`
+once for consistent error responses (see
+[libs/nest-error/README.md](./../../libs/nest-error/README.md)).
 
 ## Quick Start
 

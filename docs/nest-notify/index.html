@@ -82,8 +82,8 @@
     <h2 id="quickstart">Install</h2>
     <p>We recommend using <strong>pnpm</strong> as your package manager. <code>firebase-admin</code> and <code>nodemailer</code> are bundled as regular dependencies.</p>
     <div class="install-box">
-      <code>pnpm add @nest-util/nest-notify</code>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-notify').then(()=>this.textContent='Copied!')">Copy</button>
+      <code>pnpm add @nest-util/nest-notify @nest-util/nest-error</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-notify @nest-util/nest-error').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
 
     <p>Peer dependencies:</p>
@@ -97,6 +97,8 @@
       <code>pnpm add @nest-util/nest-auth</code>
       <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-auth').then(()=>this.textContent='Copied!')">Copy</button>
     </div>
+
+    <p><code>@nest-util/nest-error</code> is required. Register <code>LocalizationModule.forRoot(...)</code> once for consistent error responses.</p>
 
     <h2 id="module">Module</h2>
     <p>Register <code>NestNotifyModule.forRoot()</code> in your root module. Endpoints are available immediately — no controller class needed.</p>

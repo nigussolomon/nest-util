@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@nest-util/nest-error — Standardized, Localized Errors for NestJS</title>
+  <meta name="description" content="Standardized, localized, generic error responses for NestJS with stable error keys, a global exception filter, and no SQL or stack leakage.">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <a href="../index.html" class="nav-brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#E0234E"/>
+        <path d="M22 10L16 26L10 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 18H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      Nest-Util
+    </a>
+    <ul class="nav-links">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li><a href="#throwing">Throwing Errors</a></li>
+      <li><a href="#response">Response Body</a></li>
+      <li><a href="#localization">Localization</a></li>
+      <li><a href="#services">Services</a></li>
+      <li><a href="#keys">Error Keys</a></li>
+      <li><a href="https://github.com/nigussolomon/nest-util">GitHub</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="../index.html" class="nav-cta">Back to Home</a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <div class="sidebar-section">Getting Started</div>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+    </ul>
+    <div class="sidebar-section">Usage</div>
+    <ul>
+      <li><a href="#throwing">Throwing Errors</a></li>
+      <li><a href="#response">Response Body</a></li>
+      <li><a href="#localization">Localization</a></li>
+      <li><a href="#services">Services</a></li>
+    </ul>
+    <div class="sidebar-section">Reference</div>
+    <ul>
+      <li><a href="#keys">Error Keys</a></li>
+      <li><a href="#help">Help Notes</a></li>
+    </ul>
+  </aside>
+
+  <main class="doc-content">
+
+    <section id="overview">
+      <h1>nest-error</h1>
+      <p class="subtitle">Standardized, localized, generic error responses for every package in the nest-util ecosystem.</p>
+
+      <div class="features-grid" style="margin-top:32px">
+        <div class="feature-card">
+          <div class="feature-icon purple">&#128273;</div>
+          <h3>Stable Error Keys</h3>
+          <p>Every error carries a machine-readable <code>errorKey</code>. Branch on a code, not an English string.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon green">&#127760;</div>
+          <h3>Localized Messages</h3>
+          <p>Messages resolve from a language map via <code>Accept-Language</code> with a configurable default.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon red">&#128737;</div>
+          <h3>No Leakage</h3>
+          <p>SQL, stack traces, and raw user input are stripped from the client response by default.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <p>We recommend using <strong>pnpm</strong> as your package manager.</p>
+      <div class="install-box">
+        <code>pnpm add @nest-util/nest-error</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nest-util/nest-error').then(()=>this.textContent='Copied!')">Copy</button>
+      </div>
+      <p>Peer dependencies:</p>
+      <div class="install-box">
+        <code>pnpm add @nestjs/common @nestjs/core express</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('pnpm add @nestjs/common @nestjs/core express').then(()=>this.textContent='Copied!')">Copy</button>
+      </div>
+      <p><code>@nest-util/nest-error</code> is a required peer dependency of every other nest-util package. Register <code>LocalizationModule.forRoot(...)</code> once to render the standardized body.</p>
+    </section>
+
+    <section id="quickstart">
+      <h2>Quick Start</h2>
+      <p>Register the module once, globally, in your root module. It wires the <code>I18nService</code>, <code>LangResolverService</code>, and a global <code>LocalizedExceptionFilter</code>.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">app.module.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">LocalizationModule</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-error'</span>;
+<span class="kw">import</span> errorMessages <span class="kw">from</span> <span class="str">'./config/error-messages.json'</span>;
+
+<span class="dec">@Module</span>({
+  imports: [
+    <span class="typ">LocalizationModule</span>.<span class="fn">forRoot</span>({
+      messages: errorMessages, <span class="cm">// { [lang]: { [errorKey]: 'template' } }</span>
+      defaultLang: <span class="str">'en'</span>,
+      supportedLangs: [<span class="str">'en'</span>, <span class="str">'am'</span>],
+      debug: process.env.<span class="typ">NODE_ENV</span> !== <span class="str">'production'</span>,
+    }),
+  ],
+})
+<span class="kw">export class</span> <span class="typ">AppModule</span> {}</pre>
+      </div>
+
+      <p>Language is resolved from <code>Accept-Language</code> (clamped to <code>supportedLangs</code>), or from the <code>x-lang</code> header when <code>allowHeaderOverride</code> is <code>true</code>.</p>
+    </section>
+
+    <section id="throwing">
+      <h2>Throwing Errors</h2>
+      <p>Use <code>keyed()</code> instead of <code>new HttpException(...)</code>. It returns the matching native NestJS exception class, so the HTTP status and exception type are unchanged — existing <code>toThrow(...)</code> assertions keep passing.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">some.service.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="fn">keyed</span>, <span class="typ">ErrorKey</span>, <span class="typ">HttpStatus</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-error'</span>;
+
+<span class="kw">if</span> (!user) {
+  <span class="kw">throw</span> <span class="fn">keyed</span>(<span class="typ">HttpStatus</span>.<span class="typ">NOT_FOUND</span>, <span class="typ">ErrorKey</span>.<span class="typ">AUTH_USER_NOT_FOUND</span>);
+}
+
+<span class="kw">throw</span> <span class="fn">keyed</span>(
+  <span class="typ">HttpStatus</span>.<span class="typ">BAD_REQUEST</span>,
+  <span class="typ">ErrorKey</span>.<span class="typ">AUTH_PASSWORD_WEAK</span>,
+  { minLength: <span class="num">8</span> },            <span class="cm">// interpolated into the message (safe values only)</span>
+  { attemptId: <span class="str">'...'</span> },        <span class="cm">// redacted from the client unless debug</span>
+);</pre>
+      </div>
+
+      <h3>Custom app errors</h3>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">custom-error.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">AppError</span>, <span class="typ">ErrorKey</span>, <span class="typ">HttpStatus</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-error'</span>;
+
+<span class="kw">throw new</span> <span class="typ">AppError</span>(
+  <span class="typ">HttpStatus</span>.<span class="typ">CONFLICT</span>,
+  <span class="typ">ErrorKey</span>.<span class="typ">AUTH_ROLE_ALREADY_EXISTS</span>
+);</pre>
+      </div>
+
+      <p><code>params</code> are string-interpolated into the translated message. <code>safeDetails</code> are never sent to the client unless <code>debug</code> is enabled, and must <strong>never</strong> contain user input or secrets.</p>
+    </section>
+
+    <section id="response">
+      <h2>Response Body</h2>
+      <p>With <code>LocalizationModule</code> registered, every error renders as:</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">error response</div>
+        </div>
+        <pre>{
+  <span class="str">"status"</span>: <span class="str">"error"</span>,
+  <span class="str">"code"</span>: <span class="str">"AUTH_USER_NOT_FOUND"</span>,
+  <span class="str">"message"</span>: <span class="str">"The requested user was not found"</span>,
+  <span class="str">"statusCode"</span>: <span class="num">404</span>,
+  <span class="str">"details"</span>: <span class="num">null</span>,
+  <span class="str">"timestamp"</span>: <span class="str">"2026-08-22T12:00:00.000Z"</span>,
+  <span class="str">"path"</span>: <span class="str">"/users/42"</span>
+}</pre>
+      </div>
+
+      <ul>
+        <li><code>code</code> — the stable <code>ErrorKey</code> (e.g. <code>AUTH_USER_NOT_FOUND</code>).</li>
+        <li><code>message</code> — the localized, generic message for <code>code</code>.</li>
+        <li><code>details</code> — populated <strong>only</strong> when <code>debug</code> is enabled.</li>
+      </ul>
+
+      <h3>Fallback codes for non-keyed exceptions</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>HTTP status</th>
+            <th>Fallback code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>400</code></td><td><code>VALIDATION_FAILED</code></td></tr>
+          <tr><td><code>404</code></td><td><code>NOT_FOUND</code></td></tr>
+          <tr><td><code>401</code></td><td><code>AUTH_UNAUTHORIZED</code></td></tr>
+          <tr><td><code>403</code></td><td><code>AUTH_PERMISSION_DENIED</code></td></tr>
+          <tr><td><code>500</code></td><td><code>INTERNAL_ERROR</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>TypeORM <code>QueryFailedError</code> unique violations map to <code>DB_DUPLICATE_ENTRY</code> (HTTP <code>422</code>) with no SQL leaked; other database errors map to <code>DB_QUERY_FAILED</code>.</p>
+    </section>
+
+    <section id="localization">
+      <h2>Localization</h2>
+      <p><code>LocalizationModule.forRoot({ messages })</code> deep-merges your JSON over the library's built-in <code>defaultMessages</code>, so you only override what you need.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">error-messages.json</div>
+        </div>
+        <pre>{
+  <span class="str">"en"</span>: {
+    <span class="str">"AUTH_USER_NOT_FOUND"</span>: <span class="str">"The requested user was not found"</span>,
+    <span class="str">"AUTH_PASSWORD_WEAK"</span>: <span class="str">"Your password must be at least {minLength} characters"</span>
+  },
+  <span class="str">"am"</span>: {
+    <span class="str">"AUTH_USER_NOT_FOUND"</span>: <span class="str">"መጠቀሚያው አልተገኘም"</span>,
+    <span class="str">"AUTH_PASSWORD_WEAK"</span>: <span class="str">"የይለፍ ቃልዎ ቢያንም {minLength} ፊደላት ሊሆን አለበት"</span>
+  }
+}</pre>
+      </div>
+
+      <h3>Configuration options</h3>
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>messages</code></td><td><code>Record&lt;lang, Record&lt;code, template&gt;&gt;</code></td><td>—</td><td>User-supplied message map, deep-merged over defaults</td></tr>
+          <tr><td><code>defaultLang</code></td><td><code>string</code></td><td><code>'en'</code></td><td>Fallback language</td></tr>
+          <tr><td><code>supportedLangs</code></td><td><code>string[]</code></td><td><code>[defaultLang]</code></td><td>Languages used to clamp <code>Accept-Language</code></td></tr>
+          <tr><td><code>fallbackToDefault</code></td><td><code>boolean</code></td><td><code>true</code></td><td>Fall back to <code>defaultLang</code> when a key is missing</td></tr>
+          <tr><td><code>allowHeaderOverride</code></td><td><code>boolean</code></td><td><code>false</code></td><td>Allow <code>x-lang</code> header to override language</td></tr>
+          <tr><td><code>debug</code></td><td><code>boolean</code></td><td><code>false</code></td><td>Include <code>details</code>/<code>params</code>/stack in the response</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="services">
+      <h2>Services</h2>
+
+      <h3>I18nService</h3>
+      <p>Translate an <code>errorKey</code> with <code>{placeholder}</code> interpolation:</p>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">i18n.service.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">I18nService</span>, <span class="typ">ErrorKey</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-error'</span>;
+
+<span class="fn">constructor</span>(<span class="kw">private readonly</span> i18n: <span class="typ">I18nService</span>) {}
+
+<span class="kw">const</span> msg = <span class="kw">this</span>.i18n.<span class="fn">translate</span>(
+  <span class="typ">ErrorKey</span>.<span class="typ">AUTH_USER_NOT_FOUND</span>,
+  <span class="num">undefined</span>,
+  <span class="str">'am'</span>
+);</pre>
+      </div>
+
+      <h3>LangResolverService</h3>
+      <p>Resolve the active language for a request from <code>x-lang</code>, <code>Accept-Language</code>, or the default:</p>
+      <div class="code-block">
+        <div class="code-block-header">
+          <div class="code-block-dots"><span></span><span></span><span></span></div>
+          <div class="code-block-title">lang-resolver.ts</div>
+        </div>
+        <pre><span class="kw">import</span> { <span class="typ">LangResolverService</span> } <span class="kw">from</span> <span class="str">'@nest-util/nest-error'</span>;
+
+<span class="fn">constructor</span>(<span class="kw">private readonly</span> langs: <span class="typ">LangResolverService</span>) {}
+
+<span class="kw">const</span> lang = <span class="kw">this</span>.langs.<span class="fn">resolve</span>(request);</pre>
+      </div>
+    </section>
+
+    <section id="keys">
+      <h2>Error Keys</h2>
+      <p>The <code>ErrorKey</code> enum is the single source of truth for every standardized code. Keys are namespaced <code>UPPER_SNAKE</code> and stable across releases.</p>
+
+      <table class="endpoints-table">
+        <thead>
+          <tr>
+            <th>Namespace</th>
+            <th>Examples</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>CRUD_*</code></td>
+            <td><code>CRUD_RESOURCE_NOT_FOUND</code>, <code>CRUD_FORBIDDEN</code>, <code>CRUD_INVALID_FILTER</code>, <code>CRUD_APPROVAL_INVALID_TRANSITION</code></td>
+          </tr>
+          <tr>
+            <td><code>AUTH_*</code></td>
+            <td><code>AUTH_INVALID_CREDENTIALS</code>, <code>AUTH_UNAUTHORIZED</code>, <code>AUTH_OTP_EXPIRED</code>, <code>AUTH_API_KEY_REVOKED</code></td>
+          </tr>
+          <tr>
+            <td><code>NOTIFY_*</code></td>
+            <td><code>NOTIFY_FCM_NOT_CONFIGURED</code>, <code>NOTIFY_EMAIL_DELIVERY_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>PAYMENT_*</code></td>
+            <td><code>PAYMENT_CHECKOUT_FAILED</code>, <code>PAYMENT_REFUND_NOT_FOUND</code></td>
+          </tr>
+          <tr>
+            <td><code>FILE_*</code></td>
+            <td><code>FILE_NOT_FOUND</code>, <code>FILE_TOO_LARGE</code>, <code>FILE_INVALID_TYPE</code></td>
+          </tr>
+          <tr>
+            <td>Generic / DB</td>
+            <td><code>DB_DUPLICATE_ENTRY</code>, <code>DB_QUERY_FAILED</code>, <code>VALIDATION_FAILED</code>, <code>INTERNAL_ERROR</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Adding new error keys</h3>
+      <ol>
+        <li>Add the key to the <code>ErrorKey</code> enum in <code>libs/nest-error/src/lib/constants/error-keys.ts</code>.</li>
+        <li>Add the English default to <code>default-messages.ts</code>.</li>
+        <li>Add translations in your app's <code>error-messages.json</code>.</li>
+        <li>Throw with <code>keyed(HttpStatus.X, ErrorKey.YOUR_KEY)</code>.</li>
+      </ol>
+    </section>
+
+    <section id="help">
+      <h2>Help Notes</h2>
+      <ul>
+        <li><strong>Required peer:</strong> every other nest-util package imports <code>@nest-util/nest-error</code> at runtime, so install it in any project using those packages.</li>
+        <li><strong>Register once:</strong> add <code>LocalizationModule.forRoot(...)</code> in the root module. Without it, thrown errors carry the key but render through Nest's default filter instead of the standardized body.</li>
+        <li><strong>Assert on codes, not text:</strong> English wording is generic and localizable, so branch on <code>body.code</code> rather than parsing messages.</li>
+        <li><strong>Keep <code>debug</code> off in production:</strong> it re-enables <code>details</code>/<code>params</code>/stack in the client response.</li>
+        <li><strong>Reuse keys:</strong> prefer an existing <code>ErrorKey</code> over adding a new one when the semantics match.</li>
+      </ul>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <div class="container">
+    <p style="margin-bottom:12px">
+      <a href="../index.html">Back to Nest-Util</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util">GitHub</a> &middot;
+      <a href="https://github.com/nigussolomon/nest-util/blob/main/NEST-ERROR-MIGRATION-GUIDE.md">Error Migration Guide</a>
+    </p>
+    <p>Built with NestJS, TypeORM, and TypeScript. MIT License.</p>
+  </div>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateToggleIcon(next);
+}
+function updateToggleIcon(theme) {
+  document.querySelector('.icon-sun').style.display = theme === 'light' ? 'none' : 'block';
+  document.querySelector('.icon-moon').style.display = theme === 'light' ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateToggleIcon(saved);
+  }
+})();
+</script>
+
+</body>
+</html>

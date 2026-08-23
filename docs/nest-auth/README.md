@@ -7,8 +7,12 @@ This guide is based on the current implementation in `libs/nest-auth`.
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-auth@^1.4.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
+pnpm add @nest-util/nest-auth@^2.0.1 @nest-util/nest-error@^1.0.0 @nestjs/jwt @nestjs/passport typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator bcrypt
 ```
+
+`@nest-util/nest-error` is a required peer dependency. Register
+`LocalizationModule.forRoot(...)` once to get consistent localized error
+responses (see [libs/nest-error/README.md](./../../libs/nest-error/README.md)).
 
 ## 2) Prepare Requirements
 

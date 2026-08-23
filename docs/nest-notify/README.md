@@ -5,7 +5,7 @@ Multi-channel notification library for NestJS: **FCM push** (Firebase Cloud Mess
 ## Installation
 
 ```bash
-pnpm add @nest-util/nest-notify
+pnpm add @nest-util/nest-notify @nest-util/nest-error
 ```
 
 `firebase-admin` and `nodemailer` are bundled as regular dependencies. Peer dependencies:
@@ -15,6 +15,10 @@ pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator typeorm
 # Required — for JwtAuthGuard, PermissionsGuard, and @CurrentUser()
 pnpm add @nest-util/nest-auth
 ```
+
+`@nest-util/nest-error` is required. Register `LocalizationModule.forRoot(...)`
+once for consistent error responses (see
+[libs/nest-error/README.md](./../../libs/nest-error/README.md)).
 
 ## Quick Start
 

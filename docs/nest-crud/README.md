@@ -7,10 +7,17 @@ This guide reflects the implementation in `libs/nest-crud`.
 We recommend using **pnpm** as your package manager.
 
 ```bash
-pnpm add @nest-util/nest-crud@^1.1.3 @nest-util/nest-auth@^1.4.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger @nestjs/jwt @nestjs/passport class-validator class-transformer bcrypt
+pnpm add @nest-util/nest-crud@^2.0.1 @nest-util/nest-error@^1.0.0 typeorm@^1.1.0 @nestjs/typeorm @nestjs/swagger class-validator class-transformer
+# Optional — for guard integration in section 3
+pnpm add @nest-util/nest-auth@^2.0.1 @nestjs/jwt @nestjs/passport bcrypt
 ```
 
-`@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination, findMine, status pipelines, and a testing factory — all built-in.
+`@nest-util/nest-error` is a required peer dependency. `@nest-util/nest-auth` is
+optional and only needed if you use `JwtAuthGuard` / `PermissionsGuard`.
+
+`@nest-util/nest-crud` includes audit logging, lifecycle hooks, cursor pagination,
+findMine, ownership enforcement, status pipelines, approval pipelines, and a
+testing factory — all built-in.
 
 ## 2) Build a Service with `NestCrudService`
 
@@ -58,9 +65,14 @@ interface CrudServiceOptions<Entity, ResponseDto> {
   cursorStrategy?: CursorStrategy;          // override auto-detection
   hooks?: CrudHooks<Entity, any, any>;      // lifecycle hooks
   transactionConfig?: TransactionConfig;    // isolation level for hooks
-  userOwnershipField?: keyof Entity;        // enables findMine
+  userOwnershipField?: keyof Entity;        // ownership column for findMine
   findMineQuery?: (qb, userId) => void;     // custom findMine query
+  enforceOwnership?: boolean;               // scope read/update/delete to owner
+  ownershipBypassPermissions?: readonly string[]; // permissions that bypass ownership
+  ownershipBypass?: (user: OwnershipUser) => boolean; // custom ownership bypass
+  superAdminPermission?: string;            // permission that skips ownership checks
   statusPipeline?: StatusPipelineConfig<Entity>;  // status transition rules
+  approvalPipeline?: ApprovalPipelineConfig;      // draft/submitted approval workflow
 }
 ```
 
@@ -423,6 +435,26 @@ super({
 });
 ```
 
+### Ownership enforcement
+
+`findMine` adds a user-scoped *list* endpoint. To also scope `findOne`, `update`,
+and `remove` to the authenticated user, add `enforceOwnership: true`. Non-owned
+records return 404 (no existence leak); unauthenticated requests return 403
+(fail-closed).
+
+```ts
+super({
+  repository,
+  userOwnershipField: 'authorId',
+  enforceOwnership: true,
+  ownershipBypassPermissions: ['admin.access'],
+  // ownershipBypass: (user) => user.email?.endsWith('@example.com'),
+  // superAdminPermission: 'admin.access',
+});
+```
+
+This is opt-in and defaults to `false`.
+
 ## 10) Audit Logging
 
 Two complementary audit mechanisms are built in: **event-based** (real-time streams) and **DB-backed** (persistent audit trail).
@@ -648,10 +680,31 @@ const mock = createDefaultMockEntity(Post);
 
 ## 12) Global Response and DB Error Handling
 
-Add these in bootstrap:
+Add `ResponseInterceptor` as a global interceptor for a consistent response shape:
 
-- `ResponseInterceptor` as global interceptor for consistent response shape.
-- `TypeOrmExceptionFilter` as global filter for DB errors (including duplicate keys).
+```ts
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ResponseInterceptor } from '@nest-util/nest-crud';
+
+@Module({
+  providers: [{ provide: APP_INTERCEPTOR, useClass: ResponseInterceptor }],
+})
+export class AppModule {}
+```
+
+For database errors (including duplicate keys), register `LocalizationModule`
+from `@nest-util/nest-error`. Its global `LocalizedExceptionFilter` maps TypeORM
+unique violations to `DB_DUPLICATE_ENTRY` with no SQL leaked. See
+[libs/nest-error/README.md](./../../libs/nest-error/README.md).
+
+```ts
+import { LocalizationModule } from '@nest-util/nest-error';
+
+@Module({
+  imports: [LocalizationModule.forRoot({ defaultLang: 'en', supportedLangs: ['en'] })],
+})
+export class AppModule {}
+```
 
 ## 13) Filtering and Pagination Notes
 

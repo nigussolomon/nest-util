@@ -5,7 +5,7 @@ S3-compatible file management library with presigned URL uploads and TypeORM met
 ## Installation
 
 ```bash
-pnpm add @nest-util/nest-file
+pnpm add @nest-util/nest-file @nest-util/nest-error
 ```
 
 Peer dependencies:
@@ -15,6 +15,10 @@ pnpm add @nestjs/common @nestjs/swagger @nestjs/typeorm class-validator typeorm
 # Optional — for RBAC permissions
 pnpm add @nest-util/nest-auth
 ```
+
+`@nest-util/nest-error` is required. Register `LocalizationModule.forRoot(...)`
+once for consistent error responses (see
+[libs/nest-error/README.md](./../../libs/nest-error/README.md)).
 
 ## Quick Start
 
