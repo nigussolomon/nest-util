@@ -64,6 +64,22 @@ describe('NestCrudService - approval pipeline', () => {
     });
   }
 
+  const withAddressesRelationMetadata = () => {
+    (repo as any).metadata = {
+      ...(repo as any).metadata,
+      columns: [
+        { propertyPath: 'id', type: () => Number },
+        { propertyPath: 'name', type: () => String },
+      ],
+      relations: [
+        {
+          propertyName: 'addresses',
+          inverseEntityMetadata: { relations: [] },
+        },
+      ],
+    };
+  };
+
   beforeEach(() => {
     approvalRepo = {
       findOneBy: jest.fn().mockResolvedValue(submittedRow()),
@@ -96,6 +112,7 @@ describe('NestCrudService - approval pipeline', () => {
   });
 
   describe('create', () => {
+
     it('creates the entity and a draft approval status in one transaction', async () => {
       const service = buildService();
       repo.save.mockImplementation((e: any) =>
@@ -652,6 +669,114 @@ describe('NestCrudService - approval pipeline', () => {
 
       expect(customChecker).toHaveBeenCalled();
       expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('blocks resubmit on the ownership-enforced path when the relation is untouched', async () => {
+      withAddressesRelationMetadata();
+      const untouched = [{ id: 3, city: 'X' }];
+      const qb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1, addresses: untouched }]),
+      };
+      (repo as any).createQueryBuilder = jest.fn().mockReturnValue(qb);
+      const captureService = buildService({
+        userOwnershipField: 'authorId',
+        enforceOwnership: true,
+      });
+      await captureService.requestModification(
+        1,
+        { modifications: [{ field: 'addresses', wantedValue: 'x' }] },
+        { id: 9 } as any
+      );
+      const stored =
+        approvalRepo.save.mock.calls[0][0].currentModifications;
+
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: stored,
+      } as unknown as ApprovalStatusEntity);
+
+      await expect(
+        captureService.resubmitApproval(1, { id: 9 } as any)
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows resubmit on the ownership-enforced path when the relation changed', async () => {
+      const qb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1, addresses: [{ id: 3, city: 'X' }] }]),
+      };
+      (repo as any).createQueryBuilder = jest.fn().mockReturnValue(qb);
+      withAddressesRelationMetadata();
+      const service = buildService({
+        userOwnershipField: 'authorId',
+        enforceOwnership: true,
+      });
+      await service.requestModification(
+        1,
+        { modifications: [{ field: 'addresses', wantedValue: 'x' }] },
+        { id: 9 } as any
+      );
+      const stored =
+        approvalRepo.save.mock.calls[0][0].currentModifications;
+
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: stored,
+      } as unknown as ApprovalStatusEntity);
+      qb.getMany.mockResolvedValue([
+        { id: 1, addresses: [{ id: 3, city: 'Y' }] },
+      ]);
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('loads derived relations on the ownership-enforced path for capture', async () => {
+      const qb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1, addresses: [{ id: 3, city: 'X' }] }]),
+      };
+      (repo as any).createQueryBuilder = jest.fn().mockReturnValue(qb);
+      withAddressesRelationMetadata();
+      const service = buildService({
+        userOwnershipField: 'authorId',
+        enforceOwnership: true,
+      });
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      await service.requestModification(
+        1,
+        { modifications: [{ field: 'addresses', wantedValue: 'x' }] },
+        { id: 9 } as any
+      );
+
+      expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('e.addresses', 'addresses');
+      const savedRow = approvalRepo.save.mock.calls[0][0] as any;
+      expect(savedRow.currentModifications[0].currentValue).toEqual([
+        { id: 3, city: 'X' },
+      ]);
     });
 
     it('blocks resubmit when a relation snapshot matches after jsonb round-trip and reordering', async () => {

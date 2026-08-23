@@ -304,15 +304,19 @@ export class NestCrudService<
 
   private applyIncludeJoins(
     qb: SelectQueryBuilder<Entity>,
-    withSelect = true
+    withSelect = true,
+    extraRelations?: readonly string[]
   ): void {
-    if (this.include.length === 0) return;
+    const relationPaths = [
+      ...new Set([...this.include, ...(extraRelations ?? [])]),
+    ];
+    if (relationPaths.length === 0) return;
 
     const join = withSelect
       ? (path: string, alias: string) => qb.leftJoinAndSelect(path, alias)
       : (path: string, alias: string) => qb.leftJoin(path, alias);
 
-    this.include.forEach((relation) => {
+    relationPaths.forEach((relation) => {
       const parts = relation.split('.');
       if (parts.length === 1) {
         join(`e.${parts[0]}`, parts[0]);
@@ -426,7 +430,8 @@ export class NestCrudService<
 
   private async findOwnedEntity(
     id: number,
-    user: OwnershipUser
+    user: OwnershipUser,
+    extraRelations?: readonly string[]
   ): Promise<Entity | null> {
     const userId = user?.id;
 
@@ -437,7 +442,7 @@ export class NestCrudService<
     const qb = this.repo.createQueryBuilder('e');
     this.applyOwnershipCondition(qb, userId);
     qb.andWhere('e.id = :id', { id });
-    this.applyIncludeJoins(qb);
+    this.applyIncludeJoins(qb, true, extraRelations);
 
     const rows = await qb.getMany();
     return rows[0] ?? null;
@@ -926,7 +931,7 @@ export class NestCrudService<
     extraRelations?: readonly string[]
   ): Promise<Entity | null> {
     if (this.enforceOwnershipFor(user)) {
-      return this.findOwnedEntity(id, user as OwnershipUser);
+      return this.findOwnedEntity(id, user as OwnershipUser, extraRelations);
     }
     const relationPaths = [
       ...new Set([...this.include, ...(extraRelations ?? [])]),
