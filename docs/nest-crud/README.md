@@ -267,6 +267,11 @@ super({
       resubmit: 'posts.update',
     },
     visibleStatuses: ['approved'],         // optional read filter (default: all)
+    resubmitCheck: {
+      mode: 'all',                         // 'all' (default) | 'any'
+      ignoreFields: ['tags'],              // fields exempt from the check
+      // customChecker: async ({ modifications, satisfied, entity }) => true,
+    },
     hooks: {
       beforeSubmit: {
         handler: async (ctx) => { /* validate before the submit transition */ },
@@ -286,16 +291,14 @@ Behavior:
 - **`POST /:id/approval/submit`** — moves `draft` → `submitted` and records `requestedBy`. When the record is already in a reviewable/terminal state (e.g. it started as `submitted`), this is a harmless no-op returning the current status. Gated by `permissions.submit` when the transition actually runs.
 - **`GET /:id/approval`** — returns `{ approval, history }`, where `approval` is the current status row and `history` is every modification request ever made (newest first).
 - **`POST /:id/approval/approve`** / **`reject`** — allowed from `submitted` or `resubmitted`; records `decidedBy` / `decidedAt`. `400` on illegal transitions, `404` when the entity or approval row is missing.
-- **`POST /:id/approval/request-modification`** — allowed from `submitted` or `resubmitted`; body `{ modifications: [{ field, currentValue?, wantedValue, note? }], note? }`. Moves the status to `modification_requested`, stores the items on `currentModifications`, and appends an immutable `approval_modification_history` row. `currentValue` is **auto-captured from the live record** when omitted — including relation objects (the entity is loaded with its configured `include` relations). Circular references in captured objects are sanitized to `'[Circular]'` so the `jsonb` column saves cleanly.
-- **`POST /:id/approval/resubmit`** — moves `modification_requested` → `resubmitted` (the creator edits the record via `PATCH` first, then resubmits).
+- **`POST /:id/approval/request-modification`** — allowed from `submitted` or `resubmitted`; body `{ modifications: [{ field, currentValue?, wantedValue, note? }], note? }`. Moves the status to `modification_requested`, stores the items on `currentModifications`, and appends an immutable `approval_modification_history` row. `currentValue` is **auto-captured from the live record** when omitted — relation fields are loaded automatically (no `include` configuration needed; nested dot paths like `company.addresses` work too). Each captured value also stores a SHA-256 `currentValueHash` of its canonical JSON form. Circular references in captured objects are sanitized to `'[Circular]'` so the `jsonb` column saves cleanly.
+- **`POST /:id/approval/resubmit`** — moves `modification_requested` → `resubmitted`. With `resubmitCheck` configured, the request is rejected with `400 CRUD_APPROVAL_RESUBMIT_NOT_SATISFIED` until the requester has actually changed each requested field (see below).
 - **Permissions**: when `permissions.<action>` is set, the caller must hold that permission (403 otherwise). When unset, the action is open to any caller. Ownership rules from `enforceOwnership` are respected for all approval actions.
 - **Lifecycle hooks**: `hooks.before<Action>` fires before the transition (with the current approval view); `hooks.after<Action>` fires after the transition is saved (with the new view and `previousStatus`). `requestModification` hooks also receive `modifications` and `note`. Hooks use the same `{ handler, transaction? }` shape as `CrudHooks`, and `transaction: true` wraps the handler in its own transaction. A `submit` that is a no-op (already reviewable) skips hooks. See section 7 for the full hook list and context shapes.
 - **Visibility**: when `visibleStatuses` is set, read endpoints (`findAll`, `findMine`, `findAllWithCursor`, `findOne`) only return records whose approval status is in the list. Unset = all records visible regardless of approval state.
 - Endpoints 404 when the pipeline is disabled or the endpoint is disabled, mirroring `changeStatus`.
 
-The endpoints map to `CrudEndpoint` values `getApproval | submitApproval | approveApproval | rejectApproval | requestModification | resubmitApproval`. Map them for the permission guard via `endpointActions`:
-
-```ts
+The endpoints map to `CrudEndpoint` values `getApproval | submitApproval | approveApproval | rejectApproval | requestModification | resubmitApproval`. Map them for the permission guard via `endpointActions`:```ts
 buildCrudPermissionsFromRegistry(permissionRegistry, {
   resource: 'posts',
   endpointActions: {
@@ -308,6 +311,42 @@ buildCrudPermissionsFromRegistry(permissionRegistry, {
   },
 });
 ```
+
+### Resubmit check (`resubmitCheck`)
+
+`wantedValue` is treated as a suggestion, not a requirement. To stop users from
+blindly pressing resubmit, configure `resubmitCheck`: at request time each
+modification item's `currentValue` is hashed (SHA-256 of its canonical JSON), and
+at resubmit time the live field value is hashed the same way. A matching hash
+means the field was **not touched**, and the resubmit is rejected with
+`400 CRUD_APPROVAL_RESUBMIT_NOT_SATISFIED` listing the unchanged fields.
+
+```ts
+approvalPipeline: {
+  resubmitCheck: {
+    mode: 'all',            // default 'all': every requested field must change; 'any': at least one
+    ignoreFields: ['tags'], // advisory-only fields that don't gate resubmission
+    // Full override — return false to block:
+    customChecker: async ({ modifications, satisfied, entity }) => {
+      return satisfied.every((s) => s.satisfied);
+    },
+  },
+}
+```
+
+Notes:
+
+- Relation fields work without configuring `include` — they are loaded
+  automatically for both capture and check.
+- Key order, `undefined` vs `null`, and Date serialization are normalized by the
+  canonical hashing, so jsonb round-trips don't cause false positives. Collection
+  fields are compared as unordered sets — reordering rows alone doesn't count as
+  a change.
+- Rows stored before this feature (no hash) fall back to deep equality against
+  the stored `currentValue`; items with neither value nor hash are treated as
+  satisfied.
+- Editing a field back to its exact original value reads as "unchanged" — only
+  current-vs-snapshot is known.
 
 ## 7) Lifecycle Hooks
 

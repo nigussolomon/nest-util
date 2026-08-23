@@ -9,6 +9,7 @@ import { createMockRepository } from '../testing/mock-repository';
 import { ApprovalStatusEntity } from '../entities/approval-status.entity';
 import { ModificationRequestHistoryEntity } from '../entities/modification-request-history.entity';
 import { APPROVAL_STATUS } from '../interfaces/approval-pipeline.interface';
+import { hashValue } from '../helpers/value-hash.helper';
 
 class ApprovalEntity {
   id!: number;
@@ -503,6 +504,277 @@ describe('NestCrudService - approval pipeline', () => {
       await expect(service.resubmitApproval(1)).rejects.toThrow(
         BadRequestException
       );
+    });
+
+    it('allows resubmit when every modification field has changed', async () => {
+      const service = buildService({
+        approvalPipeline: {
+          enabled: true,
+          resubmitCheck: { mode: 'all' },
+        },
+      });
+      approvalRepo.findOneBy.mockResolvedValue(modificationRequestedRow());
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+      repo.findOne.mockResolvedValue({ id: 1, name: 'renamed' } as any);
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('blocks resubmit and lists unchanged fields when nothing changed', async () => {
+      const service = buildService({
+        approvalPipeline: {
+          enabled: true,
+          resubmitCheck: { mode: 'all' },
+        },
+      });
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: [
+          {
+            field: 'name',
+            wantedValue: 'renamed',
+            currentValue: 'post',
+            currentValueHash: hashValue('post'),
+          },
+        ],
+      } as unknown as ApprovalStatusEntity);
+      repo.findOne.mockResolvedValue({ id: 1, name: 'post' } as any);
+
+      await expect(service.resubmitApproval(1)).rejects.toThrow(
+        BadRequestException
+      );
+      expect(approvalRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('treats key-order-different objects as unchanged via canonical hashing', async () => {
+      const service = buildService();
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: [
+          {
+            field: 'name',
+            currentValue: { b: 2, a: 1 },
+            currentValueHash: hashValue({ a: 1, b: 2 }),
+          },
+        ],
+      } as unknown as ApprovalStatusEntity);
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        name: { a: 1, b: 2 },
+      } as any);
+
+      await expect(service.resubmitApproval(1)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it("'any' mode passes when at least one field changed", async () => {
+      const service = buildService({
+        approvalPipeline: {
+          enabled: true,
+          resubmitCheck: { mode: 'any' },
+        },
+      });
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: [
+          {
+            field: 'name',
+            currentValue: 'post',
+            currentValueHash: hashValue('post'),
+          },
+          {
+            field: 'id',
+            currentValue: 1,
+            currentValueHash: hashValue(1),
+          },
+        ],
+      } as unknown as ApprovalStatusEntity);
+      repo.findOne.mockResolvedValue({ id: 1, name: 'post' } as any);
+
+      // 'name' untouched but hash of live id (2) differs from stored hash(1)?
+      // Both unchanged -> still blocked even in 'any' mode.
+      await expect(service.resubmitApproval(1)).rejects.toThrow(
+        BadRequestException
+      );
+
+      repo.findOne.mockResolvedValue({ id: 2, name: 'post' } as any);
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('skips ignored fields in the satisfaction check', async () => {
+      const service = buildService({
+        approvalPipeline: {
+          enabled: true,
+          resubmitCheck: {
+            mode: 'all',
+            ignoreFields: ['name'],
+          },
+        },
+      });
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: [
+          {
+            field: 'name',
+            currentValue: 'post',
+            currentValueHash: hashValue('post'),
+          },
+        ],
+      } as unknown as ApprovalStatusEntity);
+      repo.findOne.mockResolvedValue({ id: 1, name: 'post' } as any);
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('delegates to customChecker when provided', async () => {
+      const customChecker = jest.fn().mockReturnValue(true);
+      const service = buildService({
+        approvalPipeline: {
+          enabled: true,
+          resubmitCheck: { customChecker },
+        },
+      });
+      approvalRepo.findOneBy.mockResolvedValue(modificationRequestedRow());
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+      repo.findOne.mockResolvedValue({ id: 1, name: 'post' } as any);
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(customChecker).toHaveBeenCalled();
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('blocks resubmit when a relation snapshot matches after jsonb round-trip and reordering', async () => {
+      const service = buildService();
+      // Simulate capture: live entity graph with Date objects and unordered collection
+      const liveAtCapture = {
+        id: 1,
+        addresses: [
+          {
+            id: 2,
+            city: 'Budapest',
+            createdAt: new Date('2024-01-02T00:00:00.000Z'),
+          },
+          {
+            id: 1,
+            city: 'Addis',
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          },
+        ],
+      };
+      const captured = [
+        {
+          field: 'addresses',
+          wantedValue: 'ijncsnd',
+          currentValueHash: (service as any).hashModificationValue(
+            liveAtCapture.addresses
+          ),
+        },
+      ];
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: captured,
+      } as unknown as ApprovalStatusEntity);
+      // Simulate jsonb persistence of the captured value, then rehydration as a
+      // fresh entity graph in different order with identical data.
+      const persisted = JSON.parse(
+        JSON.stringify({
+          id: 1,
+          addresses: [
+            {
+              id: 1,
+              city: 'Addis',
+              createdAt: new Date('2024-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 2,
+              city: 'Budapest',
+              createdAt: new Date('2024-01-02T00:00:00.000Z'),
+            },
+          ],
+        })
+      );
+      repo.findOne.mockResolvedValue(persisted as any);
+
+      await expect(service.resubmitApproval(1)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('allows resubmit when a collection element actually changed', async () => {
+      const service = buildService();
+      const liveAtCapture = [
+        { id: 1, city: 'Addis' },
+        { id: 2, city: 'Budapest' },
+      ];
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: [
+          {
+            field: 'addresses',
+            wantedValue: 'x',
+            currentValueHash: (service as any).hashModificationValue(
+              liveAtCapture
+            ),
+          },
+        ],
+      } as unknown as ApprovalStatusEntity);
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        addresses: [{ id: 1, city: 'Addis' }, { id: 2, city: 'Vienna' }],
+      } as any);
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('falls back to deep equality for legacy rows without hashes', async () => {
+      const service = buildService();
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: [
+          { field: 'name', currentValue: 'post', wantedValue: 'renamed' },
+        ],
+      } as unknown as ApprovalStatusEntity);
+      repo.findOne.mockResolvedValue({ id: 1, name: 'changed' } as any);
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
+    });
+
+    it('skips the check when currentModifications is empty', async () => {
+      const service = buildService({
+        approvalPipeline: {
+          enabled: true,
+          resubmitCheck: { mode: 'all' },
+        },
+      });
+      approvalRepo.findOneBy.mockResolvedValue({
+        ...modificationRequestedRow(),
+        currentModifications: null,
+      } as unknown as ApprovalStatusEntity);
+      approvalRepo.save.mockImplementation((row) =>
+        Promise.resolve(row as ApprovalStatusEntity)
+      );
+
+      const result = await service.resubmitApproval(1, { id: 9 } as any);
+
+      expect(result.status).toBe(APPROVAL_STATUS.resubmitted);
     });
   });
 

@@ -12,6 +12,7 @@ import {
   normalizeCapturedValue,
   resolveRelationPaths,
 } from '../helpers/relation-path.helper';
+import { deepEqual, hashValue } from '../helpers/value-hash.helper';
 import { CrudEndpoint, CrudInterface, CursorPaginationResult } from '../interfaces/crud.interface';
 import { CursorStrategy } from '../interfaces/cursor-strategy.interface';
 import {
@@ -959,12 +960,16 @@ export class NestCrudService<
    * Deep-clones a value so it can be safely stored in a jsonb column. Object
    * graphs with circular references (common for loaded relations) are
    * sanitized: a circular branch is replaced with the string '[Circular]'.
+   * Keys whose value is `undefined` are dropped, mirroring jsonb persistence.
    */
   private sanitizeForJsonb(value: unknown): unknown {
     const seen = new WeakSet<object>();
     const walk = (node: unknown): unknown => {
       if (node === null || typeof node !== 'object') {
         return node;
+      }
+      if (node instanceof Date) {
+        return Number.isNaN(node.getTime()) ? null : node.toISOString();
       }
       if (seen.has(node as object)) {
         return '[Circular]';
@@ -975,11 +980,30 @@ export class NestCrudService<
       }
       const out: Record<string, unknown> = {};
       for (const key of Object.keys(node as Record<string, unknown>)) {
-        out[key] = walk((node as Record<string, unknown>)[key]);
+        const item = (node as Record<string, unknown>)[key];
+        if (item === undefined) {
+          continue;
+        }
+        out[key] = walk(item);
       }
       return out;
     };
     return walk(value);
+  }
+
+  /**
+   * Hashes a modification value through the exact pipeline its stored snapshot
+   * goes through — sanitize clone plus a JSON round-trip simulating jsonb
+   * persistence (Dates → ISO strings, undefined dropped) — so the resubmit
+   * check compares like with like regardless of TypeORM hydration.
+   */
+  private hashModificationValue(value: unknown): string {
+    const sanitized = this.sanitizeForJsonb(value);
+    const roundTripped =
+      typeof sanitized === 'object' && sanitized !== null
+        ? JSON.parse(JSON.stringify(sanitized))
+        : sanitized;
+    return hashValue(roundTripped);
   }
 
   private async loadApprovalStatus(
@@ -1096,15 +1120,16 @@ export class NestCrudService<
               `[NestCrudService] Approval modification field "${m.field}" does not exist on ${this.repo.metadata.tableName}; capturing null`
             );
           }
+          const rawValue =
+            m.currentValue !== undefined
+              ? m.currentValue
+              : this.readCurrentValue(entity, m.field);
           return {
             ...m,
             currentValue: this.sanitizeForJsonb(
-              normalizeCapturedValue(
-                m.currentValue !== undefined
-                  ? m.currentValue
-                  : this.readCurrentValue(entity, m.field)
-              )
+              normalizeCapturedValue(rawValue)
             ),
+            currentValueHash: this.hashModificationValue(rawValue),
             wantedValue: this.sanitizeForJsonb(m.wantedValue),
           };
         });
@@ -1120,7 +1145,7 @@ export class NestCrudService<
         );
         break;
       }
-      case 'resubmit':
+      case 'resubmit': {
         if (current !== APPROVAL_STATUS.modificationRequested) {
           throw keyed(
             HttpStatus.BAD_REQUEST,
@@ -1128,11 +1153,13 @@ export class NestCrudService<
             { action: 'resubmit', current: String(current) }
           );
         }
+        await this.assertResubmitSatisfied(approval, id, user);
         approval.status = APPROVAL_STATUS.resubmitted;
         approval.currentModifications = null;
         approval.resubmittedBy = userId;
         approval.resubmittedAt = now;
         break;
+      }
     }
 
     const saved = await this.getApprovalRepository().save(approval);
@@ -1249,6 +1276,69 @@ export class NestCrudService<
         approvalVisibleStatuses: [...visible],
       }
     );
+  }
+
+  /**
+   * Ensures the requester actually changed the fields covered by the stored
+   * modification request before a resubmit is allowed. Each item's live value
+   * hash is compared against the hash captured at request time; an identical
+   * hash means the field was left untouched.
+   */
+  private async assertResubmitSatisfied(
+    approval: ApprovalStatusEntity,
+    id: number,
+    user?: OwnershipUser
+  ): Promise<void> {
+    const checkConfig = this.approvalPipeline?.resubmitCheck;
+    const modifications =
+      (approval.currentModifications as ModificationItem[] | null) ?? [];
+    if (modifications.length === 0) {
+      return;
+    }
+
+    const fields = modifications.map((m) => m.field);
+    const extraRelations = resolveRelationPaths(this.repo.metadata, fields);
+    const entity = await this.getEntityWithRelations(id, user, extraRelations);
+
+    const ignored = new Set(checkConfig?.ignoreFields ?? []);
+    const satisfied = modifications.map((m) => {
+      if (ignored.has(m.field)) {
+        return { field: m.field, satisfied: true };
+      }
+      const live = this.readCurrentValue(entity, m.field);
+      const satisfiedField =
+        m.currentValueHash !== undefined
+          ? this.hashModificationValue(live) !== m.currentValueHash
+          : m.currentValue !== undefined
+            ? !deepEqual(live, m.currentValue)
+            : true;
+      return { field: m.field, satisfied: satisfiedField };
+    });
+
+    let allowed: boolean;
+    if (checkConfig?.customChecker) {
+      allowed = await checkConfig.customChecker({
+        modifications,
+        satisfied,
+        entity,
+      });
+    } else {
+      const required = satisfied.filter((s) => s.satisfied);
+      allowed =
+        checkConfig?.mode === 'any' ? required.length > 0 : required.length === satisfied.length;
+    }
+
+    if (!allowed) {
+      throw keyed(
+        HttpStatus.BAD_REQUEST,
+        ErrorKey.CRUD_APPROVAL_RESUBMIT_NOT_SATISFIED,
+        {
+          unchangedFields: satisfied
+            .filter((s) => !s.satisfied)
+            .map((s) => s.field),
+        }
+      );
+    }
   }
 
   private approvalIdCastExpression(): string {

@@ -34,6 +34,12 @@ export interface ModificationItem {
    * '[Circular]').
    */
   currentValue?: unknown;
+  /**
+   * SHA-256 hash of the captured value's canonical JSON form. Stored so the
+   * resubmit check can cheaply detect whether the field changed since the
+   * request without deep-comparing (possibly large) relation snapshots.
+   */
+  currentValueHash?: string;
   /** Value the reviewer wants instead. */
   wantedValue: unknown;
   /** Optional human-readable explanation. */
@@ -117,6 +123,35 @@ export interface ApprovalPipelineConfig {
    * `after*`) the previous status.
    */
   hooks?: ApprovalHooks;
+
+  /**
+   * Verifies that the requester actually applied the requested changes before
+   * allowing a resubmit. For each modification item the live field value is
+   * hashed and compared with the hash captured at request time — an identical
+   * hash means the field was left untouched.
+   */
+  resubmitCheck?: ApprovalResubmitCheckConfig;
+}
+
+export interface ApprovalResubmitCheckConfig {
+  /**
+   * 'all' (default): every non-ignored modification field must have changed.
+   * 'any': at least one must have changed.
+   */
+  mode?: 'all' | 'any';
+
+  /** Modification fields exempt from the "must have changed" gate. */
+  ignoreFields?: readonly string[];
+
+  /**
+   * Full override of the built-in comparison. Return false to block the
+   * resubmit with CRUD_APPROVAL_RESUBMIT_NOT_SATISFIED.
+   */
+  customChecker?: (context: {
+    modifications: ModificationItem[];
+    satisfied: { field: string; satisfied: boolean }[];
+    entity: unknown;
+  }) => boolean | Promise<boolean>;
 }
 
 export interface RequestModificationPayload {

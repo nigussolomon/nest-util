@@ -17,6 +17,7 @@ export const defaultMessages: Record<string, string> = {
   CRUD_APPROVAL_NOT_CONFIGURED: 'Approvals are not enabled for this resource',
   CRUD_APPROVAL_FORBIDDEN: 'You do not have permission to perform this approval action',
   CRUD_APPROVAL_INVALID_TRANSITION: 'The requested approval change is not allowed',
+  CRUD_APPROVAL_RESUBMIT_NOT_SATISFIED: 'Requested modifications have not been applied yet',
 
   // ---- Auth ----
   AUTH_INVALID_CREDENTIALS: 'Invalid credentials',

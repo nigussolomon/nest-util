@@ -56,6 +56,7 @@
       <li class="sidebar-section">Features</li>
       <li><a href="#hooks">Lifecycle Hooks</a></li>
       <li><a href="#status">Status Pipeline</a></li>
+      <li><a href="#approval">Approval Pipeline</a></li>
       <li><a href="#cursor">Cursor Pagination</a></li>
       <li><a href="#findmine">findMine</a></li>
       <li><a href="#filtering">Filtering</a></li>
@@ -511,6 +512,62 @@
     </ul>
 
     <p>Permission gating: grant <code>posts.changeStatus</code> (or map the action via <code>endpointActions</code> when building permissions) and use <code>@ApiBearerAuth</code> + <code>PermissionsGuard</code> as in the controller section.</p>
+
+    <!-- ═══════════════════════════════════════════════════
+         APPROVAL PIPELINE
+         ═══════════════════════════════════════════════════ -->
+    <h2 id="approval">Approval Pipeline</h2>
+    <p>An approval workflow for created records: <code>draft → submitted → approved / rejected</code>, with modification requests and resubmission in between. Every <code>create</code> also writes an <code>approval_statuses</code> row in the same transaction.</p>
+
+    <div class="code-block">
+      <div class="code-block-title">post.service.ts (approvalPipeline)</div>
+      <pre><code><span class="kw">super</span>({
+  repository,
+  approvalPipeline: {
+    initialStatus: <span class="str">'draft'</span>,   <span class="cm">// or 'submitted' (no explicit submit step)</span>
+    permissions: {
+      submit: <span class="str">'posts.submit'</span>,
+      approve: <span class="str">'posts.approve'</span>,
+      reject: <span class="str">'posts.reject'</span>,
+      requestModification: <span class="str">'posts.update'</span>,
+      resubmit: <span class="str">'posts.update'</span>,
+    },
+    visibleStatuses: [<span class="str">'approved'</span>],
+  },
+});</code></pre>
+    </div>
+
+    <h3>Endpoints</h3>
+    <ul>
+      <li><strong>POST /:id/approval/submit</strong> — draft → submitted</li>
+      <li><strong>GET /:id/approval</strong> — current status + full modification history</li>
+      <li><strong>POST /:id/approval/approve</strong> / <strong>reject</strong> — from submitted/resubmitted; records <code>decidedBy</code>/<code>decidedAt</code></li>
+      <li><strong>POST /:id/approval/request-modification</strong> — body <code>{ modifications: [{ field, wantedValue, note? }], note? }</code>; captures each field's live value (relations auto-loaded, no <code>include</code> needed) plus a SHA-256 hash into an immutable history row</li>
+      <li><strong>POST /:id/approval/resubmit</strong> — modification_requested → resubmitted</li>
+    </ul>
+
+    <h3>Resubmit Check (<code>resubmitCheck</code>)</h3>
+    <p><code>wantedValue</code> is a suggestion, not a requirement. To stop users from blindly pressing resubmit, configure <code>resubmitCheck</code>: each captured value is hashed (SHA-256 of canonical JSON) at request time, and at resubmit time the live field is hashed the same way. An unchanged field blocks the resubmit with <code>400 CRUD_APPROVAL_RESUBMIT_NOT_SATISFIED</code>, listing the untouched fields.</p>
+
+    <div class="code-block">
+      <div class="code-block-title">resubmit check config</div>
+      <pre><code>approvalPipeline: {
+  resubmitCheck: {
+    mode: <span class="str">'all'</span>,            <span class="cm">// default 'all' | 'any' (at least one changed)</span>
+    ignoreFields: [<span class="str">'tags'</span>],   <span class="cm">// advisory fields that don't gate resubmission</span>
+    customChecker: <span class="kw">async</span> ({ modifications, satisfied, entity }) =&gt; {
+      <span class="kw">return</span> satisfied.<span class="fn">every</span>((s) =&gt; s.satisfied);
+    },
+  },
+},</code></pre>
+    </div>
+
+    <ul>
+      <li>Relation fields work without configuring <code>include</code> — loaded automatically for capture and check.</li>
+      <li>Key order, <code>undefined</code>/<code>null</code>, and Date forms are normalized by canonical hashing, so jsonb round-trips don't cause false positives. Collections compare as unordered sets — reordering rows alone isn't a change.</li>
+      <li>Legacy rows without hashes fall back to deep equality against the stored <code>currentValue</code>.</li>
+      <li>Editing a field back to its exact original value reads as "unchanged" — only current-vs-snapshot is known.</li>
+    </ul>
 
     <!-- ═══════════════════════════════════════════════════
          LIFECYCLE HOOKS
