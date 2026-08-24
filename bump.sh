@@ -9,6 +9,18 @@ usage() {
   exit 1
 }
 
+run_check_gate() {
+  if [ "${NEST_UTIL_SKIP_GATE:-}" = "1" ]; then
+    return 0
+  fi
+  if [ "${SKIP_CHECK:-}" = "1" ]; then
+    echo "SKIP_CHECK=1 set — skipping pnpm check gate."
+    return 0
+  fi
+  echo "=== Running pnpm check gate ==="
+  pnpm check
+}
+
 PKG="${1:-}"
 BUMP="${2:-patch}"
 
@@ -17,8 +29,9 @@ if [ "$PKG" = "full" ]; then
     major|minor|patch) ;;
     *) usage ;;
   esac
+  run_check_gate
   for p in auth crud file notify payment error; do
-    "$0" "$p" "$BUMP"
+    NEST_UTIL_SKIP_GATE=1 "$0" "$p" "$BUMP"
   done
   exit 0
 fi
@@ -37,6 +50,8 @@ case "$BUMP" in
   major|minor|patch) ;;
   *) usage ;;
 esac
+
+run_check_gate
 
 node -e "
 const fs = require('fs');

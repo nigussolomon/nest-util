@@ -10,6 +10,18 @@ usage() {
   exit 1
 }
 
+run_check_gate() {
+  if [ "${NEST_UTIL_SKIP_GATE:-}" = "1" ]; then
+    return 0
+  fi
+  if [ "${SKIP_CHECK:-}" = "1" ]; then
+    echo "SKIP_CHECK=1 set — skipping pnpm check gate."
+    return 0
+  fi
+  echo "=== Running pnpm check gate ==="
+  pnpm check
+}
+
 PKG="${1:-}"
 
 if [ -z "${NPM_TOKEN:-}" ]; then
@@ -19,8 +31,9 @@ if [ -z "${NPM_TOKEN:-}" ]; then
 fi
 
 if [ "$PKG" = "full" ]; then
+  run_check_gate
   for p in auth crud file notify payment error; do
-    "$0" "$p"
+    NEST_UTIL_SKIP_GATE=1 "$0" "$p"
   done
   exit 0
 fi
@@ -34,6 +47,8 @@ case "$PKG" in
   error)   DIR="libs/nest-error"   NAME="nest-error" ;;
   *)       usage ;;
 esac
+
+run_check_gate
 
 echo "=== Building $NAME ==="
 pnpm nx build "$NAME"
