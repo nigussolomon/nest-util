@@ -7,6 +7,7 @@ import {
   Post,
   Query,
   ParseIntPipe,
+  PipeTransform,
   Type,
   HttpStatus,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { PaginationDto } from '../dtos/pagination.dto';
 import { CursorPaginationDto } from '../dtos/cursor-pagination.dto';
 import { FilterDto } from '../dtos/filter.dto';
 import { Audit } from '../decorators/audit-log.decorator';
+import { DtoValidationPipe, NoopPipe } from './dto-validation.pipe';
 import { ListAuditLogsDto } from '../dtos/list-audit-logs.dto';
 import { StatusChangeDto } from '../dtos/status-change.dto';
 import { RequestModificationDto } from '../dtos/request-modification.dto';
@@ -40,6 +42,11 @@ export type CrudPermissionsMap = Partial<
 export interface CrudControllerFactoryOptions {
   permissions?: CrudPermissionsMap;
   enableFindMine?: boolean;
+  /**
+   * When true, disables the automatic `class-validator` enforcement on the
+   * create/update request bodies. Enforcement is enabled by default.
+   */
+  disableDtoValidation?: boolean;
 }
 
 export interface IBaseController<CD, UD, RD> {
@@ -133,6 +140,13 @@ export function CreateNestedCrudController<CD, UD, RD>(
   responseDto: Type<RD>,
   options?: CrudControllerFactoryOptions
 ): Type<IBaseController<CD, UD, RD>> {
+  const createBodyPipe: PipeTransform = options?.disableDtoValidation
+    ? new NoopPipe()
+    : new DtoValidationPipe(createDto);
+  const updateBodyPipe: PipeTransform = options?.disableDtoValidation
+    ? new NoopPipe()
+    : new DtoValidationPipe(updateDto);
+
   class BaseController implements IBaseController<CD, UD, RD> {
     constructor(public readonly service: CrudInterface<CD, UD, RD>) {}
 
@@ -211,7 +225,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @Audit({ action: 'CREATE' })
     @ApiBody({ type: createDto })
     @ApiResponse({ type: responseDto })
-    create(@Body() dto: CD, @CurrentUser() user?: OwnershipUser) {
+    create(@Body(createBodyPipe) dto: CD, @CurrentUser() user?: OwnershipUser) {
       this.ensureEndpointEnabled('create');
       return this.service.create(dto, user);
     }
@@ -223,7 +237,7 @@ export function CreateNestedCrudController<CD, UD, RD>(
     @ApiResponse({ type: responseDto })
     update(
       @Param('id', ParseIntPipe) id: number,
-      @Body() dto: UD,
+      @Body(updateBodyPipe) dto: UD,
       @CurrentUser() user?: OwnershipUser
     ) {
       this.ensureEndpointEnabled('update');
